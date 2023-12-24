@@ -1,5 +1,7 @@
 #include "llvm/Pass.h"
 
+#include <tuple>
+
 #include "llvm/IR/NoFolder.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Passes/PassBuilder.h"
@@ -13,19 +15,41 @@ std::vector<std::string> gen_coro_list = {
 
 using builder_t = IRBuilder<NoFolder>;
 
+// Declares structure and external methods to work with it.
+// CoroPromise should be compatiable wuth the one from task module.
+std::tuple<Type *, Function *, Function *> GenPromise(Module &M) {
+  auto &ctx = M.getContext();
+  auto i32_t = Type::getInt32Ty(ctx);
+  auto ptr_t = PointerType::get(ctx, 0);
+  auto void_t = Type::getVoidTy(ctx);
+  auto promise_t = StructType::create("CoroPromise", i32_t, i32_t, ptr_t);
+  auto promise_ptr_t = PointerType::get(promise_t, 0);
+
+  auto set_child_hdl =
+      Function::Create(FunctionType::get(void_t, {promise_ptr_t, ptr_t}, false),
+                       Function::ExternalLinkage, "set_child_hdl", M);
+  auto set_ret_val =
+      Function::Create(FunctionType::get(void_t, {promise_ptr_t, i32_t}, false),
+                       Function::ExternalLinkage, "set_ret_val", M);
+
+  return std::make_tuple(dyn_cast<Type>(promise_t), set_child_hdl, set_ret_val);
+}
+
 void rawGenCoroFunc(Module &M, Function &F) {
   auto &ctx = M.getContext();
-  auto ptr = PointerType::get(ctx, 0);
-  auto i1 = Type::getInt1Ty(ctx);
-  auto i8 = Type::getInt8Ty(ctx);
-  auto i32 = Type::getInt32Ty(ctx);
-  auto token = Type::getTokenTy(ctx);
-  auto i32_0 = ConstantInt::get(i32, 0);
-  auto ptr_null = ConstantPointerNull::get(ptr);
-  auto token_none = ConstantTokenNone::get(ctx);
-  auto i1_false = ConstantInt::get(i1, false);
+  auto ptr_t = PointerType::get(ctx, 0);
+  auto i1_t = Type::getInt1Ty(ctx);
+  auto i8_t = Type::getInt8Ty(ctx);
+  auto i32_t = Type::getInt32Ty(ctx);
+  auto token_t = Type::getTokenTy(ctx);
+  auto [promise_t, set_child_hdl, set_ret_val] = GenPromise(M);
 
-  assert(ptr == F.getReturnType() && "F must have ptr return type");
+  auto i32_0 = ConstantInt::get(i32_t, 0);
+  auto ptr_null = ConstantPointerNull::get(ptr_t);
+  auto token_none = ConstantTokenNone::get(ctx);
+  auto i1_false = ConstantInt::get(i1_t, false);
+
+  assert(ptr_t == F.getReturnType() && "F must have ptr return type");
   F.setPresplitCoroutine();
 
   auto &first_real_block = F.front();
@@ -37,30 +61,31 @@ void rawGenCoroFunc(Module &M, Function &F) {
 
   // init:
   Builder.SetInsertPoint(init);
-  auto id = Builder.CreateIntrinsic(token, Intrinsic::coro_id,
-                                    {i32_0, ptr_null, ptr_null, ptr_null},
+  auto promise = Builder.CreateAlloca(promise_t, nullptr, "promise");
+  auto id = Builder.CreateIntrinsic(token_t, Intrinsic::coro_id,
+                                    {i32_0, promise, ptr_null, ptr_null},
                                     nullptr, "id");
   auto size =
-      Builder.CreateIntrinsic(i32, Intrinsic::coro_size, {}, nullptr, "size");
+      Builder.CreateIntrinsic(i32_t, Intrinsic::coro_size, {}, nullptr, "size");
   auto alloc =
       Builder.CreateCall(utils::GenMallocCallee(M), {size}, "hdl_alloc");
-  auto hdl = Builder.CreateIntrinsic(ptr, Intrinsic::coro_begin, {id, alloc},
+  auto hdl = Builder.CreateIntrinsic(ptr_t, Intrinsic::coro_begin, {id, alloc},
                                      nullptr, "hdl");
-  auto suspend_0 = Builder.CreateIntrinsic(i8, Intrinsic::coro_suspend,
+  auto suspend_0 = Builder.CreateIntrinsic(i8_t, Intrinsic::coro_suspend,
                                            {token_none, i1_false});
   auto _switch = Builder.CreateSwitch(suspend_0, suspend, 2);
-  _switch->addCase(ConstantInt::get(i8, 0), &first_real_block);
-  _switch->addCase(ConstantInt::get(i8, 1), cleanup);
+  _switch->addCase(ConstantInt::get(i8_t, 0), &first_real_block);
+  _switch->addCase(ConstantInt::get(i8_t, 1), cleanup);
 
   // cleanup:
   Builder.SetInsertPoint(cleanup);
-  auto mem = Builder.CreateIntrinsic(ptr, Intrinsic::coro_free, {id, hdl});
+  auto mem = Builder.CreateIntrinsic(ptr_t, Intrinsic::coro_free, {id, hdl});
   Builder.CreateCall(utils::GenFreeCallee(M), {mem});
   Builder.CreateBr(suspend);
 
   // suspend:
   Builder.SetInsertPoint(suspend);
-  auto unused = Builder.CreateIntrinsic(i1, Intrinsic::coro_end,
+  auto unused = Builder.CreateIntrinsic(i1_t, Intrinsic::coro_end,
                                         {hdl, i1_false, token_none});
   Builder.CreateRet(hdl);
 
@@ -72,7 +97,10 @@ void rawGenCoroFunc(Module &M, Function &F) {
       continue;
     }
     auto &terminate_instr = b.back();
-    if (dyn_cast<ReturnInst>(&terminate_instr)) {
+    if (auto ret = dyn_cast<ReturnInst>(&terminate_instr)) {
+      Builder.SetInsertPoint(ret);
+      // TODO: functions which return void.
+      Builder.CreateCall(set_ret_val, {promise, ret->getOperand(0)});
       ReplaceInstWithInst(&terminate_instr, BranchInst::Create(cleanup));
     }
   }
