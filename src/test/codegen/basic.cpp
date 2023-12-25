@@ -1,6 +1,19 @@
 extern "C" {
 
-int myFunc(int a, int b) {
+int bar(int c) {
+  c++;
+  return c;
+}
+
+int mini(int a) {
+  if (a == 5) {
+    return a;
+  }
+  a++;
+  return mini(a);
+}
+
+int foo(int a, int b) {
   int c = 0;
   if (a == 3) {
     c = a + b + 1;
@@ -12,8 +25,5 @@ int myFunc(int a, int b) {
   return d;
 }
 
-int main() {
-    return 42;
-}
-
+int main() { return 42; }
 }

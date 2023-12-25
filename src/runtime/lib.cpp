@@ -16,5 +16,5 @@ void set_child_hdl(CoroPromise *p, int8_t *hdl) {
 
 void set_ret_val(CoroPromise *p, int ret_val) { p->ret_val = ret_val; }
 
-std::optional<int> get_ret_val(CoroPromise *p) { return p->ret_val; }
+int get_ret_val(CoroPromise *p) { return p->ret_val.value(); }
 }
