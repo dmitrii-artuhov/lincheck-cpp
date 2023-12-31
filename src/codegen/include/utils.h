@@ -54,4 +54,9 @@ FunctionCallee GenFreeCallee(Module &M) {
                                FunctionType::get(void_type, args, false));
 }
 
+struct SeqGenerator {
+  int num{};
+  int next() { return num++; }
+};
+
 }  // namespace utils

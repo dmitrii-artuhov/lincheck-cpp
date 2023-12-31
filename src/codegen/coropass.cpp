@@ -1,9 +1,6 @@
-#include "llvm/Pass.h"
-
-#include <tuple>
-
 #include "llvm/IR/NoFolder.h"
 #include "llvm/IR/Verifier.h"
+#include "llvm/Pass.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/PassPlugin.h"
 #include "utils.h"
@@ -84,7 +81,9 @@ struct CoroGenerator final {
     return rawGenCoroFunc(newF);
   }
 
+  // TODO: rewrite it using one pass.
   Function *rawGenCoroFunc(Function *F) {
+    auto int_gen = utils::SeqGenerator{};
     auto &ctx = M.getContext();
 
     auto i32_0 = ConstantInt::get(i32_t, 0);
@@ -95,14 +94,44 @@ struct CoroGenerator final {
     assert(ptr_t == F->getReturnType() && "F must have ptr return type");
     F->setPresplitCoroutine();
 
+    builder_t Builder(&*F->begin());
+
+    // * Add suspension points after each operation.
+    for (auto b_it = (*F).begin(); b_it != (*F).end();) {
+      auto cb = b_it;
+      std::optional<BasicBlock *> new_entry_block;
+
+      for (auto insn_it = cb->begin(); insn_it != cb->end();) {
+        if (std::next(insn_it) == cb->end()) {
+          // Left terminate instruction in this block.
+          break;
+        }
+        auto new_block = BasicBlock::Create(
+            ctx, "execution." + std::to_string(int_gen.next()), F, &*b_it);
+        if (!new_entry_block.has_value()) {
+          new_entry_block = new_block;
+        }
+        b_it = cb->getIterator();
+        Builder.SetInsertPoint(new_block);
+        auto suspend_res = Builder.CreateIntrinsic(
+            i8_t, Intrinsic::coro_suspend, {token_none, i1_false});
+        auto insn = insn_it++;
+        insn->moveBefore(suspend_res);
+      }
+      b_it++;
+
+      cb->setName("terminator." + std::to_string(int_gen.next()));
+      if (new_entry_block.has_value()) {
+        cb->replaceAllUsesWith(new_entry_block.value());
+      }
+    }
+
     auto &first_real_block = F->front();
     auto suspend = BasicBlock::Create(ctx, "suspend", F, &F->front());
     auto cleanup = BasicBlock::Create(ctx, "cleanup", F, suspend);
     auto init = BasicBlock::Create(ctx, "init", F, cleanup);
 
-    builder_t Builder(init);
-
-    // init:
+    // Init:
     Builder.SetInsertPoint(init);
     auto promise = Builder.CreateAlloca(promise_t, nullptr, "promise");
     auto id = Builder.CreateIntrinsic(token_t, Intrinsic::coro_id,
@@ -120,66 +149,78 @@ struct CoroGenerator final {
     _switch->addCase(ConstantInt::get(i8_t, 0), &first_real_block);
     _switch->addCase(ConstantInt::get(i8_t, 1), cleanup);
 
-    // cleanup:
+    // Cleanup:
     Builder.SetInsertPoint(cleanup);
     auto mem = Builder.CreateIntrinsic(ptr_t, Intrinsic::coro_free, {id, hdl});
     Builder.CreateCall(utils::GenFreeCallee(M), {mem});
     Builder.CreateBr(suspend);
 
-    // suspend:
+    // Suspend:
     Builder.SetInsertPoint(suspend);
     auto unused = Builder.CreateIntrinsic(i1_t, Intrinsic::coro_end,
                                           {hdl, i1_false, token_none});
     Builder.CreateRet(hdl);
 
-    for (int i = 0; auto &b : *F) {
-      ++i;
-      if (i < 4) {
-        // We must skip [init, cleanup, suspend].
-        continue;
-      }
+    // * Replace ret instructions with result memorization.
+    // We memorize return value in promise.
+    // * Create terminate instructions in execution blocks.
+    // * Replace function calls with coroutine clone calls.
+    for (auto &b : *F) {
+      auto b_name = b.getName();
 
-      for (auto it = b.begin(); it != b.end();) {
-        auto &instr = *it;
-
-        if (auto ret = dyn_cast<ReturnInst>(&instr)) {
-          // Change terminating instructions.
+      if (!b_name.starts_with("execution") && !b_name.starts_with("init") &&
+          !b_name.starts_with("cleanup") && !b_name.starts_with("suspend")) {
+        auto instr = &*b.rbegin();
+        if (auto ret = dyn_cast<ReturnInst>(instr)) {
           Builder.SetInsertPoint(ret);
           // TODO: functions which return void.
           auto call =
               Builder.CreateCall(set_ret_val, {promise, ret->getOperand(0)});
-          ReplaceInstWithInst(&instr, BranchInst::Create(cleanup));
-          it = call->getIterator();
-          continue;
-
-        } else if (auto call = dyn_cast<CallInst>(&instr)) {
-          // Replace calls with coroutines clone calls.
-          // Maybe need to generate coro clones in process.
-          auto f = call->getCalledFunction();
-          auto name = f->getName().str();
-          if (IsCoroTarget(name)) {
-            errs() << "Replace " << name << " call\n";
-            auto coro_f = GenCoroFunc(f);
-            Builder.SetInsertPoint(call);
-            std::vector<Value *> args;
-            for (int i = 0; i < call->arg_size(); ++i) {
-              args.push_back(call->getArgOperand(i));
-            }
-            auto hdl = Builder.CreateCall(coro_f, args);
-            // TODO: add suspension point here.
-            // Scheduler must resume us when child coroutine is terminated.
-            auto ret_val = Builder.CreateCall(get_ret_val, {promise});
-            for (auto &use : call->uses()) {
-              User *user = use.getUser();
-              user->setOperand(use.getOperandNo(), ret_val);
-            }
-            call->eraseFromParent();
-            it = ret_val->getIterator();
-            continue;
-          }
+          ReplaceInstWithInst(instr, BranchInst::Create(cleanup));
         }
+      }
 
-        ++it;
+      if (!b_name.starts_with("execution")) {
+        continue;
+      }
+
+      auto suspend_res = &*b.rbegin();
+      Builder.SetInsertPoint(&b);
+      auto _switch = Builder.CreateSwitch(suspend_res, suspend, 2);
+      _switch->addCase(ConstantInt::get(i8_t, 0), &*std::next(b.getIterator()));
+      _switch->addCase(ConstantInt::get(i8_t, 1), cleanup);
+
+      auto insn = &*std::prev(suspend_res->getIterator());
+      if (auto call = dyn_cast<CallInst>(insn)) {
+        // Replace calls with coroutines clone calls.
+        // Maybe need to generate coro clones in process.
+        auto f = call->getCalledFunction();
+        auto f_name = f->getName().str();
+        if (IsCoroTarget(f_name)) {
+          // TODO: remove after debug.
+          errs() << "Replace " << f_name << " call\n";
+          auto coro_f = GenCoroFunc(f);
+
+          Builder.SetInsertPoint(call);
+          std::vector<Value *> args(call->arg_size());
+          for (int i = 0; i < call->arg_size(); ++i) {
+            args[i] = call->getArgOperand(i);
+          }
+          auto hdl = Builder.CreateCall(coro_f, args);
+
+          Builder.SetInsertPoint(call);
+          Builder.CreateCall(set_child_hdl, {promise, hdl});
+          // %hdl = ptr call @call_coro()
+          // call void @set_child_hdl(promise, hdl)
+
+          Builder.SetInsertPoint(_switch);
+          auto ret_val = Builder.CreateCall(get_ret_val, {promise});
+          for (auto &use : call->uses()) {
+            User *user = use.getUser();
+            user->setOperand(use.getOperandNo(), ret_val);
+          }
+          call->eraseFromParent();
+        }
       }
     }
 

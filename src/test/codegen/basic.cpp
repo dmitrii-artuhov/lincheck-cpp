@@ -21,9 +21,9 @@ int foo(int a, int b) {
   } else {
     c = a + b;
   }
-  int d = c + 4;
+  int d = mini(c);
   return d;
 }
 
-int main() { return 42; }
+// int main() { return 42; }
 }
