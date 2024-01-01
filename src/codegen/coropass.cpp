@@ -3,13 +3,20 @@
 #include "llvm/Pass.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/PassPlugin.h"
+#include "llvm/Support/CommandLine.h"
 #include "utils.h"
+
+using builder_t = IRBuilder<NoFolder>;
+static cl::opt<std::string> test_foo("test_foo",
+                                     cl::desc("Specify test foo name"),
+                                     cl::value_desc("function name"));
 
 // Function names for which we generate coroutines.
 std::vector<std::string> gen_coro_list = {
     "foo",
     "bar",
     "mini",
+    "test",
 };
 
 bool IsCoroTarget(const std::string &target) {
@@ -17,8 +24,46 @@ bool IsCoroTarget(const std::string &target) {
          gen_coro_list.end();
 }
 
-Twine ToCoro(const Twine &name) { return name + "_coro"; }
+std::string ToCoro(const std::string &name) { return name + "_coro"; }
 
+// Generates main where calls test function.
+// With specified coroutine tasks.
+struct MainGenerator final {
+  MainGenerator(Module &M) : M(M) {
+    auto &ctx = M.getContext();
+    void_t = Type::getVoidTy(ctx);
+    ptr_t = PointerType::get(ctx, 0);
+    i32_t = Type::getInt32Ty(ctx);
+
+    test_func = Function::Create(FunctionType::get(void_t, {ptr_t}, false),
+                                 Function::ExternalLinkage, "test_func", M);
+  }
+
+  void run(const std::vector<std::string> &coros_to_call) {
+    auto &ctx = M.getContext();
+    auto main = Function::Create(FunctionType::get(i32_t, {}, false),
+                                 Function::ExternalLinkage, "main", M);
+    auto block = BasicBlock::Create(ctx, "entry", main);
+    builder_t Builder(block);
+
+    for (const auto &coro_name : coros_to_call) {
+      auto coro = M.getFunction(coro_name);
+      assert(coro && "coro function doesn't exist");
+      auto hdl = Builder.CreateCall(coro, {});
+      Builder.CreateCall(test_func, {hdl});
+    }
+    Builder.CreateRet(ConstantInt::get(i32_t, 0));
+  }
+
+ private:
+  Module &M;
+  Function *test_func;
+  PointerType *ptr_t;
+  Type *void_t;
+  Type *i32_t;
+};
+
+// Generates coro clones for functions in the module.
 struct CoroGenerator final {
   CoroGenerator(Module &M) : M(M) {
     auto &ctx = M.getContext();
@@ -28,7 +73,10 @@ struct CoroGenerator final {
     ptr_t = PointerType::get(ctx, 0);
     void_t = Type::getVoidTy(ctx);
     token_t = Type::getTokenTy(ctx);
-    promise_t = StructType::create("CoroPromise", i32_t, i32_t, ptr_t);
+    // This signature must be as in runtime declaration.
+    // TODO: validate this by some way.
+    promise_t =
+        StructType::create("CoroPromise", i32_t, i32_t, i32_t, i32_t, ptr_t);
     promise_ptr_t = PointerType::get(promise_t, 0);
 
     // Names clashes?
@@ -38,9 +86,12 @@ struct CoroGenerator final {
     set_ret_val = Function::Create(
         FunctionType::get(void_t, {promise_ptr_t, i32_t}, false),
         Function::ExternalLinkage, "set_ret_val", M);
-    get_ret_val =
+    get_child_ret =
         Function::Create(FunctionType::get(i32_t, {promise_ptr_t}, false),
-                         Function::ExternalLinkage, "get_ret_val", M);
+                         Function::ExternalLinkage, "get_child_ret", M);
+    init_promise =
+        Function::Create(FunctionType::get(void_t, {ptr_t}, false),
+                         Function::ExternalLinkage, "init_promise", M);
   }
 
   void Run() {
@@ -53,7 +104,6 @@ struct CoroGenerator final {
   }
 
  private:
-  using builder_t = IRBuilder<NoFolder>;
   Module &M;
   Type *void_t;
   Type *token_t;
@@ -65,13 +115,14 @@ struct CoroGenerator final {
   PointerType *promise_ptr_t;
   Function *set_child_hdl;
   Function *set_ret_val;
-  Function *get_ret_val;
+  Function *get_child_ret;
+  Function *init_promise;
 
   Function *GenCoroFunc(Function *F) {
     assert(!F->empty() && "function must not be empty");
-    auto coro_name = ToCoro(F->getName());
+    auto coro_name = ToCoro(F->getName().str());
     SmallVector<char, 10> vec;
-    if (auto func = M.getFunction(coro_name.toStringRef(vec))) {
+    if (auto func = M.getFunction(coro_name)) {
       // Was generated later.
       // TODO: what if this symbol is defined in user code?
       return func;
@@ -134,6 +185,7 @@ struct CoroGenerator final {
     // Init:
     Builder.SetInsertPoint(init);
     auto promise = Builder.CreateAlloca(promise_t, nullptr, "promise");
+    Builder.CreateCall(init_promise, {promise});
     auto id = Builder.CreateIntrinsic(token_t, Intrinsic::coro_id,
                                       {i32_0, promise, ptr_null, ptr_null},
                                       nullptr, "id");
@@ -187,7 +239,9 @@ struct CoroGenerator final {
       auto suspend_res = &*b.rbegin();
       Builder.SetInsertPoint(&b);
       auto _switch = Builder.CreateSwitch(suspend_res, suspend, 2);
-      _switch->addCase(ConstantInt::get(i8_t, 0), &*std::next(b.getIterator()));
+
+      auto next_block = &*std::next(b.getIterator());
+      _switch->addCase(ConstantInt::get(i8_t, 0), next_block);
       _switch->addCase(ConstantInt::get(i8_t, 1), cleanup);
 
       auto insn = &*std::prev(suspend_res->getIterator());
@@ -211,10 +265,14 @@ struct CoroGenerator final {
           Builder.SetInsertPoint(call);
           Builder.CreateCall(set_child_hdl, {promise, hdl});
           // %hdl = ptr call @call_coro()
+          // %suspend = @llvm.coro.suspend()
+          // switch
+          //
+          // In the next block:
           // call void @set_child_hdl(promise, hdl)
 
-          Builder.SetInsertPoint(_switch);
-          auto ret_val = Builder.CreateCall(get_ret_val, {promise});
+          Builder.SetInsertPoint(&*next_block->begin());
+          auto ret_val = Builder.CreateCall(get_child_ret, {promise});
           for (auto &use : call->uses()) {
             User *user = use.getUser();
             user->setOperand(use.getOperandNo(), ret_val);
@@ -234,6 +292,10 @@ struct CoroGenPass : public PassInfoMixin<CoroGenPass> {
   PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) {
     CoroGenerator gen{M};
     gen.Run();
+    if (test_foo != "") {
+      MainGenerator main_gen{M};
+      main_gen.run(std::vector<std::string>{ToCoro(test_foo)});
+    }
     return PreservedAnalyses::none();
   };
 };

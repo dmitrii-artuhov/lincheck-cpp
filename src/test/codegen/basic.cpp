@@ -1,7 +1,12 @@
+#include <iostream>
+
 extern "C" {
 
-int bar(int c) {
-  c++;
+int bar() {
+  int c = 0;
+  std::cout << "0x\n";
+  c = 42;
+  std::cout << "1y\n";
   return c;
 }
 
