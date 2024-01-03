@@ -269,7 +269,8 @@ struct CoroGenerator final {
           // switch
           //
           // In the next block:
-          // call void @set_child_hdl(promise, hdl)
+          // %ret_val = call void @get_child_ret(promise, hdl)
+          // operate with %ret_val
 
           Builder.SetInsertPoint(&*next_block->begin());
           auto ret_val = Builder.CreateCall(get_child_ret, {promise});
