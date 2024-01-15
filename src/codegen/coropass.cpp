@@ -11,17 +11,8 @@ static cl::opt<std::string> test_foo("test_foo",
                                      cl::desc("Specify test foo name"),
                                      cl::value_desc("function name"));
 
-// Function names for which we generate coroutines.
-std::vector<std::string> gen_coro_list = {
-    "foo",
-    "bar",
-    "mini",
-    "test",
-};
-
 bool IsCoroTarget(const std::string &target) {
-  return std::find(gen_coro_list.begin(), gen_coro_list.end(), target) !=
-         gen_coro_list.end();
+  return !target.ends_with("_coro");
 }
 
 std::string ToCoro(const std::string &name) { return name + "_coro"; }
@@ -119,7 +110,10 @@ struct CoroGenerator final {
   Function *init_promise;
 
   Function *GenCoroFunc(Function *F) {
-    assert(!F->empty() && "function must not be empty");
+    if (F->empty()) {
+      errs() << "Skip generation for " << F->getName() << ": it's empty\n";
+      return nullptr;
+    }
     auto coro_name = ToCoro(F->getName().str());
     SmallVector<char, 10> vec;
     if (auto func = M.getFunction(coro_name)) {
@@ -128,12 +122,15 @@ struct CoroGenerator final {
       return func;
     }
     errs() << "Gen " << coro_name << "\n";
+    auto old_ret_t = F->getReturnType();
     auto newF = utils::CloneFuncChangeRetType(F, ptr_t, coro_name);
-    return rawGenCoroFunc(newF);
+    assert(newF != nullptr && "Generated function is nullptr");
+    errs() << "Generated: " << coro_name << "\n";
+    return rawGenCoroFunc(newF, old_ret_t);
   }
 
   // TODO: rewrite it using one pass.
-  Function *rawGenCoroFunc(Function *F) {
+  Function *rawGenCoroFunc(Function *F, Type *old_ret_t) {
     auto int_gen = utils::SeqGenerator{};
     auto &ctx = M.getContext();
 
@@ -224,10 +221,12 @@ struct CoroGenerator final {
           !b_name.starts_with("cleanup") && !b_name.starts_with("suspend")) {
         auto instr = &*b.rbegin();
         if (auto ret = dyn_cast<ReturnInst>(instr)) {
-          Builder.SetInsertPoint(ret);
-          // TODO: functions which return void.
-          auto call =
-              Builder.CreateCall(set_ret_val, {promise, ret->getOperand(0)});
+          if (old_ret_t == i32_t) {
+            // TODO: what if function return type is not int?
+            Builder.SetInsertPoint(ret);
+            auto call =
+                Builder.CreateCall(set_ret_val, {promise, ret->getOperand(0)});
+          }
           ReplaceInstWithInst(instr, BranchInst::Create(cleanup));
         }
       }
@@ -254,6 +253,11 @@ struct CoroGenerator final {
           // TODO: remove after debug.
           errs() << "Replace " << f_name << " call\n";
           auto coro_f = GenCoroFunc(f);
+          if (coro_f == nullptr) {
+            // We can't generate this call because
+            // can't generate coro clone for callee.
+            continue;
+          }
 
           Builder.SetInsertPoint(call);
           std::vector<Value *> args(call->arg_size());
