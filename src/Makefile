@@ -8,3 +8,8 @@ run_codegen: basic.bc
 	@ opt --load-pass-plugin ./build/codegen/CoroGenPass.so \
 	-passes="coro_gen" -test_foo bar basic.bc -o res.bc
 	@ llvm-dis res.bc -o res.ll
+
+.PHONY: regression
+regression:
+	make -Cbuild
+	pytest -v ./test/regression
