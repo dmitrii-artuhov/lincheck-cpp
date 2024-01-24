@@ -77,12 +77,15 @@ struct CoroGenerator final {
     set_ret_val = Function::Create(
         FunctionType::get(void_t, {promise_ptr_t, i32_t}, false),
         Function::ExternalLinkage, "set_ret_val", M);
-    get_child_ret =
+    get_ret_val =
         Function::Create(FunctionType::get(i32_t, {promise_ptr_t}, false),
-                         Function::ExternalLinkage, "get_child_ret", M);
+                         Function::ExternalLinkage, "get_ret_val", M);
     init_promise =
         Function::Create(FunctionType::get(void_t, {ptr_t}, false),
                          Function::ExternalLinkage, "init_promise", M);
+    get_promise =
+        Function::Create(FunctionType::get(promise_ptr_t, {ptr_t}, false),
+                         Function::ExternalLinkage, "get_promise", M);
   }
 
   void Run() {
@@ -106,7 +109,8 @@ struct CoroGenerator final {
   PointerType *promise_ptr_t;
   Function *set_child_hdl;
   Function *set_ret_val;
-  Function *get_child_ret;
+  Function *get_ret_val;
+  Function *get_promise;
   Function *init_promise;
 
   Function *GenCoroFunc(Function *F) {
@@ -273,11 +277,13 @@ struct CoroGenerator final {
           // switch
           //
           // In the next block:
-          // %ret_val = call void @get_child_ret(promise, hdl)
+          // %as_promise = call Promise* @get_promise(hdl)
+          // %ret_val    = call i32 @get_ret(as_promise)
           // operate with %ret_val
 
           Builder.SetInsertPoint(&*next_block->begin());
-          auto ret_val = Builder.CreateCall(get_child_ret, {promise});
+          auto as_promise = Builder.CreateCall(get_promise, {hdl});
+          auto ret_val = Builder.CreateCall(get_ret_val, {as_promise});
           for (auto &use : call->uses()) {
             User *user = use.getUser();
             user->setOperand(use.getOperandNo(), ret_val);

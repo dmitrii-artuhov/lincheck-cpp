@@ -23,7 +23,7 @@ void test_func(int8_t *hdl_addr) {
       auto ret = get_ret_val(&promise);
       stack.pop_back();
       if (!stack.empty()) {
-        set_child_ret(&stack.back().promise(), ret);
+        set_child_hdl(&stack.back().promise(), nullptr);
       }
     } else {
       hdl.resume();
