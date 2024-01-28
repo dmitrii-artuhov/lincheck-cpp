@@ -7,15 +7,15 @@
 #include "utils.h"
 
 using builder_t = IRBuilder<NoFolder>;
-static cl::opt<std::string> test_foo("test_foo",
-                                     cl::desc("Specify test foo name"),
-                                     cl::value_desc("function name"));
+
+const std::string coro_suf = "_coro";
+const std::string task_builder_suf = "_task_builder";
 
 bool IsCoroTarget(const std::string &target) {
-  return !target.ends_with("_coro");
+  return !target.ends_with(coro_suf) && !target.ends_with(task_builder_suf);
 }
 
-std::string ToCoro(const std::string &name) { return name + "_coro"; }
+std::string ToCoro(const std::string &name) { return name + coro_suf; }
 
 // Generates main where calls test function.
 // With specified coroutine tasks.
@@ -26,32 +26,60 @@ struct MainGenerator final {
     ptr_t = PointerType::get(ctx, 0);
     i32_t = Type::getInt32Ty(ctx);
 
-    test_func = Function::Create(FunctionType::get(void_t, {ptr_t}, false),
-                                 Function::ExternalLinkage, "test_func", M);
+    task_builder_list_t = ptr_t;
+    task_builder_t = ptr_t;
+
+    new_task_builder_list =
+        Function::Create(FunctionType::get(task_builder_list_t, {}, false),
+                         Function::ExternalLinkage, "new_task_builder_list", M);
+
+    destroy_task_builder_list = Function::Create(
+        FunctionType::get(void_t, {task_builder_list_t}, false),
+        Function::ExternalLinkage, "destroy_task_builder_list", M);
+
+    push_task_builder_list = Function::Create(
+        FunctionType::get(void_t, {task_builder_list_t, task_builder_t}, false),
+        Function::ExternalLinkage, "push_task_builder_list", M);
   }
 
-  void run(const std::vector<std::string> &coros_to_call) {
+  void run(const std::string &entry_point_name,
+           std::vector<Function *> &builders_to_pass) {
     auto &ctx = M.getContext();
     auto main = Function::Create(FunctionType::get(i32_t, {}, false),
                                  Function::ExternalLinkage, "main", M);
     auto block = BasicBlock::Create(ctx, "entry", main);
     builder_t Builder(block);
 
-    for (const auto &coro_name : coros_to_call) {
-      auto coro = M.getFunction(coro_name);
-      assert(coro && "coro function doesn't exist");
-      auto hdl = Builder.CreateCall(coro, {});
-      Builder.CreateCall(test_func, {hdl});
+    // Create task_builder_list.
+    auto task_builder_list = Builder.CreateCall(new_task_builder_list, {});
+
+    // Push builders to list.
+    for (const auto &builder : builders_to_pass) {
+      Builder.CreateCall(push_task_builder_list, {task_builder_list, builder});
     }
+
+    auto entry_point = Function::Create(
+        FunctionType::get(void_t, {task_builder_list_t}, false),
+        Function::ExternalLinkage, entry_point_name, M);
+    // Call entry point.
+    Builder.CreateCall(entry_point, {task_builder_list});
+
+    // Destroy task_builder_list.
+    Builder.CreateCall(destroy_task_builder_list, {task_builder_list});
     Builder.CreateRet(ConstantInt::get(i32_t, 0));
   }
 
  private:
   Module &M;
-  Function *test_func;
   PointerType *ptr_t;
   Type *void_t;
   Type *i32_t;
+
+  PointerType *task_builder_t;
+  PointerType *task_builder_list_t;
+  Function *new_task_builder_list;
+  Function *destroy_task_builder_list;
+  Function *push_task_builder_list;
 };
 
 // Generates coro clones for functions in the module.
@@ -66,52 +94,103 @@ struct CoroGenerator final {
     token_t = Type::getTokenTy(ctx);
     // This signature must be as in runtime declaration.
     // TODO: validate this by some way.
-    promise_t =
-        StructType::create("CoroPromise", i32_t, i32_t, i32_t, i32_t, ptr_t);
+    promise_t = StructType::create("CoroPromise", i32_t, i32_t, ptr_t, ptr_t);
+    task_t = StructType::create("Task", ptr_t);
+
     promise_ptr_t = PointerType::get(promise_t, 0);
+    task_builder_t = ptr_t;
 
     // Names clashes?
     set_child_hdl = Function::Create(
         FunctionType::get(void_t, {promise_ptr_t, ptr_t}, false),
         Function::ExternalLinkage, "set_child_hdl", M);
+
     set_ret_val = Function::Create(
         FunctionType::get(void_t, {promise_ptr_t, i32_t}, false),
         Function::ExternalLinkage, "set_ret_val", M);
+
     get_ret_val =
         Function::Create(FunctionType::get(i32_t, {promise_ptr_t}, false),
                          Function::ExternalLinkage, "get_ret_val", M);
     init_promise =
-        Function::Create(FunctionType::get(void_t, {ptr_t}, false),
+        Function::Create(FunctionType::get(void_t, {ptr_t, ptr_t}, false),
                          Function::ExternalLinkage, "init_promise", M);
     get_promise =
         Function::Create(FunctionType::get(promise_ptr_t, {ptr_t}, false),
                          Function::ExternalLinkage, "get_promise", M);
+
+    make_task = Function::Create(FunctionType::get(task_t, {ptr_t}, false),
+                                 Function::ExternalLinkage, "make_task", M);
   }
 
-  void Run() {
+  std::vector<Function *> Run() {
+    std::vector<Function *> result;
     for (auto &F : M) {
       auto name = F.getName().str();
       if (IsCoroTarget(name)) {
-        GenCoroFunc(&F);
+        // Generate coroutine.
+        auto fun = GenCoroFunc(&F);
+        if (fun != nullptr) {
+          // Generate TaskBulder wrapper for this coroutine
+          // to provide caller an ability to create tasks.
+          auto task_builder = GenTaskBuilder(fun, name);
+          if (task_builder != nullptr) {
+            result.push_back(task_builder);
+          }
+        }
       }
     }
+    return result;
   }
 
  private:
   Module &M;
   Type *void_t;
   Type *token_t;
+
   StructType *promise_t;
+  StructType *task_t;
+
   IntegerType *i1_t;
   IntegerType *i8_t;
   IntegerType *i32_t;
+
   PointerType *ptr_t;
   PointerType *promise_ptr_t;
+  PointerType *task_builder_t;
+
   Function *set_child_hdl;
   Function *set_ret_val;
   Function *get_ret_val;
   Function *get_promise;
   Function *init_promise;
+  Function *make_task;
+
+  Function *GenTaskBuilder(Function *F, const std::string &name) {
+    assert(F != nullptr && "F is nullptr");
+    if (F->arg_size() != 0) {
+      // TODO: how caller will provide input arguments?
+      errs() << "Skip TaskBuilder generation for " << F->getName()
+             << ": args are non empty\n";
+      return nullptr;
+    }
+    errs() << "Generate TaskBuilder for " << F->getName() << "\n";
+    auto &ctx = M.getContext();
+    auto task_builder_name = name + task_builder_suf;
+    auto ftype = FunctionType::get(task_t, {}, false);
+
+    Function *TaskBuilder = Function::Create(ftype, Function::ExternalLinkage,
+                                             task_builder_name, M);
+
+    auto block =
+        BasicBlock::Create(ctx, "init", TaskBuilder, &TaskBuilder->front());
+    builder_t Builder{block};
+    auto hdl = Builder.CreateCall(F, {});
+    auto task = Builder.CreateCall(make_task, {hdl});
+    Builder.CreateRet(task);
+
+    return TaskBuilder;
+  }
 
   Function *GenCoroFunc(Function *F) {
     if (F->empty()) {
@@ -129,12 +208,11 @@ struct CoroGenerator final {
     auto old_ret_t = F->getReturnType();
     auto newF = utils::CloneFuncChangeRetType(F, ptr_t, coro_name);
     assert(newF != nullptr && "Generated function is nullptr");
-    errs() << "Generated: " << coro_name << "\n";
-    return rawGenCoroFunc(newF, old_ret_t);
+    return rawGenCoroFunc(newF, old_ret_t, F->getName().str());
   }
 
   // TODO: rewrite it using one pass.
-  Function *rawGenCoroFunc(Function *F, Type *old_ret_t) {
+  Function *rawGenCoroFunc(Function *F, Type *old_ret_t, std::string old_name) {
     auto int_gen = utils::SeqGenerator{};
     auto &ctx = M.getContext();
 
@@ -186,7 +264,14 @@ struct CoroGenerator final {
     // Init:
     Builder.SetInsertPoint(init);
     auto promise = Builder.CreateAlloca(promise_t, nullptr, "promise");
-    Builder.CreateCall(init_promise, {promise});
+
+    // Declare global variable that hold function name.
+    auto name_const = createPrivateGlobalForString(M, old_name, false, "");
+    auto name_ptr = Builder.CreateGEP(
+        ArrayType::get(i8_t, old_name.length() + 1), name_const,
+        {ConstantInt::get(i32_t, 0), ConstantInt::get(i32_t, 0)});
+
+    Builder.CreateCall(init_promise, {promise, name_ptr});
     auto id = Builder.CreateIntrinsic(token_t, Intrinsic::coro_id,
                                       {i32_0, promise, ptr_null, ptr_null},
                                       nullptr, "id");
@@ -224,14 +309,21 @@ struct CoroGenerator final {
       if (!b_name.starts_with("execution") && !b_name.starts_with("init") &&
           !b_name.starts_with("cleanup") && !b_name.starts_with("suspend")) {
         auto instr = &*b.rbegin();
+        // Check if terminate instruction is `ret`.
         if (auto ret = dyn_cast<ReturnInst>(instr)) {
+          // TODO: what if function return type is not int?
+          Builder.SetInsertPoint(ret);
           if (old_ret_t == i32_t) {
-            // TODO: what if function return type is not int?
-            Builder.SetInsertPoint(ret);
-            auto call =
-                Builder.CreateCall(set_ret_val, {promise, ret->getOperand(0)});
+            Builder.CreateCall(set_ret_val, {promise, ret->getOperand(0)});
           }
-          ReplaceInstWithInst(instr, BranchInst::Create(cleanup));
+          // We need to suspend after `ret` because
+          // return value must be accessed before coroutine destruction.
+          auto suspend_res = Builder.CreateIntrinsic(
+              i8_t, Intrinsic::coro_suspend, {token_none, i1_false});
+          auto _switch = Builder.CreateSwitch(suspend_res, suspend, 2);
+          _switch->addCase(ConstantInt::get(i8_t, 0), cleanup);
+          _switch->addCase(ConstantInt::get(i8_t, 1), cleanup);
+          instr->eraseFromParent();
         }
       }
 
@@ -302,11 +394,10 @@ namespace {
 struct CoroGenPass : public PassInfoMixin<CoroGenPass> {
   PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) {
     CoroGenerator gen{M};
-    gen.Run();
-    if (test_foo != "") {
-      MainGenerator main_gen{M};
-      main_gen.run(std::vector<std::string>{ToCoro(test_foo)});
-    }
+    auto generated_builders = gen.Run();
+
+    MainGenerator main_gen{M};
+    main_gen.run("run", generated_builders);
     return PreservedAnalyses::none();
   };
 };

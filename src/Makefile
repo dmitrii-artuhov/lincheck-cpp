@@ -6,7 +6,7 @@ basic.bc: ./test/codegen/basic.cpp
 run_codegen: basic.bc
 	@ make -C build > /dev/null
 	@ opt --load-pass-plugin ./build/codegen/CoroGenPass.so \
-	-passes="coro_gen" -test_foo bar basic.bc -o res.bc
+	-passes="coro_gen" basic.bc -o res.bc
 	@ llvm-dis res.bc -o res.ll
 
 .PHONY: regression

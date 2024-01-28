@@ -1,4 +1,6 @@
+#include <cassert>
 #include <iostream>
+#include <optional>
 #include <vector>
 
 #include "../../runtime/include/lib.h"
@@ -8,29 +10,33 @@ extern "C" {
 int var{};
 void tick() { ++var; }
 
-// This function runs task by handler until it and all children are terminated.
-void test_func(int8_t *hdl_addr) {
-  auto root_hdl = std::coroutine_handle<CoroPromise>::from_address(hdl_addr);
-  // Keep stack that contains launched functions.
-  std::vector<decltype(root_hdl)> stack{root_hdl};
+// This function runs `test` task until it and all children are terminated.
+void run(TaskBuilderList l) {
+  std::optional<Task> task;
+  for (auto task_builder : *l) {
+    auto cur_task = task_builder();
+    if (cur_task.GetName() == "test") {
+      task = cur_task;
+      break;
+    }
+  }
+  assert(task.has_value() && "task `test` is not found");
 
+  // Keep stack that contains launched tasks.
+  std::vector<Task> stack = {task.value()};
   while (stack.size()) {
-    auto hdl = stack.back();
-    auto &promise = hdl.promise();
-    if (has_ret_val(&promise)) {
-      auto ret_val = get_ret_val(&promise);
-      std::cout << "returned " << ret_val << std::endl;
-      auto ret = get_ret_val(&promise);
+    auto current = stack.back();
+    if (current.IsReturned()) {
+      std::cout << "returned " << current.GetRetVal() << std::endl;
       stack.pop_back();
       if (!stack.empty()) {
-        set_child_hdl(&stack.back().promise(), nullptr);
+        stack.back().ClearChild();
       }
     } else {
-      hdl.resume();
+      current.Resume();
       std::cout << var << std::endl;
-      if (has_child_hdl(&promise)) {
-        // Coroutine has gave birth to a child.
-        stack.push_back(get_child_hdl(&promise));
+      if (current.HasChild()) {
+        stack.push_back(current.GetChild());
       }
     }
   }

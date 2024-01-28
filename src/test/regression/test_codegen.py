@@ -66,8 +66,9 @@ def test_codegen(name, tmpdir):
 
     # Run coro-gen pass.
     cmd = [OPT, "--load-pass-plugin", COROGEN_PATH,
-           "-passes", "coro_gen", "-test_foo", "test",
-           "bytecode.bc", "-o", "res.bc"]
+           "-passes", "coro_gen",
+           "bytecode.bc",
+           "-o", "res.bc"]
     rc, _ = run_command_and_get_output(cmd, cwd=tmpdir)
     assert rc == 0
 
