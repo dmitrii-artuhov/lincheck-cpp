@@ -17,8 +17,9 @@ bool IsCoroTarget(const std::string &target) {
 
 std::string ToCoro(const std::string &name) { return name + coro_suf; }
 
-// Generates main where calls test function.
-// With specified coroutine tasks.
+// Generates
+// * task_builders from generated coroutines, which has not args.
+// * main where produces task builders list and call entrypoint function on it.
 struct MainGenerator final {
   MainGenerator(Module &M) : M(M) {
     auto &ctx = M.getContext();
@@ -26,8 +27,12 @@ struct MainGenerator final {
     ptr_t = PointerType::get(ctx, 0);
     i32_t = Type::getInt32Ty(ctx);
 
+    task_t = StructType::create("Task", ptr_t);
     task_builder_list_t = ptr_t;
     task_builder_t = ptr_t;
+
+    make_task = Function::Create(FunctionType::get(task_t, {ptr_t}, false),
+                                 Function::ExternalLinkage, "make_task", M);
 
     new_task_builder_list =
         Function::Create(FunctionType::get(task_builder_list_t, {}, false),
@@ -43,7 +48,7 @@ struct MainGenerator final {
   }
 
   void run(const std::string &entry_point_name,
-           std::vector<Function *> &builders_to_pass) {
+           std::vector<Function *> &coroutines) {
     auto &ctx = M.getContext();
     auto main = Function::Create(FunctionType::get(i32_t, {}, false),
                                  Function::ExternalLinkage, "main", M);
@@ -54,8 +59,12 @@ struct MainGenerator final {
     auto task_builder_list = Builder.CreateCall(new_task_builder_list, {});
 
     // Push builders to list.
-    for (const auto &builder : builders_to_pass) {
-      Builder.CreateCall(push_task_builder_list, {task_builder_list, builder});
+    for (const auto &coro : coroutines) {
+      auto builder_fun = GenTaskBuilder(coro, coro->getName().str());
+      if (builder_fun != nullptr) {
+        Builder.CreateCall(push_task_builder_list,
+                           {task_builder_list, builder_fun});
+      }
     }
 
     auto entry_point = Function::Create(
@@ -70,102 +79,6 @@ struct MainGenerator final {
   }
 
  private:
-  Module &M;
-  PointerType *ptr_t;
-  Type *void_t;
-  Type *i32_t;
-
-  PointerType *task_builder_t;
-  PointerType *task_builder_list_t;
-  Function *new_task_builder_list;
-  Function *destroy_task_builder_list;
-  Function *push_task_builder_list;
-};
-
-// Generates coro clones for functions in the module.
-struct CoroGenerator final {
-  CoroGenerator(Module &M) : M(M) {
-    auto &ctx = M.getContext();
-    i1_t = Type::getInt1Ty(ctx);
-    i8_t = Type::getInt8Ty(ctx);
-    i32_t = Type::getInt32Ty(ctx);
-    ptr_t = PointerType::get(ctx, 0);
-    void_t = Type::getVoidTy(ctx);
-    token_t = Type::getTokenTy(ctx);
-    // This signature must be as in runtime declaration.
-    // TODO: validate this by some way.
-    promise_t = StructType::create("CoroPromise", i32_t, i32_t, ptr_t, ptr_t);
-    task_t = StructType::create("Task", ptr_t);
-
-    promise_ptr_t = PointerType::get(promise_t, 0);
-    task_builder_t = ptr_t;
-
-    // Names clashes?
-    set_child_hdl = Function::Create(
-        FunctionType::get(void_t, {promise_ptr_t, ptr_t}, false),
-        Function::ExternalLinkage, "set_child_hdl", M);
-
-    set_ret_val = Function::Create(
-        FunctionType::get(void_t, {promise_ptr_t, i32_t}, false),
-        Function::ExternalLinkage, "set_ret_val", M);
-
-    get_ret_val =
-        Function::Create(FunctionType::get(i32_t, {promise_ptr_t}, false),
-                         Function::ExternalLinkage, "get_ret_val", M);
-    init_promise =
-        Function::Create(FunctionType::get(void_t, {ptr_t, ptr_t}, false),
-                         Function::ExternalLinkage, "init_promise", M);
-    get_promise =
-        Function::Create(FunctionType::get(promise_ptr_t, {ptr_t}, false),
-                         Function::ExternalLinkage, "get_promise", M);
-
-    make_task = Function::Create(FunctionType::get(task_t, {ptr_t}, false),
-                                 Function::ExternalLinkage, "make_task", M);
-  }
-
-  std::vector<Function *> Run() {
-    std::vector<Function *> result;
-    for (auto &F : M) {
-      auto name = F.getName().str();
-      if (IsCoroTarget(name)) {
-        // Generate coroutine.
-        auto fun = GenCoroFunc(&F);
-        if (fun != nullptr) {
-          // Generate TaskBulder wrapper for this coroutine
-          // to provide caller an ability to create tasks.
-          auto task_builder = GenTaskBuilder(fun, name);
-          if (task_builder != nullptr) {
-            result.push_back(task_builder);
-          }
-        }
-      }
-    }
-    return result;
-  }
-
- private:
-  Module &M;
-  Type *void_t;
-  Type *token_t;
-
-  StructType *promise_t;
-  StructType *task_t;
-
-  IntegerType *i1_t;
-  IntegerType *i8_t;
-  IntegerType *i32_t;
-
-  PointerType *ptr_t;
-  PointerType *promise_ptr_t;
-  PointerType *task_builder_t;
-
-  Function *set_child_hdl;
-  Function *set_ret_val;
-  Function *get_ret_val;
-  Function *get_promise;
-  Function *init_promise;
-  Function *make_task;
-
   Function *GenTaskBuilder(Function *F, const std::string &name) {
     assert(F != nullptr && "F is nullptr");
     if (F->arg_size() != 0) {
@@ -191,6 +104,93 @@ struct CoroGenerator final {
 
     return TaskBuilder;
   }
+
+  Module &M;
+  PointerType *ptr_t;
+  Type *void_t;
+  Type *i32_t;
+  StructType *task_t;
+
+  PointerType *task_builder_t;
+  PointerType *task_builder_list_t;
+  Function *new_task_builder_list;
+  Function *destroy_task_builder_list;
+  Function *push_task_builder_list;
+  Function *make_task;
+};
+
+// Generates coro clones for functions in the module.
+struct CoroGenerator final {
+  CoroGenerator(Module &M) : M(M) {
+    auto &ctx = M.getContext();
+    i1_t = Type::getInt1Ty(ctx);
+    i8_t = Type::getInt8Ty(ctx);
+    i32_t = Type::getInt32Ty(ctx);
+    ptr_t = PointerType::get(ctx, 0);
+    void_t = Type::getVoidTy(ctx);
+    token_t = Type::getTokenTy(ctx);
+    // This signature must be as in runtime declaration.
+    // TODO: validate this by some way.
+    promise_t = StructType::create("CoroPromise", i32_t, i32_t, ptr_t, ptr_t);
+
+    promise_ptr_t = PointerType::get(promise_t, 0);
+    task_builder_t = ptr_t;
+
+    // Names clashes?
+    set_child_hdl = Function::Create(
+        FunctionType::get(void_t, {promise_ptr_t, ptr_t}, false),
+        Function::ExternalLinkage, "set_child_hdl", M);
+
+    set_ret_val = Function::Create(
+        FunctionType::get(void_t, {promise_ptr_t, i32_t}, false),
+        Function::ExternalLinkage, "set_ret_val", M);
+
+    get_ret_val =
+        Function::Create(FunctionType::get(i32_t, {promise_ptr_t}, false),
+                         Function::ExternalLinkage, "get_ret_val", M);
+    init_promise =
+        Function::Create(FunctionType::get(void_t, {ptr_t, ptr_t}, false),
+                         Function::ExternalLinkage, "init_promise", M);
+    get_promise =
+        Function::Create(FunctionType::get(promise_ptr_t, {ptr_t}, false),
+                         Function::ExternalLinkage, "get_promise", M);
+  }
+
+  std::vector<Function *> Run() {
+    std::vector<Function *> result;
+    for (auto &F : M) {
+      auto name = F.getName().str();
+      if (IsCoroTarget(name)) {
+        // Generate coroutine.
+        auto fun = GenCoroFunc(&F);
+        if (fun != nullptr) {
+          result.push_back(fun);
+        }
+      }
+    }
+    return result;
+  }
+
+ private:
+  Module &M;
+  Type *void_t;
+  Type *token_t;
+
+  StructType *promise_t;
+
+  IntegerType *i1_t;
+  IntegerType *i8_t;
+  IntegerType *i32_t;
+
+  PointerType *ptr_t;
+  PointerType *promise_ptr_t;
+  PointerType *task_builder_t;
+
+  Function *set_child_hdl;
+  Function *set_ret_val;
+  Function *get_ret_val;
+  Function *get_promise;
+  Function *init_promise;
 
   Function *GenCoroFunc(Function *F) {
     if (F->empty()) {
@@ -394,10 +394,11 @@ namespace {
 struct CoroGenPass : public PassInfoMixin<CoroGenPass> {
   PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) {
     CoroGenerator gen{M};
-    auto generated_builders = gen.Run();
+    auto coroutines = gen.Run();
 
     MainGenerator main_gen{M};
-    main_gen.run("run", generated_builders);
+    main_gen.run("run", coroutines);
+
     return PreservedAnalyses::none();
   };
 };
