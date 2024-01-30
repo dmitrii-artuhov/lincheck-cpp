@@ -111,3 +111,35 @@ bool Task::IsReturned() { return has_ret_val(&hdl.promise()); }
 int Task::GetRetVal() { return get_ret_val(&hdl.promise()); }
 
 std::string Task::GetName() { return std::string{get_name(&hdl.promise())}; }
+
+StackfulTask::StackfulTask(Task task) {
+  stack = std::vector<Task>{task};
+}
+
+void StackfulTask::Resume() {
+  assert(!stack.empty());
+  Task& stack_head = stack.back();
+  stack_head.Resume();
+
+  if (stack_head.HasChild()) {
+    // new child was forked
+    stack.push_back(stack_head.GetChild());
+  } else if (stack_head.IsReturned()) {
+    // stack_head returned
+    last_returned_value = stack_head.GetRetVal();
+
+    // if it wasn't the first task clean up children
+    if (stack.size() >= 2) {
+      auto previous = stack[stack.size() - 2];
+      previous.ClearChild();
+    }
+  }
+}
+
+bool StackfulTask::IsReturned() {
+  return stack.empty();
+}
+
+int StackfulTask::GetRetVal() const {
+  return last_returned_value;
+}

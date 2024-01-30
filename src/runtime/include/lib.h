@@ -61,4 +61,38 @@ using TaskBuilderList = std::vector<TaskBuilder> *;
 // Runtime entrypoint.
 // Call will be generated during LLVM pass.
 void run(TaskBuilderList l);
+
+// Task wrapper with more user-friendly interface
+struct StackfulTask {
+  StackfulTask(Task task);
+
+  // Resumes the last child
+  void Resume();
+
+  bool IsReturned();
+
+  int GetRetVal() const;
+
+// TODO: snapshot
+ private:
+  std::vector<Task> stack;
+  int last_returned_value;
+};
 }
+
+// TODO: potential cyclic dependency
+struct ActionHandle {
+  ActionHandle(StackfulTask& task);
+  StackfulTask& task;
+};
+
+struct StackfulTaskInvoke {
+  StackfulTaskInvoke(StackfulTask &task);
+  StackfulTask &task;
+};
+
+struct StackfulTaskResponse {
+  StackfulTaskResponse(StackfulTask &task, int result);
+  StackfulTask &task;
+  int result;
+};
