@@ -2,13 +2,13 @@
 
 #include "include/scheduler.h"
 
-StackfulTaskInvoke::StackfulTaskInvoke(StackfulTask &task): task(task) {}
+StackfulTaskInvoke::StackfulTaskInvoke(const StackfulTask &task): task(task) {}
 
-StackfulTaskResponse::StackfulTaskResponse(StackfulTask &task, int result): task(task), result(result) {}
+StackfulTaskResponse::StackfulTaskResponse(const StackfulTask &task, int result): task(task), result(result) {}
 
 ActionHandle::ActionHandle(StackfulTask& task): task(task) {}
 
-Scheduler::Scheduler(SchedulerClass sched_class, ModelChecker checker, size_t max_tasks):
+Scheduler::Scheduler(SchedulerClass sched_class, ModelChecker& checker, size_t max_tasks):
   full_history({}),
   sequential_history({}),
   sched_class(std::move(sched_class)),
