@@ -23,7 +23,7 @@ struct Task {
   void Resume();
 
   // Returns true if the task called another coroutine task.
-  // Scheduler must check result of this function after each resume.
+  // Scheduler must Check result of this function after each resume.
   bool HasChild();
 
   // Returns child of the task.
@@ -44,7 +44,7 @@ struct Task {
   int GetRetVal();
 
   // Returns the task name.
-  std::string GetName();
+  std::string GetName() const;
 
  private:
   handle hdl;
@@ -64,7 +64,9 @@ void run(TaskBuilderList l);
 
 // Task wrapper with more user-friendly interface
 struct StackfulTask {
-  StackfulTask(Task task);
+  explicit StackfulTask(Task task);
+  // TODO: заменить это на мок, сейчас я хочу потестить линчек, не хочу сча разбираться с gmock
+  StackfulTask(int ret_val, int uid, std::string name);
 
   // Resumes the last child
   void Resume();
@@ -73,10 +75,21 @@ struct StackfulTask {
 
   int GetRetVal() const;
 
+  std::string GetName() const;
+
+  // TODO: google uuid
+  int Uid() const;
+
 // TODO: snapshot
  private:
   std::vector<Task> stack;
+  Task entrypoint;
   int last_returned_value;
+  // TODO: заменить это на мок, сейчас я хочу потестить линчек, не хочу сча разбираться с gmock
+  std::string name;
+  bool is_testing;
+  int ret_value;
+  int uid;
 };
 }
 
@@ -86,13 +99,13 @@ struct ActionHandle {
   StackfulTask& task;
 };
 
-struct StackfulTaskInvoke {
-  StackfulTaskInvoke(StackfulTask &task);
-  StackfulTask &task;
+struct StackfulTaskResponse {
+  StackfulTaskResponse(const StackfulTask &task, int result);
+  const StackfulTask &task;
+  int result;
 };
 
-struct StackfulTaskResponse {
-  StackfulTaskResponse(StackfulTask &task, int result);
-  StackfulTask &task;
-  int result;
+struct StackfulTaskInvoke {
+  StackfulTaskInvoke(const StackfulTask &task);
+  const StackfulTask &task;
 };

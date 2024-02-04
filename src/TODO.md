@@ -21,5 +21,6 @@
 * tests
 * ~~lincheck research~~
 * basic lincheck
+* поработать над кодом в целом
 * isBusy для примтивов синхронизации
 * threads - количество потоков влияет на порядок
