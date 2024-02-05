@@ -8,10 +8,10 @@ StackfulTaskResponse::StackfulTaskResponse(const StackfulTask &task, int result)
 
 ActionHandle::ActionHandle(StackfulTask& task): task(task) {}
 
-Scheduler::Scheduler(SchedulerClass sched_class, ModelChecker& checker, size_t max_tasks):
+Scheduler::Scheduler(SchedulerClass& sched_class, ModelChecker& checker, size_t max_tasks):
   full_history({}),
   sequential_history({}),
-  sched_class(std::move(sched_class)),
+  sched_class(sched_class),
   checker(checker),
   max_tasks(max_tasks) {}
 
