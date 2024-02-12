@@ -1,6 +1,7 @@
 #pragma once
 #include <coroutine>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -62,42 +63,38 @@ using TaskBuilderList = std::vector<TaskBuilder> *;
 // Call will be generated during LLVM pass.
 void run(TaskBuilderList l);
 
-// Task wrapper with more user-friendly interface
+// StackfulTask is a Task wrapper which contains the stack inside, so resume
+// method resumes the last subtask.
 struct StackfulTask {
   explicit StackfulTask(Task task);
-  // TODO: заменить это на мок, сейчас я хочу потестить линчек, не хочу сча разбираться с gmock
-  StackfulTask(int ret_val, int uid, std::string name);
 
-  // Resumes the last child
-  void Resume();
+  // Resume method resumes the last subtask.
+  virtual void Resume();
 
-  bool IsReturned();
+  // Haven't the first task finished yet?
+  virtual bool IsReturned();
 
-  int GetRetVal() const;
+  // Returns the value that was returned from the first task, have to be called
+  // only when IsReturned is true
+  // TODO: after a while int will be replaced with the trait
+  [[nodiscard]] virtual int GetRetVal() const;
 
-  std::string GetName() const;
+  [[nodiscard]] virtual const std::string &GetName() const;
 
-  // TODO: google uuid
-  int Uid() const;
+  virtual ~StackfulTask() = default;
 
-// TODO: snapshot
+  // TODO: snapshot method might be useful.
+ protected:
+  // Need this constructor for tests
+  StackfulTask() = default;
+
  private:
   std::vector<Task> stack;
-  Task entrypoint;
-  int last_returned_value;
-  // TODO: заменить это на мок, сейчас я хочу потестить линчек, не хочу сча разбираться с gmock
-  std::string name;
-  bool is_testing;
-  int ret_value;
-  int uid;
+  // Need option for tests, because I have to initialize Task field(
+  std::optional<Task> entrypoint;
+  int last_returned_value{};
 };
 }
-
-// TODO: potential cyclic dependency
-struct ActionHandle {
-  ActionHandle(StackfulTask& task);
-  StackfulTask& task;
-};
 
 struct StackfulTaskResponse {
   StackfulTaskResponse(const StackfulTask &task, int result);
@@ -106,6 +103,6 @@ struct StackfulTaskResponse {
 };
 
 struct StackfulTaskInvoke {
-  StackfulTaskInvoke(const StackfulTask &task);
+  explicit StackfulTaskInvoke(const StackfulTask &task);
   const StackfulTask &task;
 };

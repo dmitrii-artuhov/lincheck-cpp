@@ -110,23 +110,17 @@ bool Task::IsReturned() { return has_ret_val(&hdl.promise()); }
 
 int Task::GetRetVal() { return get_ret_val(&hdl.promise()); }
 
-std::string Task::GetName() const { return std::string{get_name(&hdl.promise())}; }
+std::string Task::GetName() const {
+  return std::string{get_name(&hdl.promise())};
+}
 
 StackfulTask::StackfulTask(Task task) : entrypoint(task) {
   stack = std::vector<Task>{task};
 }
 
-// TODO: delete
-StackfulTask::StackfulTask(int ret_val, int uid, std::string name) : is_testing(true), ret_value(ret_val), uid(uid), name(name), entrypoint(handle{}) {}
-
 void StackfulTask::Resume() {
-  // TODO: delete
-  if (is_testing) {
-    return;
-  }
-
   assert(!stack.empty());
-  Task& stack_head = stack.back();
+  Task &stack_head = stack.back();
   stack_head.Resume();
 
   if (stack_head.HasChild()) {
@@ -144,35 +138,9 @@ void StackfulTask::Resume() {
   }
 }
 
-bool StackfulTask::IsReturned() {
-  // TODO: delete
-  if (is_testing) {
-    return true;
-  }
-  return stack.empty();
-}
+bool StackfulTask::IsReturned() { return stack.empty(); }
 
-int StackfulTask::GetRetVal() const {
-  // TODO: delete
-  if (is_testing) {
-    return ret_value;
-  }
-  return last_returned_value;
-}
-
-std::string StackfulTask::GetName() const {
-  // TODO: delete
-  if (is_testing) {
-    return name;
-  }
-  return entrypoint.GetName();
-}
-
-int StackfulTask::Uid() const {
-  // TODO: delete
-  if (is_testing) {
-    return uid;
-  }
-  // TODO: normal random
-  return rand();
+int StackfulTask::GetRetVal() const { return last_returned_value; }
+const std::string &StackfulTask::GetName() const {
+  return entrypoint.value().GetName();
 }

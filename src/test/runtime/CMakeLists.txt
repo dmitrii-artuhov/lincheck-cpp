@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.6)
+cmake_minimum_required(VERSION 3.6)
 
 include(FetchContent)
 FetchContent_Declare(
@@ -17,6 +17,7 @@ target_link_libraries(
         lin_check_test
         runtime
         GTest::gtest_main
+        GTest::gmock_main
 )
 
 include(GoogleTest)
