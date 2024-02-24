@@ -15,6 +15,8 @@ add_executable(
         lin_check_test.cpp
 )
 
+target_compile_options(lin_check_test PRIVATE -Wall -Wextra -Werror -pedantic-errors)
+
 target_link_libraries(
         lin_check_test
         PRIVATE
