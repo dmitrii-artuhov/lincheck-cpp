@@ -52,6 +52,11 @@ bool LinearizabilityCheckerRecursive<LinearSpecificationObject,
                                      SpecificationObjectEqual>::
     Check(const std::vector<
           std::variant<StackfulTaskInvoke, StackfulTaskResponse>>& history) {
+  // It's a crunch, but it's required because the semantics of this implementation must be the same
+  // as the semantics of the non-recursive implementation
+  if (history.empty()) {
+    return true;
+  }
   std::map<size_t, size_t> inv_res = get_inv_res_mapping(history);
 
   std::function<bool(const std::vector<
@@ -63,6 +68,11 @@ bool LinearizabilityCheckerRecursive<LinearSpecificationObject,
               std::variant<StackfulTaskInvoke, StackfulTaskResponse>>& history,
           std::vector<bool>& linearized,
           LinearSpecificationObject data_structure_state) -> bool {
+    // the history is empty
+    if (std::reduce(linearized.begin(), linearized.end(), true, std::bit_and<>())) {
+      return true;
+    }
+
     // walk all minimal operations
     for (size_t i = 0; i < history.size(); ++i) {
       // we could think that history doesn't contain events that already have
@@ -78,20 +88,23 @@ bool LinearizabilityCheckerRecursive<LinearSpecificationObject,
 
       StackfulTaskInvoke minimal_op = std::get<StackfulTaskInvoke>(history[i]);
       auto method =
-          specification_methods.find(minimal_op.task.GetName())->second;
+          specification_methods.find(minimal_op.GetTask().GetName())->second;
 
       LinearSpecificationObject data_structure_state_copy =
           data_structure_state;
       // state is already have been copied, because it's the argument of the
       // lambda
       int res = method(&data_structure_state_copy);
-      if (res == minimal_op.task.GetRetVal()) {
+      if (res == minimal_op.GetTask().GetRetVal()) {
         linearized[i] = true;
         assert(inv_res.find(i) != inv_res.end());
         linearized[inv_res[i]] = true;
 
         if (recursive_step(history, linearized, data_structure_state_copy)) {
           return true;
+        } else {
+          linearized[i] = false;
+          linearized[inv_res[i]] = false;
         }
       }
     }

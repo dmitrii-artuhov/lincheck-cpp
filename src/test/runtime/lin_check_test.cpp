@@ -1,7 +1,9 @@
+#include <fuzztest/fuzztest.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "include/lincheck.h"
+#include "include/lincheck_recursive.h"
 #include "include/scheduler.h"
 
 struct Counter {
@@ -34,6 +36,7 @@ class MockStackfulTask : public StackfulTask {
 using ::testing::AnyNumber;
 using ::testing::Return;
 using ::testing::ReturnRef;
+using ::testing::ReturnRefOfCopy;
 
 TEST(LinearizabilityCheckerCounterTest, SmallLinearizableHistory) {
   std::function<int(Counter*)> fetch_and_add = [](Counter* c) {
@@ -184,5 +187,127 @@ TEST(LinearizabilityCheckerCounterTest, SmallUnlinearizableHistory) {
 
   EXPECT_EQ(checker.Check(history), false);
 }
+
+std::vector<std::unique_ptr<MockStackfulTask>> create_mocks(const std::vector<bool> &b_history) {
+  std::vector<std::unique_ptr<MockStackfulTask>> mocks;
+  mocks.reserve(b_history.size());
+  size_t adds = 0;
+
+  for (auto v : b_history) {
+    if (v) {
+      auto* add_task = new MockStackfulTask();
+      mocks.push_back(std::unique_ptr<MockStackfulTask>(add_task));
+
+      EXPECT_CALL(*add_task, GetRetVal())
+          .Times(AnyNumber())
+          .WillRepeatedly(Return(adds));
+      EXPECT_CALL(*add_task, GetName())
+          .Times(AnyNumber())
+          .WillRepeatedly(ReturnRefOfCopy(std::string("faa")));
+
+      adds++;
+    } else {
+      auto* get_task = new MockStackfulTask();
+      mocks.push_back(std::unique_ptr<MockStackfulTask>(get_task));
+
+      EXPECT_CALL(*get_task, GetRetVal())
+          .Times(AnyNumber())
+          .WillRepeatedly(Return(adds));
+      EXPECT_CALL(*get_task, GetName())
+          .Times(AnyNumber())
+          .WillRepeatedly(ReturnRefOfCopy(std::string("get")));
+    }
+  }
+
+  return mocks;
+}
+
+std::vector<std::variant<StackfulTaskInvoke, StackfulTaskResponse>> create_history(const std::vector<std::unique_ptr<MockStackfulTask>>& mocks) {
+  std::vector<std::variant<StackfulTaskInvoke, StackfulTaskResponse>> history;
+  history.reserve(2 * mocks.size());
+
+  for (auto& m: mocks) {
+    history.emplace_back(StackfulTaskInvoke(*m));
+    history.emplace_back(StackfulTaskResponse(*m, m->GetRetVal()));
+  }
+
+  std::random_device rd;
+  std::mt19937 g(rd());
+  std::shuffle(history.begin(), history.end(), g);
+
+  // Fix the order between invokes and responses
+  std::map<const StackfulTask*, size_t> responses_indexes;
+
+  for (size_t i = 0; i < history.size(); ++i) {
+    auto& event = history[i];
+    if (event.index() == 0) {
+       if(responses_indexes.find(&std::get<StackfulTaskInvoke>(event).GetTask()) != responses_indexes.end()) {
+          size_t index = responses_indexes[&std::get<StackfulTaskInvoke>(event).GetTask()];
+          std::swap(history[index], history[i]);
+       }
+    } else {
+      responses_indexes[&std::get<StackfulTaskResponse>(event).GetTask()] = i;
+    }
+  }
+
+  return history;
+}
+
+std::string draw_history(const std::vector<std::variant<StackfulTaskInvoke, StackfulTaskResponse>>& history) {
+  std::map<const StackfulTask*, size_t> numeration;
+  size_t i = 0;
+  for (auto& event: history) {
+    if (event.index() == 1) {
+      continue;
+    }
+
+    StackfulTaskInvoke invoke = std::get<StackfulTaskInvoke>(event);
+    numeration[&invoke.GetTask()] = i;
+    ++i;
+  }
+
+  std::stringstream history_string;
+
+  for (auto& event: history) {
+    if (event.index() == 0) {
+      StackfulTaskInvoke invoke = std::get<StackfulTaskInvoke>(event);
+      history_string << "[" << numeration[&invoke.GetTask()] << " inv: " << invoke.GetTask().GetName() << "]\n";
+    } else {
+      StackfulTaskResponse response = std::get<StackfulTaskResponse>(event);
+      history_string << "[" << numeration[&response.GetTask()] << " res: " << response.GetTask().GetName() << " returned: " << response.GetTask().GetRetVal() <<  "]\n";
+    }
+  }
+
+  return history_string.str();
+}
+
+void CheckersAreTheSame(const std::vector<bool> &b_history) {
+  std::function<int(Counter*)> fetch_and_add = [](Counter* c) {
+    c->count += 1;
+    return c->count - 1;
+  };
+  std::function<int(Counter*)> get = [](Counter* c) { return c->count; };
+  Counter c{};
+
+  LinearizabilityChecker<Counter> fast(
+      std::map<MethodName, std::function<int(Counter*)>>{
+          {"faa", fetch_and_add},
+          {"get", get},
+      },
+      c);
+
+  LinearizabilityCheckerRecursive<Counter> slow(
+      std::map<MethodName, std::function<int(Counter*)>>{
+          {"faa", fetch_and_add},
+          {"get", get},
+      },
+      c);
+
+  auto mocks = create_mocks(b_history);
+  auto history = create_history(mocks);
+  EXPECT_EQ(fast.Check(history), slow.Check(history)) << draw_history(history);
+}
+
+FUZZ_TEST(LinearizabilityCheckerCounterTest, CheckersAreTheSame);
 
 };  // namespace LinearizabilityCheckerTest
