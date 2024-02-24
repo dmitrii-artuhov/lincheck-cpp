@@ -1,17 +1,17 @@
 #include "include/scheduler.h"
 
-StackfulTaskInvoke::StackfulTaskInvoke(const StackfulTask& task) : task(task) {}
+Invoke::Invoke(const StackfulTask& task) : task(task) {}
 
-StackfulTaskResponse::StackfulTaskResponse(const StackfulTask& task, int result)
+Response::Response(const StackfulTask& task, int result)
     : task(task), result(result) {}
 
 Scheduler::Scheduler(SchedulerClass& sched_class, ModelChecker& checker,
-                     size_t max_switches)
+                     size_t max_tasks)
     : full_history({}),
       sequential_history({}),
       sched_class(sched_class),
       checker(checker),
-      max_tasks(max_switches) {}
+      max_tasks(max_tasks) {}
 
 std::optional<std::vector<std::reference_wrapper<StackfulTask>>>
 Scheduler::Run() {
@@ -20,7 +20,7 @@ Scheduler::Run() {
 
     // fill the sequential history
     if (is_new) {
-      sequential_history.emplace_back(StackfulTaskInvoke(next_task));
+      sequential_history.emplace_back(Invoke(next_task));
     }
     full_history.emplace_back(next_task);
 
@@ -29,7 +29,7 @@ Scheduler::Run() {
       finished_tasks++;
 
       auto result = next_task.GetRetVal();
-      sequential_history.emplace_back(StackfulTaskResponse(next_task, result));
+      sequential_history.emplace_back(Response(next_task, result));
 
       if (!checker.Check(sequential_history)) {
         return full_history;

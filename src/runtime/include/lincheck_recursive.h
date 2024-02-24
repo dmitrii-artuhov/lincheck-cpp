@@ -19,7 +19,7 @@ struct LinearizabilityCheckerRecursive : ModelChecker {
       LinearSpecificationObject first_state);
 
   bool Check(
-      const std::vector<std::variant<StackfulTaskInvoke, StackfulTaskResponse>>&
+      const std::vector<std::variant<Invoke, Response>>&
           history) override;
 
  private:
@@ -51,25 +51,27 @@ bool LinearizabilityCheckerRecursive<LinearSpecificationObject,
                                      SpecificationObjectHash,
                                      SpecificationObjectEqual>::
     Check(const std::vector<
-          std::variant<StackfulTaskInvoke, StackfulTaskResponse>>& history) {
-  // It's a crunch, but it's required because the semantics of this implementation must be the same
-  // as the semantics of the non-recursive implementation
+          std::variant<Invoke, Response>>& history) {
+  // It's a crunch, but it's required because the semantics of this
+  // implementation must be the same as the semantics of the non-recursive
+  // implementation
   if (history.empty()) {
     return true;
   }
   std::map<size_t, size_t> inv_res = get_inv_res_mapping(history);
 
-  std::function<bool(const std::vector<
-    std::variant<StackfulTaskInvoke, StackfulTaskResponse>>&, std::vector<bool>&, LinearSpecificationObject)> recursive_step;
+  std::function<bool(const std::vector<std::variant<Invoke, Response>>&,
+                     std::vector<bool>&, LinearSpecificationObject)>
+      recursive_step;
 
   recursive_step =
-      [&](
-          const std::vector<
-              std::variant<StackfulTaskInvoke, StackfulTaskResponse>>& history,
+      [&](const std::vector<
+              std::variant<Invoke, Response>>& history,
           std::vector<bool>& linearized,
           LinearSpecificationObject data_structure_state) -> bool {
     // the history is empty
-    if (std::reduce(linearized.begin(), linearized.end(), true, std::bit_and<>())) {
+    if (std::reduce(linearized.begin(), linearized.end(), true,
+                    std::bit_and<>())) {
       return true;
     }
 
@@ -86,7 +88,7 @@ bool LinearizabilityCheckerRecursive<LinearSpecificationObject,
         break;
       }
 
-      StackfulTaskInvoke minimal_op = std::get<StackfulTaskInvoke>(history[i]);
+      Invoke minimal_op = std::get<Invoke>(history[i]);
       auto method =
           specification_methods.find(minimal_op.GetTask().GetName())->second;
 
