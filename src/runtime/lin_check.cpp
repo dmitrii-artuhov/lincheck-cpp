@@ -14,11 +14,11 @@ std::map<size_t, size_t> get_inv_res_mapping(
     auto el = history[i];
     if (el.index() == 0) {
       const StackfulTaskInvoke& inv = std::get<0>(el);
-      uids[&inv.task] = i;
+      uids[&inv.GetTask()] = i;
     } else {
       const StackfulTaskResponse& res = std::get<1>(el);
-      assert(uids.find(&res.task) != uids.end());
-      auto inv_id = uids[&res.task];
+      assert(uids.find(&res.GetTask()) != uids.end());
+      auto inv_id = uids[&res.GetTask()];
       inv_res[inv_id] = i;
     }
   }

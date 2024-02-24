@@ -83,6 +83,9 @@ struct StackfulTask {
 
   virtual ~StackfulTask() = default;
 
+  StackfulTask& operator=(const StackfulTask& other)
+  = default;
+
   // TODO: snapshot method might be useful.
  protected:
   // Need this constructor for tests
@@ -98,11 +101,24 @@ struct StackfulTask {
 
 struct StackfulTaskResponse {
   StackfulTaskResponse(const StackfulTask &task, int result);
-  const StackfulTask &task;
+
+  const StackfulTask& GetTask() const;
+
   int result;
+
+ private:
+  std::reference_wrapper<const StackfulTask> task;
 };
+
+//void swap(StackfulTaskResponse& lhs, StackfulTaskResponse& rhs);
 
 struct StackfulTaskInvoke {
   explicit StackfulTaskInvoke(const StackfulTask &task);
-  const StackfulTask &task;
+
+  const StackfulTask& GetTask() const;
+
+ private:
+  std::reference_wrapper<const StackfulTask> task;
 };
+
+//void swap(StackfulTaskInvoke& lhs, StackfulTaskInvoke& rhs);

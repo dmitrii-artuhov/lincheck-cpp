@@ -144,3 +144,11 @@ int StackfulTask::GetRetVal() const { return last_returned_value; }
 const std::string &StackfulTask::GetName() const {
   return entrypoint.value().GetName();
 }
+
+const StackfulTask &StackfulTaskInvoke::GetTask() const {
+  return this->task.get();
+}
+
+const StackfulTask &StackfulTaskResponse::GetTask() const {
+  return this->task.get();
+}

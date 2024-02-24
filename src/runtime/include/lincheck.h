@@ -109,6 +109,7 @@ bool LinearizabilityChecker<LinearSpecificationObject, SpecificationObjectHash,
     // predicate
     if (linearized[current_section_start]) {
       current_section_start++;
+      continue;
     }
 
     // Current event is an invoke event
@@ -116,16 +117,16 @@ bool LinearizabilityChecker<LinearSpecificationObject, SpecificationObjectHash,
       // invoke
       const StackfulTaskInvoke& inv =
           std::get<0>(history[current_section_start]);
-      assert(specification_methods.find(inv.task.GetName()) !=
+      assert(specification_methods.find(inv.GetTask().GetName()) !=
              specification_methods.end());
-      auto method = specification_methods.find(inv.task.GetName())->second;
+      auto method = specification_methods.find(inv.GetTask().GetName())->second;
       // apply method
       bool was_checked = false;
       LinearSpecificationObject data_structure_state_copy =
           data_structure_state;
       int res = method(&data_structure_state_copy);
 
-      if (res == inv.task.GetRetVal()) {
+      if (res == inv.GetTask().GetRetVal()) {
         // We can append this event to a linearization
         linearized[current_section_start] = true;
         assert(inv_res.find(current_section_start) != inv_res.end());
@@ -146,7 +147,7 @@ bool LinearizabilityChecker<LinearSpecificationObject, SpecificationObjectHash,
 
       // haven't seen this state previously, so continue procedure with this new
       // state
-      if (res == inv.task.GetRetVal() && !was_checked) {
+      if (res == inv.GetTask().GetRetVal() && !was_checked) {
         // open section
         open_sections_stack.push_back(current_section_start);
         states_stack.push_back(data_structure_state);
