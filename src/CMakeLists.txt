@@ -13,6 +13,7 @@ FetchContent_Declare(
         fuzztest
         GIT_REPOSITORY https://github.com/google/fuzztest.git
         GIT_TAG "main"
+        SYSTEM
 )
 
 FetchContent_MakeAvailable(fuzztest)
