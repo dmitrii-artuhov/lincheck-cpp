@@ -8,7 +8,7 @@
 // different checkers, each of which checks its own consistency model
 struct ModelChecker {
   virtual bool Check(
-      const std::vector<std::variant<StackfulTaskInvoke, StackfulTaskResponse>>&
+      const std::vector<std::variant<Invoke, Response>>&
           history) = 0;
 };
 
@@ -26,7 +26,7 @@ struct Scheduler {
   // max_switches represents the maximal count of switches. After this count
   // scheduler will end execution of the Run function
   Scheduler(SchedulerClass& sched_class, ModelChecker& checker,
-            size_t max_switches);
+            size_t max_tasks);
 
   // Run returns full unliniarizable history if such a history is found. Full
   // history is a history with all events, where each element in the vector is a
@@ -38,7 +38,7 @@ struct Scheduler {
   // Full history of the current execution in the Run function
   std::vector<std::reference_wrapper<StackfulTask>> full_history;
   // History of invoke and response events which is required for the checker
-  std::vector<std::variant<StackfulTaskInvoke, StackfulTaskResponse>>
+  std::vector<std::variant<Invoke, Response>>
       sequential_history;
 
   SchedulerClass& sched_class;

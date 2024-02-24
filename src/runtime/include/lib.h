@@ -24,7 +24,7 @@ struct Task {
   void Resume();
 
   // Returns true if the task called another coroutine task.
-  // Scheduler must Check result of this function after each resume.
+  // Scheduler must check result of this function after each resume.
   bool HasChild();
 
   // Returns child of the task.
@@ -57,7 +57,7 @@ typedef Task (*TaskBuilder)();
 // Contains task builders.
 // Will be created during LLVM pass and
 // passed to the runtime entrypoint.
-using TaskBuilderList = std::vector<TaskBuilder> *;
+using TaskBuilderList = std::vector<TaskBuilder>*;
 
 // Runtime entrypoint.
 // Call will be generated during LLVM pass.
@@ -79,12 +79,11 @@ struct StackfulTask {
   // TODO: after a while int will be replaced with the trait
   [[nodiscard]] virtual int GetRetVal() const;
 
-  [[nodiscard]] virtual const std::string &GetName() const;
+  [[nodiscard]] virtual std::string GetName() const;
 
   virtual ~StackfulTask() = default;
 
-  StackfulTask& operator=(const StackfulTask& other)
-  = default;
+  StackfulTask& operator=(const StackfulTask& other) = default;
 
   // TODO: snapshot method might be useful.
  protected:
@@ -99,10 +98,10 @@ struct StackfulTask {
 };
 }
 
-struct StackfulTaskResponse {
-  StackfulTaskResponse(const StackfulTask &task, int result);
+struct Response {
+  Response(const StackfulTask& task, int result);
 
-  const StackfulTask& GetTask() const;
+  [[nodiscard]] const StackfulTask& GetTask() const;
 
   int result;
 
@@ -110,15 +109,15 @@ struct StackfulTaskResponse {
   std::reference_wrapper<const StackfulTask> task;
 };
 
-//void swap(StackfulTaskResponse& lhs, StackfulTaskResponse& rhs);
+// void swap(Response& lhs, Response& rhs);
 
-struct StackfulTaskInvoke {
-  explicit StackfulTaskInvoke(const StackfulTask &task);
+struct Invoke {
+  explicit Invoke(const StackfulTask& task);
 
-  const StackfulTask& GetTask() const;
+  [[nodiscard]] const StackfulTask& GetTask() const;
 
  private:
   std::reference_wrapper<const StackfulTask> task;
 };
 
-//void swap(StackfulTaskInvoke& lhs, StackfulTaskInvoke& rhs);
+// void swap(Invoke& lhs, Invoke& rhs);

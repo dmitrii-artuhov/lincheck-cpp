@@ -129,10 +129,11 @@ void StackfulTask::Resume() {
   } else if (stack_head.IsReturned()) {
     // stack_head returned
     last_returned_value = stack_head.GetRetVal();
+    stack.pop_back();
 
     // if it wasn't the first task clean up children
-    if (stack.size() >= 2) {
-      auto previous = stack[stack.size() - 2];
+    if (!stack.empty()) {
+      auto previous = stack.back();
       previous.ClearChild();
     }
   }
@@ -141,14 +142,15 @@ void StackfulTask::Resume() {
 bool StackfulTask::IsReturned() { return stack.empty(); }
 
 int StackfulTask::GetRetVal() const { return last_returned_value; }
-const std::string &StackfulTask::GetName() const {
+
+std::string StackfulTask::GetName() const {
   return entrypoint.value().GetName();
 }
 
-const StackfulTask &StackfulTaskInvoke::GetTask() const {
+const StackfulTask &Invoke::GetTask() const {
   return this->task.get();
 }
 
-const StackfulTask &StackfulTaskResponse::GetTask() const {
+const StackfulTask &Response::GetTask() const {
   return this->task.get();
 }

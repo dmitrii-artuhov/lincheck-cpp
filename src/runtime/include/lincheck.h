@@ -24,7 +24,7 @@ struct LinearizabilityChecker : ModelChecker {
       LinearSpecificationObject first_state);
 
   bool Check(
-      const std::vector<std::variant<StackfulTaskInvoke, StackfulTaskResponse>>&
+      const std::vector<std::variant<Invoke, Response>>&
           history) override;
 
  private:
@@ -34,7 +34,7 @@ struct LinearizabilityChecker : ModelChecker {
 };
 
 std::map<size_t, size_t> get_inv_res_mapping(
-    const std::vector<std::variant<StackfulTaskInvoke, StackfulTaskResponse>>&
+    const std::vector<std::variant<Invoke, Response>>&
         history);
 
 template <class LinearSpecificationObject,
@@ -87,7 +87,7 @@ template <class LinearSpecificationObject, class SpecificationObjectHash,
 bool LinearizabilityChecker<LinearSpecificationObject, SpecificationObjectHash,
                             SpecificationObjectEqual>::
     Check(const std::vector<
-          std::variant<StackfulTaskInvoke, StackfulTaskResponse>>& history) {
+          std::variant<Invoke, Response>>& history) {
   // head entry
   size_t current_section_start = 0;
   LinearSpecificationObject data_structure_state = first_state;
@@ -115,7 +115,7 @@ bool LinearizabilityChecker<LinearSpecificationObject, SpecificationObjectHash,
     // Current event is an invoke event
     if (history[current_section_start].index() == 0) {
       // invoke
-      const StackfulTaskInvoke& inv =
+      const Invoke& inv =
           std::get<0>(history[current_section_start]);
       assert(specification_methods.find(inv.GetTask().GetName()) !=
              specification_methods.end());
