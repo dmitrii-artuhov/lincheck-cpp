@@ -154,3 +154,9 @@ const StackfulTask &Invoke::GetTask() const {
 const StackfulTask &Response::GetTask() const {
   return this->task.get();
 }
+
+StackfulTask::~StackfulTask() {
+  for (int i = stack.size(); i > -1; i--) {
+    stack[i].ClearChild();
+  }
+}
