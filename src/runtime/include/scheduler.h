@@ -12,21 +12,24 @@ struct ModelChecker {
           history) = 0;
 };
 
-// SchedulerClass is the general strategy interface which decides which task
+// Strategy is the general strategy interface which decides which task
 // will be the next one it can be implemented by different strategies, such as:
 // randomized/tla/fair
-struct SchedulerClass {
+struct Strategy {
   // Returns the next tasks, and also the flag which tells is the task new
   virtual std::pair<StackfulTask&, bool> Next() = 0;
+
+  // Strategy should stop all tasks that already have been started
+  virtual void StartNextRound() = 0;
 };
 
-// Scheduler generates different sequential histories(using SchedulerClass) and
+// Scheduler generates different sequential histories(using Strategy) and
 // then checks them with the ModelChecker
 struct Scheduler {
   // max_switches represents the maximal count of switches. After this count
   // scheduler will end execution of the Run function
-  Scheduler(SchedulerClass& sched_class, ModelChecker& checker,
-            size_t max_tasks);
+  Scheduler(Strategy& sched_class, ModelChecker& checker,
+            size_t max_tasks, size_t max_rounds);
 
   // Run returns full unliniarizable history if such a history is found. Full
   // history is a history with all events, where each element in the vector is a
@@ -35,15 +38,20 @@ struct Scheduler {
   std::optional<std::vector<std::reference_wrapper<StackfulTask>>> Run();
 
  private:
+
+  std::optional<std::vector<std::reference_wrapper<StackfulTask>>> runRound();
+
   // Full history of the current execution in the Run function
   std::vector<std::reference_wrapper<StackfulTask>> full_history;
   // History of invoke and response events which is required for the checker
   std::vector<std::variant<Invoke, Response>>
       sequential_history;
 
-  SchedulerClass& sched_class;
+  Strategy& strategy;
 
   ModelChecker& checker;
 
   size_t max_tasks;
+
+  size_t max_rounds;
 };

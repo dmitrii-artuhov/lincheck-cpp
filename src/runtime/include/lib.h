@@ -81,7 +81,7 @@ struct StackfulTask {
 
   [[nodiscard]] virtual std::string GetName() const;
 
-  virtual ~StackfulTask() = default;
+  virtual ~StackfulTask();
 
   StackfulTask& operator=(const StackfulTask& other) = default;
 
