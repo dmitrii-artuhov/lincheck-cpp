@@ -1,4 +1,5 @@
 #pragma once
+#include <map>
 #include <optional>
 #include <variant>
 
@@ -8,8 +9,7 @@
 // different checkers, each of which checks its own consistency model
 struct ModelChecker {
   virtual bool Check(
-      const std::vector<std::variant<Invoke, Response>>&
-          history) = 0;
+      const std::vector<std::variant<Invoke, Response>>& history) = 0;
 };
 
 // Strategy is the general strategy interface which decides which task
@@ -28,8 +28,8 @@ struct Strategy {
 struct Scheduler {
   // max_switches represents the maximal count of switches. After this count
   // scheduler will end execution of the Run function
-  Scheduler(Strategy& sched_class, ModelChecker& checker,
-            size_t max_tasks, size_t max_rounds);
+  Scheduler(Strategy& sched_class, ModelChecker& checker, size_t max_tasks,
+            size_t max_rounds);
 
   // Run returns full unliniarizable history if such a history is found. Full
   // history is a history with all events, where each element in the vector is a
@@ -38,14 +38,10 @@ struct Scheduler {
   std::optional<std::vector<std::reference_wrapper<StackfulTask>>> Run();
 
  private:
-
   std::optional<std::vector<std::reference_wrapper<StackfulTask>>> runRound();
 
   // Full history of the current execution in the Run function
   std::vector<std::reference_wrapper<StackfulTask>> full_history;
-  // History of invoke and response events which is required for the checker
-  std::vector<std::variant<Invoke, Response>>
-      sequential_history;
 
   Strategy& strategy;
 

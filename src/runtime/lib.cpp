@@ -118,6 +118,8 @@ StackfulTask::StackfulTask(Task task) : entrypoint(task) {
   stack = std::vector<Task>{task};
 }
 
+StackfulTask::StackfulTask() : entrypoint(nullptr) {}
+
 void StackfulTask::Resume() {
   assert(!stack.empty());
   Task &stack_head = stack.back();
@@ -143,20 +145,14 @@ bool StackfulTask::IsReturned() { return stack.empty(); }
 
 int StackfulTask::GetRetVal() const { return last_returned_value; }
 
-std::string StackfulTask::GetName() const {
-  return entrypoint.value().GetName();
-}
+std::string StackfulTask::GetName() const { return entrypoint.GetName(); }
 
-const StackfulTask &Invoke::GetTask() const {
-  return this->task.get();
-}
+const StackfulTask &Invoke::GetTask() const { return this->task.get(); }
 
-const StackfulTask &Response::GetTask() const {
-  return this->task.get();
-}
+const StackfulTask &Response::GetTask() const { return this->task.get(); }
 
 StackfulTask::~StackfulTask() {
-  for (int i = stack.size(); i > -1; i--) {
+  for (int i = static_cast<int>(stack.size()) - 1; i > -1; i--) {
     stack[i].ClearChild();
   }
 }

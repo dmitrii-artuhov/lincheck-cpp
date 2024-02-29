@@ -18,9 +18,8 @@ struct LinearizabilityCheckerRecursive : ModelChecker {
           specification_methods,
       LinearSpecificationObject first_state);
 
-  bool Check(
-      const std::vector<std::variant<Invoke, Response>>&
-          history) override;
+  bool Check(const std::vector<std::variant<Invoke, Response>>& fixed_history)
+      override;
 
  private:
   std::map<MethodName, std::function<int(LinearSpecificationObject*)>>
@@ -50,26 +49,25 @@ template <class LinearSpecificationObject, class SpecificationObjectHash,
 bool LinearizabilityCheckerRecursive<LinearSpecificationObject,
                                      SpecificationObjectHash,
                                      SpecificationObjectEqual>::
-    Check(const std::vector<
-          std::variant<Invoke, Response>>& history) {
+    Check(const std::vector<std::variant<Invoke, Response>>& history) {
+  auto fixed_history = fix_history(history);
   // It's a crunch, but it's required because the semantics of this
   // implementation must be the same as the semantics of the non-recursive
   // implementation
-  if (history.empty()) {
+  if (fixed_history.empty()) {
     return true;
   }
-  std::map<size_t, size_t> inv_res = get_inv_res_mapping(history);
+  std::map<size_t, size_t> inv_res = get_inv_res_mapping(fixed_history);
 
   std::function<bool(const std::vector<std::variant<Invoke, Response>>&,
                      std::vector<bool>&, LinearSpecificationObject)>
       recursive_step;
 
   recursive_step =
-      [&](const std::vector<
-              std::variant<Invoke, Response>>& history,
+      [&](const std::vector<std::variant<Invoke, Response>>& history,
           std::vector<bool>& linearized,
           LinearSpecificationObject data_structure_state) -> bool {
-    // the history is empty
+    // the fixed_history is empty
     if (std::reduce(linearized.begin(), linearized.end(), true,
                     std::bit_and<>())) {
       return true;
@@ -77,8 +75,8 @@ bool LinearizabilityCheckerRecursive<LinearSpecificationObject,
 
     // walk all minimal operations
     for (size_t i = 0; i < history.size(); ++i) {
-      // we could think that history doesn't contain events that already have
-      // been linearized
+      // we could think that fixed_history doesn't contain events that already
+      // have been linearized
       if (linearized[i]) {
         continue;
       }
@@ -114,6 +112,6 @@ bool LinearizabilityCheckerRecursive<LinearSpecificationObject,
     return false;
   };
 
-  std::vector<bool> linearized(history.size(), false);
-  return recursive_step(history, linearized, first_state);
+  std::vector<bool> linearized(fixed_history.size(), false);
+  return recursive_step(fixed_history, linearized, first_state);
 }
