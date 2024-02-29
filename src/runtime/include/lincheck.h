@@ -11,6 +11,17 @@
 
 using MethodName = std::string;
 
+// get_inv_res_mapping returns map (invoke_index -> corresponding
+// response_index)
+
+std::map<size_t, size_t> get_inv_res_mapping(
+    const std::vector<std::variant<Invoke, Response>>& history);
+
+// fix_history deletes invokes that don't have corresponding responses,
+// this is allowed by the definition of the linearizability
+std::vector<std::variant<Invoke, Response>> fix_history(
+    const std::vector<std::variant<Invoke, Response>>& history);
+
 template <class LinearSpecificationObject,
           class SpecificationObjectHash = std::hash<LinearSpecificationObject>,
           class SpecificationObjectEqual =
@@ -23,19 +34,14 @@ struct LinearizabilityChecker : ModelChecker {
           specification_methods,
       LinearSpecificationObject first_state);
 
-  bool Check(
-      const std::vector<std::variant<Invoke, Response>>&
-          history) override;
+  bool Check(const std::vector<std::variant<Invoke, Response>>& fixed_history)
+      override;
 
  private:
   std::map<MethodName, std::function<int(LinearSpecificationObject*)>>
       specification_methods;
   LinearSpecificationObject first_state;
 };
-
-std::map<size_t, size_t> get_inv_res_mapping(
-    const std::vector<std::variant<Invoke, Response>>&
-        history);
 
 template <class LinearSpecificationObject,
           class SpecificationObjectHash = std::hash<LinearSpecificationObject>>
@@ -86,8 +92,9 @@ template <class LinearSpecificationObject, class SpecificationObjectHash,
           class SpecificationObjectEqual>
 bool LinearizabilityChecker<LinearSpecificationObject, SpecificationObjectHash,
                             SpecificationObjectEqual>::
-    Check(const std::vector<
-          std::variant<Invoke, Response>>& history) {
+    Check(const std::vector<std::variant<Invoke, Response>>& history) {
+  auto fixed_history = fix_history(history);
+
   // head entry
   size_t current_section_start = 0;
   LinearSpecificationObject data_structure_state = first_state;
@@ -96,15 +103,15 @@ bool LinearizabilityChecker<LinearSpecificationObject, SpecificationObjectHash,
   // TODO: Can replace it with stack of hashes and map: hash ->
   // LinearSpecificationObject contains previous states stack
   std::vector<LinearSpecificationObject> states_stack;
-  std::map<size_t, size_t> inv_res = get_inv_res_mapping(history);
-  std::vector<bool> linearized(history.size(), false);
+  std::map<size_t, size_t> inv_res = get_inv_res_mapping(fixed_history);
+  std::vector<bool> linearized(fixed_history.size(), false);
   std::unordered_set<
       std::pair<std::vector<bool>, LinearSpecificationObject>,
       PairHash<LinearSpecificationObject, SpecificationObjectHash>,
       PairEqual<LinearSpecificationObject, SpecificationObjectEqual>>
       states_cache;
 
-  while (open_sections_stack.size() != history.size() / 2) {
+  while (open_sections_stack.size() != fixed_history.size() / 2) {
     // This event is already in the stack, don't need lift function with this
     // predicate
     if (linearized[current_section_start]) {
@@ -113,10 +120,9 @@ bool LinearizabilityChecker<LinearSpecificationObject, SpecificationObjectHash,
     }
 
     // Current event is an invoke event
-    if (history[current_section_start].index() == 0) {
+    if (fixed_history[current_section_start].index() == 0) {
       // invoke
-      const Invoke& inv =
-          std::get<0>(history[current_section_start]);
+      const Invoke& inv = std::get<0>(fixed_history[current_section_start]);
       assert(specification_methods.find(inv.GetTask().GetName()) !=
              specification_methods.end());
       auto method = specification_methods.find(inv.GetTask().GetName())->second;

@@ -88,12 +88,12 @@ struct StackfulTask {
   // TODO: snapshot method might be useful.
  protected:
   // Need this constructor for tests
-  StackfulTask() = default;
+  StackfulTask();
 
  private:
-  std::vector<Task> stack;
+  std::vector<Task> stack{};
   // Need option for tests, because I have to initialize Task field(
-  std::optional<Task> entrypoint;
+  Task entrypoint;
   int last_returned_value{};
 };
 }

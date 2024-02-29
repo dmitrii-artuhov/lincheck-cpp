@@ -6,13 +6,14 @@
 #include "scheduler.h"
 
 struct RoundRobinStrategy : Strategy {
-  explicit RoundRobinStrategy(size_t threads_count, TaskBuilderList constructors);
+  explicit RoundRobinStrategy(size_t threads_count,
+                              TaskBuilderList constructors);
 
   std::pair<StackfulTask&, bool> Next() override;
 
   void StartNextRound() override;
- private:
 
+ private:
   size_t next_task = 0;
   size_t threads_count;
   TaskBuilderList constructors;

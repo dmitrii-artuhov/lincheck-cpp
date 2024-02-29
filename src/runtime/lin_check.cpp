@@ -4,9 +4,10 @@
 #include "include/lincheck.h"
 #include "include/scheduler.h"
 
+// get_inv_res_mapping returns map (invoke_index -> corresponding
+// response_index)
 std::map<size_t, size_t> get_inv_res_mapping(
-    const std::vector<std::variant<Invoke, Response>>&
-        history) {
+    const std::vector<std::variant<Invoke, Response>>& history) {
   std::map<size_t, size_t> inv_res;            // inv -> corresponding response
   std::map<const StackfulTask*, size_t> uids;  // uid -> res
 
@@ -24,4 +25,22 @@ std::map<size_t, size_t> get_inv_res_mapping(
   }
 
   return inv_res;
+}
+
+// fix_history deletes invokes that don't have corresponding responses,
+// this is allowed by the definition of the linearizability
+std::vector<std::variant<Invoke, Response>> fix_history(
+    const std::vector<std::variant<Invoke, Response>>& history) {
+  auto indexes = get_inv_res_mapping(history);
+  // Usually histories are small and erase invalidate an iterator, so it's
+  // easier to create new history
+  std::vector<std::variant<Invoke, Response>> new_history;
+
+  for (size_t i = 0; i < history.size(); i++) {
+    if (history[i].index() == 1 || indexes.contains(i)) {
+      new_history.push_back(history[i]);
+    }
+  }
+
+  return new_history;
 }
