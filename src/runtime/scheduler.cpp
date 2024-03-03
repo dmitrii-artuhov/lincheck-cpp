@@ -51,7 +51,7 @@ Scheduler::Run() {
     if (seq_history.has_value()) {
       return seq_history;
     }
-    strategy.StartNextRound(max_tasks);
+    strategy.StartNextRound();
   }
 
   return std::nullopt;

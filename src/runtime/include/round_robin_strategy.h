@@ -8,18 +8,15 @@
 
 struct RoundRobinStrategy : Strategy {
   explicit RoundRobinStrategy(size_t threads_count,
-                              TaskBuilderList constructors, size_t max_tasks);
+                              TaskBuilderList constructors);
 
   std::pair<StackfulTask&, bool> Next() override;
 
-  void StartNextRound(size_t max_tasks) override;
+  void StartNextRound() override;
 
  private:
   size_t next_task = 0;
   size_t threads_count;
-  size_t max_tasks;
-  size_t finished_tasks = 0;
-  size_t alive_tasks = 0;
   TaskBuilderList constructors;
   // RoundRobinStrategy struct is the owner of all tasks, and all
   // references can't be invalidated before the end of the round,

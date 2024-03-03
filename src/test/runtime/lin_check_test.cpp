@@ -178,6 +178,76 @@ TEST(LinearizabilityCheckerCounterTest, SmallUnlinearizableHistory) {
   EXPECT_EQ(checker.Check(history), false);
 }
 
+TEST(LinearizabilityCheckerCounterTest, ExtendedLinearizableHistory) {
+  std::function<int(Counter*)> fetch_and_add = [](Counter* c) {
+    c->count += 1;
+    return c->count - 1;
+  };
+  std::function<int(Counter*)> get = [](Counter* c) { return c->count; };
+  Counter c{};
+
+  LinearizabilityChecker<Counter> checker(
+      std::map<MethodName, std::function<int(Counter*)>>{
+          {"faa", fetch_and_add},
+          {"get", get},
+      },
+      c);
+
+  MockStackfulTask first_task;
+  std::string first_task_name("faa");
+  EXPECT_CALL(first_task, GetRetVal())
+      .Times(AnyNumber())
+      .WillRepeatedly(Return(2));
+  EXPECT_CALL(first_task, GetName())
+      .Times(AnyNumber())
+      .WillRepeatedly(Return(first_task_name));
+
+  MockStackfulTask second_task;
+  std::string second_task_name("get");
+  EXPECT_CALL(second_task, GetRetVal())
+      .Times(AnyNumber())
+      .WillRepeatedly(Return(3));
+  EXPECT_CALL(second_task, GetName())
+      .Times(AnyNumber())
+      .WillRepeatedly(Return(second_task_name));
+
+  MockStackfulTask third_task;
+  std::string third_task_name("faa");
+  EXPECT_CALL(third_task, GetRetVal())
+      .Times(AnyNumber())
+      .WillRepeatedly(Return(100));
+  EXPECT_CALL(third_task, GetName())
+      .Times(AnyNumber())
+      .WillRepeatedly(Return(third_task_name));
+
+  MockStackfulTask fourth_task;
+  std::string fourth_task_name("faa");
+  EXPECT_CALL(fourth_task, GetRetVal())
+      .Times(AnyNumber())
+      .WillRepeatedly(Return(1));
+  EXPECT_CALL(fourth_task, GetName())
+      .Times(AnyNumber())
+      .WillRepeatedly(Return(fourth_task_name));
+
+  MockStackfulTask fifth_task;
+  std::string fifth_task_name("faa");
+  EXPECT_CALL(fifth_task, GetRetVal())
+      .Times(AnyNumber())
+      .WillRepeatedly(Return(0));
+  EXPECT_CALL(fifth_task, GetName())
+      .Times(AnyNumber())
+      .WillRepeatedly(Return(fifth_task_name));
+
+  std::vector<std::variant<Invoke, Response>> history{};
+  history.emplace_back(Invoke(first_task));
+  history.emplace_back(Invoke(second_task));
+  history.emplace_back(Invoke(third_task));
+  history.emplace_back(Invoke(fourth_task));
+  history.emplace_back(Invoke(fifth_task));
+
+  EXPECT_EQ(checker.Check(history), true);
+}
+
 std::vector<std::unique_ptr<MockStackfulTask>> create_mocks(
     const std::vector<bool>& b_history) {
   std::vector<std::unique_ptr<MockStackfulTask>> mocks;

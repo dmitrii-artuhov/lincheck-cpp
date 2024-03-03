@@ -44,7 +44,6 @@ LinearizabilityCheckerRecursive<LinearSpecificationObject,
   }
 }
 
-// Each invoke event in the history has to have a related response event
 template <class LinearSpecificationObject, class SpecificationObjectHash,
           class SpecificationObjectEqual>
 bool LinearizabilityCheckerRecursive<LinearSpecificationObject,
@@ -95,6 +94,16 @@ bool LinearizabilityCheckerRecursive<LinearSpecificationObject,
       // state is already have been copied, because it's the argument of the
       // lambda
       int res = method(&data_structure_state_copy);
+      // If invoke doesn't have a response we can't check the response
+      if (inv_res.find(i) == inv_res.end()) {
+        linearized[i] = true;
+        if (recursive_step(history, linearized, data_structure_state_copy)) {
+          return true;
+        }
+        linearized[i] = false;
+        continue;
+      }
+
       if (res == minimal_op.GetTask().GetRetVal()) {
         linearized[i] = true;
         assert(inv_res.find(i) != inv_res.end());
