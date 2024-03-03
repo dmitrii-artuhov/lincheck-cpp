@@ -131,11 +131,16 @@ bool LinearizabilityChecker<LinearSpecificationObject, SpecificationObjectHash,
           data_structure_state;
       int res = method(&data_structure_state_copy);
 
-      if (res == inv.GetTask().GetRetVal()) {
+      // If invoke doesn't have a response we can't check the response
+      bool doesnt_have_response =
+          (inv_res.find(current_section_start) == inv_res.end());
+
+      if (doesnt_have_response || res == inv.GetTask().GetRetVal()) {
         // We can append this event to a linearization
         linearized[current_section_start] = true;
-        assert(inv_res.find(current_section_start) != inv_res.end());
-        linearized[inv_res[current_section_start]] = true;
+        if (!doesnt_have_response) {
+          linearized[inv_res[current_section_start]] = true;
+        }
 
         was_checked =
             states_cache.find({linearized, data_structure_state_copy}) !=
@@ -145,14 +150,16 @@ bool LinearizabilityChecker<LinearSpecificationObject, SpecificationObjectHash,
         } else {
           // already checked equal state, don't want to Check it again
           linearized[current_section_start] = false;
-          assert(inv_res.find(current_section_start) != inv_res.end());
-          linearized[inv_res[current_section_start]] = false;
+          if (!doesnt_have_response) {
+            linearized[inv_res[current_section_start]] = false;
+          }
         }
       }
 
       // haven't seen this state previously, so continue procedure with this new
       // state
-      if (res == inv.GetTask().GetRetVal() && !was_checked) {
+      if ((doesnt_have_response || res == inv.GetTask().GetRetVal()) &&
+          !was_checked) {
         // open section
         open_sections_stack.push_back(current_section_start);
         states_stack.push_back(data_structure_state);
@@ -178,9 +185,12 @@ bool LinearizabilityChecker<LinearSpecificationObject, SpecificationObjectHash,
       states_stack.pop_back();
 
       size_t last_inv = open_sections_stack.back();
+      bool have_response = (inv_res.find(last_inv) != inv_res.end());
       current_section_start = last_inv;
       linearized[last_inv] = false;
-      linearized[inv_res[last_inv]] = false;
+      if (have_response) {
+        linearized[inv_res[last_inv]] = false;
+      }
 
       open_sections_stack.pop_back();
       // last time we started with the previous one
