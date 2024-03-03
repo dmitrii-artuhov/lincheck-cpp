@@ -31,7 +31,7 @@ std::pair<StackfulTask&, bool> RoundRobinStrategy::Next() {
   is_new[current_task] = false;
 
   StackfulTask& next = threads[current_task].back();
-  if (!next.IsReturned()) {
+  if (next.IsReturned()) {
     // task has finished, so we replace it with the new one
     auto constructor = constructors->at(distribution(rng));
     threads[current_task].emplace(constructor());
