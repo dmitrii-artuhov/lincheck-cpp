@@ -20,7 +20,7 @@ struct Strategy {
   virtual std::pair<StackfulTask&, bool> Next() = 0;
 
   // Strategy should stop all tasks that already have been started
-  virtual void StartNextRound() = 0;
+  virtual void StartNextRound(size_t max_tasks) = 0;
 };
 
 // Scheduler generates different sequential histories(using Strategy) and
@@ -39,9 +39,6 @@ struct Scheduler {
 
  private:
   std::optional<std::vector<std::reference_wrapper<StackfulTask>>> runRound();
-
-  // Full history of the current execution in the Run function
-  std::vector<std::reference_wrapper<StackfulTask>> full_history;
 
   Strategy& strategy;
 

@@ -1,44 +1,69 @@
 #include "include/round_robin_strategy.h"
 
+// max_tasks has to be greater than threads_count
 RoundRobinStrategy::RoundRobinStrategy(size_t threads_count,
-                                       TaskBuilderList constructors)
+                                       TaskBuilderList constructors,
+                                       size_t max_tasks)
     : next_task(0),
       threads_count(threads_count),
       constructors(constructors),
-      threads() {
+      threads(),
+      is_new(threads_count, true),
+      max_tasks(max_tasks) {
   std::random_device dev;
   rng = std::mt19937(dev());
   distribution = std::uniform_int_distribution<std::mt19937::result_type>(
-      0, threads_count - 1);
+      0, constructors->size() - 1);
 
   // Create tasks
   for (size_t i = 0; i < threads_count; ++i) {
     auto method = constructors->at(distribution(rng));
-    threads.emplace_back(method());
+    threads.emplace_back();
+    threads[i].emplace(method());
   }
+  alive_tasks = threads_count;
 }
 
+// If there aren't any non returned tasks and the amount of finished tasks
+// is equal to the max_tasks the finished task will be returned
 std::pair<StackfulTask&, bool> RoundRobinStrategy::Next() {
-  size_t current_task = next_task;
-  // update the next pointer
-  next_task = (++next_task) % threads_count;
+  for (size_t i = 0; i < threads.size(); ++i) {
+    size_t current_task = next_task;
+    // update the next pointer
+    next_task = (++next_task) % threads_count;
 
-  StackfulTask& next = threads[current_task];
-  if (next.IsReturned()) {
-    // If next task have returned we have to replace it with new one
-    auto constructor = constructors->at(distribution(rng));
-    threads[current_task] = StackfulTask(constructor());
+    StackfulTask& next = threads[current_task].back();
+    if (!next.IsReturned()) {
+      // Tasks hasn't finished yet can return it
+      return {next, is_new[current_task]};
+    } else if (alive_tasks + finished_tasks < max_tasks) {
+      // task has finished, but we can replace it with the new one
+      auto constructor = constructors->at(distribution(rng));
+      threads[current_task].emplace(constructor());
+      is_new[current_task] = false;
 
-    return {threads[current_task], true};
+      return {threads[current_task].back(), true};
+    }
+    // go to the next task
   }
 
-  return {next, false};
+  return {threads[0].back(), false};
 }
 
 // Have to stop all current tasks and spawn new tasks
-void RoundRobinStrategy::StartNextRound() {
+// StartNextRound invalidates all references from Next
+void RoundRobinStrategy::StartNextRound(size_t new_max_tasks) {
+  max_tasks = new_max_tasks;
   for (auto& thread : threads) {
     auto constructor = constructors->at(distribution(rng));
-    thread = StackfulTask(constructor());
+    // We don't have to keep references alive
+    thread = std::queue<StackfulTask>();
+    thread.emplace(constructor());
   }
+
+  for (size_t i = 0; i < is_new.size(); ++i) {
+    is_new[i] = true;
+  }
+  alive_tasks = threads_count;
+  finished_tasks = 0;
 }

@@ -44,20 +44,20 @@ LinearizabilityCheckerRecursive<LinearSpecificationObject,
   }
 }
 
+// Each invoke event in the history has to have a related response event
 template <class LinearSpecificationObject, class SpecificationObjectHash,
           class SpecificationObjectEqual>
 bool LinearizabilityCheckerRecursive<LinearSpecificationObject,
                                      SpecificationObjectHash,
                                      SpecificationObjectEqual>::
     Check(const std::vector<std::variant<Invoke, Response>>& history) {
-  auto fixed_history = fix_history(history);
   // It's a crunch, but it's required because the semantics of this
   // implementation must be the same as the semantics of the non-recursive
   // implementation
-  if (fixed_history.empty()) {
+  if (history.empty()) {
     return true;
   }
-  std::map<size_t, size_t> inv_res = get_inv_res_mapping(fixed_history);
+  std::map<size_t, size_t> inv_res = get_inv_res_mapping(history);
 
   std::function<bool(const std::vector<std::variant<Invoke, Response>>&,
                      std::vector<bool>&, LinearSpecificationObject)>
@@ -112,6 +112,6 @@ bool LinearizabilityCheckerRecursive<LinearSpecificationObject,
     return false;
   };
 
-  std::vector<bool> linearized(fixed_history.size(), false);
-  return recursive_step(fixed_history, linearized, first_state);
+  std::vector<bool> linearized(history.size(), false);
+  return recursive_step(history, linearized, first_state);
 }
