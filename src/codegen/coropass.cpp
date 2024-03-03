@@ -1,3 +1,5 @@
+#include <set>
+
 #include "llvm/IR/NoFolder.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Pass.h"
@@ -6,14 +8,12 @@
 #include "llvm/Support/CommandLine.h"
 #include "utils.h"
 
+using namespace llvm;
+
 using builder_t = IRBuilder<NoFolder>;
 
 const std::string coro_suf = "_coro";
 const std::string task_builder_suf = "_task_builder";
-
-bool IsCoroTarget(const std::string &target) {
-  return !target.ends_with(coro_suf) && !target.ends_with(task_builder_suf);
-}
 
 std::string ToCoro(const std::string &name) { return name + coro_suf; }
 
@@ -157,10 +157,11 @@ struct CoroGenerator final {
   }
 
   std::vector<Function *> Run() {
+    findCoroTargets();
     std::vector<Function *> result;
     for (auto &F : M) {
       auto name = F.getName().str();
-      if (IsCoroTarget(name)) {
+      if (isCoroTarget(name)) {
         // Generate coroutine.
         auto fun = GenCoroFunc(&F);
         if (fun != nullptr) {
@@ -191,6 +192,31 @@ struct CoroGenerator final {
   Function *get_ret_val;
   Function *get_promise;
   Function *init_promise;
+
+  std::set<StringRef> coro_targets;
+  bool isCoroTarget(StringRef name) {
+    return coro_targets.find(name) != coro_targets.end();
+  }
+
+  void findCoroTargets() {
+    for (auto it = M.global_begin(); it != M.global_end(); ++it) {
+      if (it->getName() != "llvm.global.annotations") {
+        continue;
+      }
+      auto *CA = dyn_cast<ConstantArray>(it->getOperand(0));
+      for (auto o_it = CA->op_begin(); o_it != CA->op_end(); ++o_it) {
+        auto *CS = dyn_cast<ConstantStruct>(o_it->get());
+        auto *fun = dyn_cast<Function>(CS->getOperand(0));
+        auto *AnnotationGL = dyn_cast<GlobalVariable>(CS->getOperand(1));
+        auto annotation =
+            dyn_cast<ConstantDataArray>(AnnotationGL->getInitializer())
+                ->getAsCString();
+        if (annotation == "nonatomic") {
+          coro_targets.insert(fun->getName());
+        }
+      }
+    }
+  }
 
   Function *GenCoroFunc(Function *F) {
     if (F->empty()) {
@@ -345,7 +371,7 @@ struct CoroGenerator final {
         // Maybe need to generate coro clones in process.
         auto f = call->getCalledFunction();
         auto f_name = f->getName().str();
-        if (IsCoroTarget(f_name)) {
+        if (isCoroTarget(f_name)) {
           // TODO: remove after debug.
           errs() << "Replace " << f_name << " call\n";
           auto coro_f = GenCoroFunc(f);
