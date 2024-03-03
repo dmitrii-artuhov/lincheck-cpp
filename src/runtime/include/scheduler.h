@@ -34,7 +34,6 @@ struct Scheduler {
   // Run returns full unliniarizable history if such a history is found. Full
   // history is a history with all events, where each element in the vector is a
   // Resume operation on the corresponding task
-  // TODO: question: should I use pointers instead of std::reference_wrapper?
   std::optional<std::vector<std::reference_wrapper<StackfulTask>>> Run();
 
  private:
