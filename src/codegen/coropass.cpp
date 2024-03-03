@@ -337,10 +337,13 @@ struct CoroGenerator final {
         auto instr = &*b.rbegin();
         // Check if terminate instruction is `ret`.
         if (auto ret = dyn_cast<ReturnInst>(instr)) {
-          // TODO: what if function return type is not int?
           Builder.SetInsertPoint(ret);
           if (old_ret_t == i32_t) {
             Builder.CreateCall(set_ret_val, {promise, ret->getOperand(0)});
+          } else {
+            // If function returns not int we set i32 as ret value.
+            // TODO: Take hash if we can.
+            Builder.CreateCall(set_ret_val, {promise, i32_0});
           }
           // We need to suspend after `ret` because
           // return value must be accessed before coroutine destruction.
