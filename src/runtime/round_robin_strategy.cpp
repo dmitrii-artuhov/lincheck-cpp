@@ -1,23 +1,19 @@
 #include "include/round_robin_strategy.h"
 
-// max_tasks has to be greater than threads_count
 RoundRobinStrategy::RoundRobinStrategy(size_t threads_count,
                                        TaskBuilderList constructors)
     : next_task(0),
       threads_count(threads_count),
       constructors(constructors),
-      threads(),
-      is_new(threads_count, true) {
+      threads() {
   std::random_device dev;
   rng = std::mt19937(dev());
   distribution = std::uniform_int_distribution<std::mt19937::result_type>(
       0, constructors->size() - 1);
 
-  // Create tasks
+  // Create queues
   for (size_t i = 0; i < threads_count; ++i) {
-    auto method = constructors->at(distribution(rng));
     threads.emplace_back();
-    threads[i].emplace(method());
   }
 }
 
@@ -27,19 +23,18 @@ std::pair<StackfulTask&, bool> RoundRobinStrategy::Next() {
   size_t current_task = next_task;
   // update the next pointer
   next_task = (++next_task) % threads_count;
-  bool old_new = is_new[current_task];
-  is_new[current_task] = false;
 
-  StackfulTask& next = threads[current_task].back();
-  if (next.IsReturned()) {
-    // task has finished, so we replace it with the new one
+  // it's the first task if the queue is empty
+  if (threads[current_task].empty() ||
+      threads[current_task].back().IsReturned()) {
+    // a task has finished or the queue is empty, so we add a new task
     auto constructor = constructors->at(distribution(rng));
     threads[current_task].emplace(constructor());
 
     return {threads[current_task].back(), true};
   }
 
-  return {next, old_new};
+  return {threads[current_task].back(), false};
 }
 
 // Have to stop all current tasks and spawn new tasks
@@ -49,10 +44,5 @@ void RoundRobinStrategy::StartNextRound() {
     auto constructor = constructors->at(distribution(rng));
     // We don't have to keep references alive
     thread = std::queue<StackfulTask>();
-    thread.emplace(constructor());
-  }
-
-  for (size_t i = 0; i < is_new.size(); ++i) {
-    is_new[i] = true;
   }
 }

@@ -23,7 +23,6 @@ struct RoundRobinStrategy : Strategy {
   // so we have to contains all tasks in queues(queue doesn't invalidate the
   // references)
   std::vector<std::queue<StackfulTask>> threads;
-  std::vector<bool> is_new;
   std::uniform_int_distribution<std::mt19937::result_type> distribution;
   std::mt19937 rng;
 };

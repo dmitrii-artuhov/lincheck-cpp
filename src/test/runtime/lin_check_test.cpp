@@ -283,8 +283,8 @@ std::vector<std::unique_ptr<MockStackfulTask>> create_mocks(
   return mocks;
 }
 
-std::vector<std::variant<Invoke, Response>>
-create_history(const std::vector<std::unique_ptr<MockStackfulTask>>& mocks) {
+std::vector<std::variant<Invoke, Response>> create_history(
+    const std::vector<std::unique_ptr<MockStackfulTask>>& mocks) {
   std::vector<std::variant<Invoke, Response>> history;
   history.reserve(2 * mocks.size());
 
@@ -303,11 +303,9 @@ create_history(const std::vector<std::unique_ptr<MockStackfulTask>>& mocks) {
   for (size_t i = 0; i < history.size(); ++i) {
     auto& event = history[i];
     if (event.index() == 0) {
-      if (responses_indexes.find(
-              &std::get<Invoke>(event).GetTask()) !=
+      if (responses_indexes.find(&std::get<Invoke>(event).GetTask()) !=
           responses_indexes.end()) {
-        size_t index =
-            responses_indexes[&std::get<Invoke>(event).GetTask()];
+        size_t index = responses_indexes[&std::get<Invoke>(event).GetTask()];
         std::swap(history[index], history[i]);
       }
     } else {
@@ -319,8 +317,7 @@ create_history(const std::vector<std::unique_ptr<MockStackfulTask>>& mocks) {
 }
 
 std::string draw_history(
-    const std::vector<std::variant<Invoke, Response>>&
-        history) {
+    const std::vector<std::variant<Invoke, Response>>& history) {
   std::map<const StackfulTask*, size_t> numeration;
   size_t i = 0;
   for (auto& event : history) {

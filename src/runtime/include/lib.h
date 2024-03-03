@@ -109,8 +109,6 @@ struct Response {
   std::reference_wrapper<const StackfulTask> task;
 };
 
-// void swap(Response& lhs, Response& rhs);
-
 struct Invoke {
   explicit Invoke(const StackfulTask& task);
 
@@ -119,5 +117,3 @@ struct Invoke {
  private:
   std::reference_wrapper<const StackfulTask> task;
 };
-
-// void swap(Invoke& lhs, Invoke& rhs);
