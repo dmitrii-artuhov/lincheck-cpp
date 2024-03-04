@@ -198,6 +198,13 @@ struct CoroGenerator final {
     return coro_targets.find(name) != coro_targets.end();
   }
 
+  bool needInterrupt(Instruction *insn) {
+    if (isa<AllocaInst>(insn)) {
+      return false;
+    }
+    return true;
+  }
+
   void findCoroTargets() {
     for (auto it = M.global_begin(); it != M.global_end(); ++it) {
       if (it->getName() != "llvm.global.annotations") {
@@ -252,14 +259,24 @@ struct CoroGenerator final {
 
     builder_t Builder(&*F->begin());
 
-    // * Add suspension points after each operation.
+    // * Add suspension points after suitable operations.
     for (auto b_it = (*F).begin(); b_it != (*F).end();) {
       auto cb = b_it;
       std::optional<BasicBlock *> new_entry_block;
 
+      auto current_block = BasicBlock::Create(
+          ctx, "execution." + std::to_string(int_gen.next()));
       for (auto insn_it = cb->begin(); insn_it != cb->end();) {
         if (std::next(insn_it) == cb->end()) {
-          // Left terminate instruction in this block.
+          // Leave terminate instruction in this block.
+          break;
+        }
+        auto start = insn_it;
+        while (insn_it != cb->end() && !needInterrupt(&*insn_it)) {
+          ++insn_it;
+        }
+        if (insn_it == cb->end()) {
+          // This is the last segment, leave them in this block.
           break;
         }
         auto new_block = BasicBlock::Create(
@@ -268,11 +285,22 @@ struct CoroGenerator final {
           new_entry_block = new_block;
         }
         b_it = cb->getIterator();
+        auto iter = insn_it++;
+
+        // Move instructions segment to the new block.
+        while (true) {
+          std::optional<decltype(iter)> prev;
+          if (iter != start) {
+            prev = std::prev(iter);
+          }
+          iter->removeFromParent();
+          iter->insertInto(new_block, new_block->begin());
+          if (!prev.has_value()) break;
+          iter = prev.value();
+        }
         Builder.SetInsertPoint(new_block);
-        auto suspend_res = Builder.CreateIntrinsic(
-            i8_t, Intrinsic::coro_suspend, {token_none, i1_false});
-        auto insn = insn_it++;
-        insn->moveBefore(suspend_res);
+        Builder.CreateIntrinsic(i8_t, Intrinsic::coro_suspend,
+                                {token_none, i1_false});
       }
       b_it++;
 
