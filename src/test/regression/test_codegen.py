@@ -54,13 +54,9 @@ def run_command_and_get_output(
     return process.returncode, out
 
 
-@pytest.mark.parametrize('name', get_test_names())
-def test_codegen(name, tmpdir):
-    path = os.path.join(TESTDATA_DIR, name)
-
-    # Compile ll file to llvm bytecode.
-    path_ll = f"{path}.ll"
-    cmd = [CLANG, "-emit-llvm", "-S", "-o", "bytecode.bc", path_ll]
+def build(path, tmpdir, flags=""):
+    # Compile sample to llvm bytecode.
+    cmd = [CLANG, "-emit-llvm", "-S", "-o", "bytecode.bc", path]
     rc, _ = run_command_and_get_output(cmd, cwd=tmpdir)
     assert rc == 0
 
@@ -72,7 +68,6 @@ def test_codegen(name, tmpdir):
     rc, _ = run_command_and_get_output(cmd, cwd=tmpdir)
     assert rc == 0
 
-    # Print output for debug.
     cmd = [LLVM_DIS, "res.bc", "-o", "res.ll"]
     rc, _ = run_command_and_get_output(cmd, cwd=tmpdir)
     assert rc == 0
@@ -80,10 +75,17 @@ def test_codegen(name, tmpdir):
         print(f.read())
 
     # Compile test_func.
-    cmd = [CLANG, "res.bc", "-std=c++2a",
+    cmd = [CLANG, f"-D{flags}", "res.bc", "-std=c++2a",
            LIB, os.path.join(DIR, "test_func.cpp"), "-o", "run"]
     rc, _ = run_command_and_get_output(cmd, cwd=tmpdir)
     assert rc == 0
+
+
+@pytest.mark.parametrize('name', get_test_names())
+def test_codegen(name, tmpdir):
+    path = os.path.join(TESTDATA_DIR, name)
+    path_ll = f"{path}.ll"
+    build(path_ll, tmpdir)
 
     # Run test_func and compare result with expected.
     with open(os.path.join(TESTDATA_DIR, f"{name}.yml")) as f:
@@ -91,3 +93,12 @@ def test_codegen(name, tmpdir):
     rc, output = run_command_and_get_output(["./run"], cwd=tmpdir)
     assert rc == 0
     assert output.rstrip("\n") == "\n".join([str(i) for i in expected])
+
+
+def test_codegen_generators(tmpdir):
+    path = os.path.join(TESTDATA_DIR, "generator.cpp")
+    build(path, tmpdir, "no_trace")
+
+    rc, output = run_command_and_get_output(["./run"], cwd=tmpdir)
+    assert rc == 0
+    assert output == "42\n43\n44\n"

@@ -1,5 +1,9 @@
 #include <set>
+#include <utility>
+#include <vector>
 
+#include "llvm/Demangle/Demangle.h"
+#include "llvm/IR/Mangler.h"
 #include "llvm/IR/NoFolder.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Pass.h"
@@ -11,11 +15,34 @@
 using namespace llvm;
 
 using builder_t = IRBuilder<NoFolder>;
+using fun_index_t = std::set<std::pair<std::string, StringRef>>;
 
 const std::string coro_suf = "_coro";
 const std::string task_builder_suf = "_task_builder";
+const std::string gen_annotation = "generator";
+const std::string nonatomic_annotation = "nonatomic";
 
 std::string ToCoro(const std::string &name) { return name + coro_suf; }
+
+fun_index_t CreateFunIndex(const Module &M) {
+  fun_index_t index{};
+  for (auto it = M.global_begin(); it != M.global_end(); ++it) {
+    if (it->getName() != "llvm.global.annotations") {
+      continue;
+    }
+    auto *CA = dyn_cast<ConstantArray>(it->getOperand(0));
+    for (auto o_it = CA->op_begin(); o_it != CA->op_end(); ++o_it) {
+      auto *CS = dyn_cast<ConstantStruct>(o_it->get());
+      auto *fun = dyn_cast<Function>(CS->getOperand(0));
+      auto *AnnotationGL = dyn_cast<GlobalVariable>(CS->getOperand(1));
+      auto annotation =
+          dyn_cast<ConstantDataArray>(AnnotationGL->getInitializer())
+              ->getAsCString();
+      index.insert({annotation.str(), fun->getName()});
+    }
+  }
+  return index;
+}
 
 // Generates
 // * task_builders from generated coroutines, which has not args.
@@ -48,7 +75,23 @@ struct MainGenerator final {
   }
 
   void run(const std::string &entry_point_name,
-           std::vector<Function *> &coroutines) {
+           std::vector<Function *> &coroutines, const fun_index_t &index) {
+    std::unordered_map<Type *, Function *> generators;
+    for (const auto &it : index) {
+      if (it.first != gen_annotation) {
+        continue;
+      }
+      auto fun = M.getFunction(it.second);
+      assert(fun);
+      if (fun->arg_size() != 0) {
+        errs() << fun->getName()
+               << " is not valid generator: it must have 0 arguments\n";
+        continue;
+      }
+      // errs() << "finded generator: " << fun->getName() << "\n";
+      generators[fun->getReturnType()] = fun;
+    }
+
     auto &ctx = M.getContext();
     auto main = Function::Create(FunctionType::get(i32_t, {}, false),
                                  Function::ExternalLinkage, "main", M);
@@ -60,7 +103,8 @@ struct MainGenerator final {
 
     // Push builders to list.
     for (const auto &coro : coroutines) {
-      auto builder_fun = GenTaskBuilder(coro, coro->getName().str());
+      auto builder_fun =
+          GenTaskBuilder(coro, coro->getName().str(), generators);
       if (builder_fun != nullptr) {
         Builder.CreateCall(push_task_builder_list,
                            {task_builder_list, builder_fun});
@@ -79,13 +123,21 @@ struct MainGenerator final {
   }
 
  private:
-  Function *GenTaskBuilder(Function *F, const std::string &name) {
+  Function *GenTaskBuilder(
+      Function *F, const std::string &name,
+      const std::unordered_map<Type *, Function *> &generators) {
     assert(F != nullptr && "F is nullptr");
     if (F->arg_size() != 0) {
-      // TODO: how caller will provide input arguments?
-      errs() << "Skip TaskBuilder generation for " << F->getName()
-             << ": args are non empty\n";
-      return nullptr;
+      // Try to find generator for each argument.
+      int i = 0;
+      for (auto it = F->arg_begin(); it != F->arg_end(); ++it, ++i) {
+        if (generators.find(it->getType()) == generators.end()) {
+          errs() << "Skip TaskBuilder generation for " << F->getName()
+                 << ": there is no generator for argument with index " << i
+                 << "\n";
+          return nullptr;
+        }
+      }
     }
     errs() << "Generate TaskBuilder for " << F->getName() << "\n";
     auto &ctx = M.getContext();
@@ -98,7 +150,15 @@ struct MainGenerator final {
     auto block =
         BasicBlock::Create(ctx, "init", TaskBuilder, &TaskBuilder->front());
     builder_t Builder{block};
-    auto hdl = Builder.CreateCall(F, {});
+    // Generate arguments.
+    std::vector<Value *> args;
+    for (auto it = F->arg_begin(); it != F->arg_end(); ++it) {
+      auto generator = generators.find(it->getType())->second;
+      auto arg = Builder.CreateCall(generator, {});
+      args.push_back(arg);
+    }
+
+    auto hdl = Builder.CreateCall(F, args);
     auto task = Builder.CreateCall(make_task, {hdl});
     Builder.CreateRet(task);
 
@@ -156,14 +216,13 @@ struct CoroGenerator final {
                          Function::ExternalLinkage, "get_promise", M);
   }
 
-  std::vector<Function *> Run() {
-    findCoroTargets();
+  std::vector<Function *> Run(const fun_index_t &index) {
     std::vector<Function *> result;
     for (auto &F : M) {
       auto name = F.getName().str();
-      if (isCoroTarget(name)) {
+      if (isCoroTarget(name, index)) {
         // Generate coroutine.
-        auto fun = GenCoroFunc(&F);
+        auto fun = GenCoroFunc(&F, index);
         if (fun != nullptr) {
           result.push_back(fun);
         }
@@ -193,9 +252,8 @@ struct CoroGenerator final {
   Function *get_promise;
   Function *init_promise;
 
-  std::set<StringRef> coro_targets;
-  bool isCoroTarget(StringRef name) {
-    return coro_targets.find(name) != coro_targets.end();
+  bool isCoroTarget(StringRef name, const fun_index_t &index) {
+    return index.find({nonatomic_annotation, name}) != index.end();
   }
 
   bool needInterrupt(Instruction *insn) {
@@ -205,27 +263,7 @@ struct CoroGenerator final {
     return true;
   }
 
-  void findCoroTargets() {
-    for (auto it = M.global_begin(); it != M.global_end(); ++it) {
-      if (it->getName() != "llvm.global.annotations") {
-        continue;
-      }
-      auto *CA = dyn_cast<ConstantArray>(it->getOperand(0));
-      for (auto o_it = CA->op_begin(); o_it != CA->op_end(); ++o_it) {
-        auto *CS = dyn_cast<ConstantStruct>(o_it->get());
-        auto *fun = dyn_cast<Function>(CS->getOperand(0));
-        auto *AnnotationGL = dyn_cast<GlobalVariable>(CS->getOperand(1));
-        auto annotation =
-            dyn_cast<ConstantDataArray>(AnnotationGL->getInitializer())
-                ->getAsCString();
-        if (annotation == "nonatomic") {
-          coro_targets.insert(fun->getName());
-        }
-      }
-    }
-  }
-
-  Function *GenCoroFunc(Function *F) {
+  Function *GenCoroFunc(Function *F, const fun_index_t &index) {
     if (F->empty()) {
       errs() << "Skip generation for " << F->getName() << ": it's empty\n";
       return nullptr;
@@ -241,11 +279,12 @@ struct CoroGenerator final {
     auto old_ret_t = F->getReturnType();
     auto newF = utils::CloneFuncChangeRetType(F, ptr_t, coro_name);
     assert(newF != nullptr && "Generated function is nullptr");
-    return rawGenCoroFunc(newF, old_ret_t, F->getName().str());
+    return rawGenCoroFunc(newF, old_ret_t, F->getName().str(), index);
   }
 
   // TODO: rewrite it using one pass.
-  Function *rawGenCoroFunc(Function *F, Type *old_ret_t, std::string old_name) {
+  Function *rawGenCoroFunc(Function *F, Type *old_ret_t, std::string old_name,
+                           const fun_index_t &index) {
     auto int_gen = utils::SeqGenerator{};
     auto &ctx = M.getContext();
 
@@ -402,10 +441,10 @@ struct CoroGenerator final {
         // Maybe need to generate coro clones in process.
         auto f = call->getCalledFunction();
         auto f_name = f->getName().str();
-        if (isCoroTarget(f_name)) {
+        if (isCoroTarget(f_name, index)) {
           // TODO: remove after debug.
           errs() << "Replace " << f_name << " call\n";
-          auto coro_f = GenCoroFunc(f);
+          auto coro_f = GenCoroFunc(f, index);
           if (coro_f == nullptr) {
             // We can't generate this call because
             // can't generate coro clone for callee.
@@ -450,11 +489,13 @@ namespace {
 
 struct CoroGenPass : public PassInfoMixin<CoroGenPass> {
   PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) {
+    auto fun_index = CreateFunIndex(M);
+
     CoroGenerator gen{M};
-    auto coroutines = gen.Run();
+    auto coroutines = gen.Run(fun_index);
 
     MainGenerator main_gen{M};
-    main_gen.run("run", coroutines);
+    main_gen.run("run", coroutines, fun_index);
 
     return PreservedAnalyses::none();
   };

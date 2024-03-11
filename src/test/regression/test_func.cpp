@@ -27,14 +27,18 @@ void run(TaskBuilderList l) {
   while (stack.size()) {
     auto current = stack.back();
     if (current.IsReturned()) {
+#ifndef no_trace
       std::cout << "returned " << current.GetRetVal() << std::endl;
+#endif
       stack.pop_back();
       if (!stack.empty()) {
         stack.back().ClearChild();
       }
     } else {
       current.Resume();
+#ifndef no_trace
       std::cout << var << std::endl;
+#endif
       if (current.HasChild()) {
         stack.push_back(current.GetChild());
       }
