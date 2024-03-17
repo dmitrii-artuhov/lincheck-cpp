@@ -82,7 +82,7 @@ def build(path, tmpdir, flags=""):
 
 
 @pytest.mark.parametrize('name', get_test_names())
-def test_codegen(name, tmpdir):
+def test_codegen_suspends(name, tmpdir):
     path = os.path.join(TESTDATA_DIR, name)
     path_ll = f"{path}.ll"
     build(path_ll, tmpdir)
@@ -102,3 +102,23 @@ def test_codegen_generators(tmpdir):
     rc, output = run_command_and_get_output(["./run"], cwd=tmpdir)
     assert rc == 0
     assert output == "42\n43\n44\n"
+
+
+def test_codegen_queue(tmpdir):
+    path = os.path.join(TESTDATA_DIR, "queue.cpp")
+    build(path, tmpdir, "no_trace")
+
+    rc, output = run_command_and_get_output(["./run"], cwd=tmpdir)
+    assert rc == 0
+    assert output == """\
+Push: 1
+Push: 2
+Push: 3
+Push: 4
+Push: 5
+Got: 1
+Got: 2
+Got: 3
+Got: 4
+Got: 5
+"""

@@ -22,6 +22,28 @@ const std::string task_builder_suf = "_task_builder";
 const std::string gen_annotation = "generator";
 const std::string nonatomic_annotation = "nonatomic";
 
+template <typename T>
+void Assert(bool cond, const T &obj) {
+  if (!cond) {
+    errs() << "Assertion failed: \n";
+    errs() << obj << "\n";
+    assert(cond);
+  }
+}
+
+void Assert(bool cond) { assert(cond); }
+
+Value *GenerateCall(builder_t *builder, Function *fun) {
+  if (fun->arg_size() == 0) {
+    return builder->CreateCall(fun, {});
+  }
+  Assert(fun->arg_size() == 1, fun);
+  auto arg = fun->arg_begin();
+  Assert(arg->hasStructRetAttr(), fun);
+  auto alloca = builder->CreateAlloca(arg->getType(), nullptr);
+  return builder->CreateCall(fun, {alloca});
+}
+
 std::string ToCoro(const std::string &name) { return name + coro_suf; }
 
 fun_index_t CreateFunIndex(const Module &M) {
@@ -82,14 +104,13 @@ struct MainGenerator final {
         continue;
       }
       auto fun = M.getFunction(it.second);
-      assert(fun);
-      if (fun->arg_size() != 0) {
-        errs() << fun->getName()
-               << " is not valid generator: it must have 0 arguments\n";
+      Assert(fun);
+      if (fun->arg_size() == 0) {
+        generators[fun->getReturnType()] = fun;
         continue;
       }
-      // errs() << "finded generator: " << fun->getName() << "\n";
-      generators[fun->getReturnType()] = fun;
+      errs() << fun->getName()
+             << " is not valid generator: it must have 0 arguments\n";
     }
 
     auto &ctx = M.getContext();
@@ -154,7 +175,8 @@ struct MainGenerator final {
     std::vector<Value *> args;
     for (auto it = F->arg_begin(); it != F->arg_end(); ++it) {
       auto generator = generators.find(it->getType())->second;
-      auto arg = Builder.CreateCall(generator, {});
+      auto arg = GenerateCall(&Builder,
+                              generator);  // Builder.CreateCall(generator, {});
       args.push_back(arg);
     }
 
@@ -257,10 +279,11 @@ struct CoroGenerator final {
   }
 
   bool needInterrupt(Instruction *insn) {
-    if (isa<AllocaInst>(insn)) {
-      return false;
+    // Suspend only after load and store.
+    if (isa<LoadInst>(insn) || isa<StoreInst>(insn)) {
+      return true;
     }
-    return true;
+    return false;
   }
 
   Function *GenCoroFunc(Function *F, const fun_index_t &index) {
@@ -342,11 +365,16 @@ struct CoroGenerator final {
                                 {token_none, i1_false});
       }
       b_it++;
-
       cb->setName("terminator." + std::to_string(int_gen.next()));
       if (new_entry_block.has_value()) {
+        // Replace all uses of the terminate block with new entry block.
         cb->replaceAllUsesWith(new_entry_block.value());
+        // But, phi nodes still must refer to terminate block,
+        // because they are real successors.
+        cb->replaceSuccessorsPhiUsesWith(new_entry_block.value(), &*cb);
       }
+      // TODO: remove after DEBUG
+      // int_gen.num += 100;
     }
 
     auto &first_real_block = F->front();
@@ -440,6 +468,9 @@ struct CoroGenerator final {
         // Replace calls with coroutines clone calls.
         // Maybe need to generate coro clones in process.
         auto f = call->getCalledFunction();
+        if (!f || !f->hasName()) {
+          continue;
+        }
         auto f_name = f->getName().str();
         if (isCoroTarget(f_name, index)) {
           // TODO: remove after debug.
