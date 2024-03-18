@@ -10,8 +10,10 @@ jobs:
         run: sudo apt install clang
       - name: Setup cmake
         run: sudo apt install cmake
+      - name: Check out repository code
+        uses: actions/checkout@v4
       - name: Prepare for build
-        run: cd LTest && cd src && mkdir build && cd build
+        run: cd ${{ github.workspace }} && cd src && mkdir build && cd build
       - name: Index
         run: cmake -DCMAKE_BUILD_TYPE=Debug ..
       - name: Export
