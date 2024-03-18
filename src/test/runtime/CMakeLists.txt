@@ -14,12 +14,15 @@ include(GoogleTest)
 #)
 #FetchContent_MakeAvailable(googletest)
 
+get_target_property(LIBGMOCK_INCLUDE_DIR GTest::gtest INTERFACE_INCLUDE_DIRECTORIES)
+
 add_library(mocks stackfulltask_mock.h)
 target_link_libraries(
         mocks
         PRIVATE
         runtime
         GTest::gmock_main
+        GTest::gmock
 )
 
 add_executable(
