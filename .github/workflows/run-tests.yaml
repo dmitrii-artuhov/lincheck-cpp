@@ -13,6 +13,8 @@ jobs:
         run: sudo apt install clang
       - name: Setup cmake
         run: sudo apt install cmake
+      - name: Setup gtest # crunch: can't file headers for gmock
+        run: sudo apt libgtest-dev
       - name: Check out repository code
         uses: actions/checkout@v4
       - name: Prepare for build
