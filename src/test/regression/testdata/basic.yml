@@ -1,6 +1,4 @@
 - 1 # tick()
-- 1 # %x = ...
 - 2 # tick()
-- 2 # %y = ...
 - 2 # ret
 - returned 42

@@ -75,8 +75,11 @@ def build(path, tmpdir, flags=""):
         print(f.read())
 
     # Compile test_func.
-    cmd = [CLANG, f"-D{flags}", "res.bc", "-std=c++2a",
-           LIB, os.path.join(DIR, "test_func.cpp"), "-o", "run"]
+    cmd = [CLANG]
+    if flags:
+        cmd.append(f"-D{flags}")
+    cmd.extend(["res.bc", "-std=c++2a",
+                LIB, os.path.join(DIR, "test_func.cpp"), "-o", "run"])
     rc, _ = run_command_and_get_output(cmd, cwd=tmpdir)
     assert rc == 0
 
