@@ -14,6 +14,7 @@ struct CoroPromise {
   int ret_val{};
   handle child_hdl{};
   char *name{};
+  int *args{};
 };
 
 CoroPromise *get_promise(std::coroutine_handle<CoroPromise> hdl) {
@@ -88,6 +89,8 @@ char *get_name(CoroPromise *p) {
   assert(p->name != nullptr);
   return p->name;
 }
+
+void push_arg(ArgList list, int arg) { list->push_back(arg); }
 }
 
 Task::Task(handle hdl) : hdl(hdl) {}

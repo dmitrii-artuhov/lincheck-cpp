@@ -5,6 +5,8 @@
 
 #include "../../runtime/include/lib.h"
 
+Task find_task(TaskBuilderList);
+
 extern "C" {
 
 int var{};
@@ -12,18 +14,9 @@ void tick() { ++var; }
 
 // This function runs `test` task until it and all children are terminated.
 void run(TaskBuilderList l) {
-  std::optional<Task> task;
-  for (auto task_builder : *l) {
-    auto cur_task = task_builder();
-    if (cur_task.GetName() == "test") {
-      task = cur_task;
-      break;
-    }
-  }
-  assert(task.has_value() && "task `test` is not found");
-
+  auto task = find_task(l);
   // Keep stack that contains launched tasks.
-  std::vector<Task> stack = {task.value()};
+  std::vector<Task> stack = {task};
   while (stack.size()) {
     auto current = stack.back();
     if (current.IsReturned()) {

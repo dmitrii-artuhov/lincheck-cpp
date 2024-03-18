@@ -79,6 +79,7 @@ struct MainGenerator final {
     task_t = StructType::create("Task", ptr_t);
     task_builder_list_t = ptr_t;
     task_builder_t = ptr_t;
+    arg_list_t = ptr_t;
 
     make_task = Function::Create(FunctionType::get(task_t, {ptr_t}, false),
                                  Function::ExternalLinkage, "make_task", M);
@@ -94,6 +95,10 @@ struct MainGenerator final {
     push_task_builder_list = Function::Create(
         FunctionType::get(void_t, {task_builder_list_t, task_builder_t}, false),
         Function::ExternalLinkage, "push_task_builder_list", M);
+
+    push_arg =
+        Function::Create(FunctionType::get(void_t, {arg_list_t, i32_t}, false),
+                         Function::ExternalLinkage, "push_arg", M);
   }
 
   void run(const std::string &entry_point_name,
@@ -163,11 +168,11 @@ struct MainGenerator final {
     errs() << "Generate TaskBuilder for " << F->getName() << "\n";
     auto &ctx = M.getContext();
     auto task_builder_name = name + task_builder_suf;
-    auto ftype = FunctionType::get(task_t, {}, false);
+    auto ftype = FunctionType::get(task_t, {arg_list_t}, false);
 
     Function *TaskBuilder = Function::Create(ftype, Function::ExternalLinkage,
                                              task_builder_name, M);
-
+    auto arg_list = TaskBuilder->getArg(0);
     auto block =
         BasicBlock::Create(ctx, "init", TaskBuilder, &TaskBuilder->front());
     builder_t Builder{block};
@@ -178,6 +183,7 @@ struct MainGenerator final {
       auto arg = GenerateCall(&Builder,
                               generator);  // Builder.CreateCall(generator, {});
       args.push_back(arg);
+      Builder.CreateCall(push_arg, {arg_list, arg});
     }
 
     auto hdl = Builder.CreateCall(F, args);
@@ -199,6 +205,9 @@ struct MainGenerator final {
   Function *destroy_task_builder_list;
   Function *push_task_builder_list;
   Function *make_task;
+
+  PointerType *arg_list_t;
+  Function *push_arg;
 };
 
 // Generates coro clones for functions in the module.

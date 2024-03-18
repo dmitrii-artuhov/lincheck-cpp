@@ -51,8 +51,11 @@ struct Task {
   handle hdl;
 };
 
+// ArgList passed to the TaskBuilder, builder fills it with arguments.
+typedef std::vector<int>* ArgList;
+
 // Describes function that builds new task.
-typedef Task (*TaskBuilder)();
+typedef Task (*TaskBuilder)(ArgList);
 
 // Contains task builders.
 // Will be created during LLVM pass and

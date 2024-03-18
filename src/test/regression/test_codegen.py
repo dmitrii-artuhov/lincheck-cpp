@@ -54,7 +54,7 @@ def run_command_and_get_output(
     return process.returncode, out
 
 
-def build(path, tmpdir, flags=""):
+def build(path, tmpdir, flags="", find_task_cpp="find_task.cpp"):
     # Compile sample to llvm bytecode.
     cmd = [CLANG, "-emit-llvm", "-S", "-o", "bytecode.bc", path]
     rc, _ = run_command_and_get_output(cmd, cwd=tmpdir)
@@ -79,7 +79,10 @@ def build(path, tmpdir, flags=""):
     if flags:
         cmd.append(f"-D{flags}")
     cmd.extend(["res.bc", "-std=c++2a",
-                LIB, os.path.join(DIR, "test_func.cpp"), "-o", "run"])
+                LIB,
+                os.path.join(DIR, "test_func.cpp"),
+                os.path.join(DIR, find_task_cpp),
+                "-o", "run"])
     rc, _ = run_command_and_get_output(cmd, cwd=tmpdir)
     assert rc == 0
 
@@ -100,7 +103,7 @@ def test_codegen_suspends(name, tmpdir):
 
 def test_codegen_generators(tmpdir):
     path = os.path.join(TESTDATA_DIR, "generator.cpp")
-    build(path, tmpdir, "no_trace")
+    build(path, tmpdir, "no_trace", find_task_cpp="find_task_args.cpp")
 
     rc, output = run_command_and_get_output(["./run"], cwd=tmpdir)
     assert rc == 0
