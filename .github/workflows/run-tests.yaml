@@ -21,7 +21,7 @@ jobs:
         run: export CC=/usr/bin/clang && export CXX=/usr/bin/clang++
       - name: Build
         working-directory: ${{ github.workspace }}/src/build
-        run: cmake --build lin_check_test
+        run: cmake --build --target lin_check_test
       - name: Run
         working-directory: ${{ github.workspace }}/src/build
         run: ./test/runtime/lin_check_test
