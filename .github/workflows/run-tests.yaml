@@ -15,7 +15,7 @@ jobs:
       - name: Prepare for build
         run: mkdir ${{ github.workspace }}/src/build
       - name: Export
-        run: export CC=/usr/bin/clang && export CXX=/usr/bin/clang++
+        run: echo "CC=/usr/bin/clang" >> build.env && echo "CXX=/usr/bin/clang++" >> build.env
       - name: Index
         working-directory: ${{ github.workspace }}/src/build
         run: cmake -DCMAKE_BUILD_TYPE=Debug ..
