@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <functional>
 
 extern "C" {
 // Let's begin from C-style API to make LLVM calls easier.
