@@ -5,11 +5,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Update
-        run: apt update
+        run: sudo apt update
       - name: Setup clang
-        run: apt install clang
+        run: sudo apt install clang
       - name: Setup cmake
-        run: apt-get cmake
+        run: sudo apt install cmake
       - name: Prepare for build
         run: cd src && mkdir build && cd build
       - name: Index
