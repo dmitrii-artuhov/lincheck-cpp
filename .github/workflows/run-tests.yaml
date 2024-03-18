@@ -3,6 +3,9 @@ on: [push]
 jobs:
   unit-tests:
     runs-on: ubuntu-latest
+    env:
+      CC: /usr/bin/clang
+      CXX: /usr/bin/clang++
     steps:
       - name: Update
         run: sudo apt update
@@ -14,8 +17,6 @@ jobs:
         uses: actions/checkout@v4
       - name: Prepare for build
         run: mkdir ${{ github.workspace }}/src/build
-      - name: Export
-        run: echo "CC=/usr/bin/clang" >> $GITHUB_OUTPUT && echo "CXX=/usr/bin/clang++" >> $GITHUB_OUTPUT
       - name: Index
         working-directory: ${{ github.workspace }}/src/build
         run: cmake -DCMAKE_BUILD_TYPE=Debug ..
