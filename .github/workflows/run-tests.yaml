@@ -1,0 +1,20 @@
+name: run-tests
+on: [push]
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup clang
+        run: apt-get clang++
+      - name: Setup cmake
+        run: apt-get cmake
+      - name: Prepare for build
+        run: cd src && mkdir build && cd build
+      - name: Index
+        run: cmake -DCMAKE_BUILD_TYPE=Debug ..
+      - name: Export
+        run: export CC=/usr/bin/clang && export CXX=/usr/bin/clang++
+      - name: Build
+        run: cmake --build lin_check_test
+      - name: Run
+        run: ./test/runtime/lin_check_test
