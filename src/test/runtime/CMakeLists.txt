@@ -8,6 +8,7 @@ target_link_libraries(
         PRIVATE
         runtime
         GTest::gmock_main
+        gmock
 )
 
 add_executable(
