@@ -11,7 +11,7 @@ jobs:
       - name: Setup cmake
         run: sudo apt install cmake
       - name: Prepare for build
-        run: cd src && mkdir build && cd build
+        run: cd LTest && cd src && mkdir build && cd build
       - name: Index
         run: cmake -DCMAKE_BUILD_TYPE=Debug ..
       - name: Export
