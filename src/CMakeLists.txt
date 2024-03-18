@@ -19,6 +19,9 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(fuzztest)
 
+INCLUDE_DIRECTORIES("${GMOCK_DIR}/include")
+INCLUDE_DIRECTORIES("${GTEST_DIR}/include")
+
 set(CMAKE_CXX_FLAGS "-DCMAKE_BUILD_TYPE=RelWithDebug -DFUZZTEST_FUZZING_MODE=on ${CMAKE_CXX_FLAGS}")
 add_compile_options(-fsanitize=address -DADDRESS_SANITIZER)
 add_link_options(-fsanitize=address -DADDRESS_SANITIZER)

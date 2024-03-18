@@ -13,8 +13,9 @@ include(GoogleTest)
 #        FIND_PACKAGE_ARGS NAMES GTest gtest
 #)
 #FetchContent_MakeAvailable(googletest)
+#
 
-get_target_property(LIBGMOCK_INCLUDE_DIR GTest::gtest INTERFACE_INCLUDE_DIRECTORIES)
+INCLUDE_DIRECTORIES("${GMOCK_DIR}/include")
 
 add_library(mocks stackfulltask_mock.h)
 target_link_libraries(
