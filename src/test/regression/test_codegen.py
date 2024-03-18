@@ -125,3 +125,34 @@ Got: 3
 Got: 4
 Got: 5
 """
+
+
+def test_codegen_flow(tmpdir):
+    path = os.path.join(TESTDATA_DIR, "flow.cpp")
+    build(path, tmpdir, "no_trace")
+    rc, output = run_command_and_get_output(["./run"], cwd=tmpdir)
+    assert rc == 0
+    assert output == """\
+bar(5)
+bar res: 12
+bar(1)
+bar res: 1
+done
+foo(2)
+foo res: 1
+bar(1)
+bar res: 1
+done
+foo(4)
+foo res: 43
+bar(3)
+bar res: 4
+bar(1)
+bar res: 1
+done
+foo(2)
+foo res: 1
+bar(1)
+bar res: 1
+done
+"""

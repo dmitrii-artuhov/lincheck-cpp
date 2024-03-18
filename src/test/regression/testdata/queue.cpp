@@ -1,7 +1,7 @@
 #include <atomic>
 #include <iostream>
 
-#define na __attribute((__annotate__(("nonatomic"))))
+#include "macro.h"
 
 std::atomic<int> queue_array[1000]{};
 std::atomic<int> tail{}, head{};

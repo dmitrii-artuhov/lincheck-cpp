@@ -1,7 +1,6 @@
 #include <iostream>
 
-#define na __attribute((__annotate__(("nonatomic"))))
-#define gen __attribute((__annotate__("generator")))
+#include "macro.h"
 
 namespace generators {
 
