@@ -288,8 +288,8 @@ struct CoroGenerator final {
   }
 
   bool needInterrupt(Instruction *insn) {
-    // Suspend only after load and store.
-    if (isa<LoadInst>(insn) || isa<StoreInst>(insn) || isa<CallInst>(insn)) {
+    if (isa<LoadInst>(insn) || isa<StoreInst>(insn) || isa<CallInst>(insn) ||
+        isa<AtomicRMWInst>(insn)) {
       return true;
     }
     return false;

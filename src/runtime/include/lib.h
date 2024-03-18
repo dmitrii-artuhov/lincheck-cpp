@@ -71,6 +71,13 @@ void run(TaskBuilderList l);
 struct StackfulTask {
   explicit StackfulTask(Task task);
 
+  // Set generated arguments.
+  // Called by the scheduler after task building.
+  virtual void SetArgs(std::vector<int> args);
+
+  // Get generated arguments.
+  virtual const std::vector<int>& GetArgs() const;
+
   // Resume method resumes the last subtask.
   virtual void Resume();
 
@@ -98,24 +105,28 @@ struct StackfulTask {
   // Need option for tests, because I have to initialize Task field(
   Task entrypoint;
   int last_returned_value{};
+  std::vector<int> args{};
 };
 }
 
 struct Response {
-  Response(const StackfulTask& task, int result);
+  Response(const StackfulTask& task, int result, int thread_id);
 
   [[nodiscard]] const StackfulTask& GetTask() const;
 
   int result;
+  int thread_id;
 
  private:
   std::reference_wrapper<const StackfulTask> task;
 };
 
 struct Invoke {
-  explicit Invoke(const StackfulTask& task);
+  explicit Invoke(const StackfulTask& task, int thread_id);
 
   [[nodiscard]] const StackfulTask& GetTask() const;
+
+  int thread_id;
 
  private:
   std::reference_wrapper<const StackfulTask> task;

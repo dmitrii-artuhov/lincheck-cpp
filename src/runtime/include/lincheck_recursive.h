@@ -12,19 +12,20 @@ template <class LinearSpecificationObject,
           class SpecificationObjectEqual =
               std::equal_to<LinearSpecificationObject>>
 struct LinearizabilityCheckerRecursive : ModelChecker {
+  using method_t = std::function<int(LinearSpecificationObject*,
+                                     const std::vector<int>& args)>;
+  using method_map_t = std::map<MethodName, method_t>;
+
   LinearizabilityCheckerRecursive() = delete;
 
-  LinearizabilityCheckerRecursive(
-      std::map<MethodName, std::function<int(LinearSpecificationObject*)>>
-          specification_methods,
-      LinearSpecificationObject first_state);
+  LinearizabilityCheckerRecursive(method_map_t specification_methods,
+                                  LinearSpecificationObject first_state);
 
   bool Check(const std::vector<std::variant<Invoke, Response>>& fixed_history)
       override;
 
  private:
-  std::map<MethodName, std::function<int(LinearSpecificationObject*)>>
-      specification_methods;
+  std::map<MethodName, method_t> specification_methods;
   LinearSpecificationObject first_state;
 };
 
@@ -34,8 +35,7 @@ LinearizabilityCheckerRecursive<LinearSpecificationObject,
                                 SpecificationObjectHash,
                                 SpecificationObjectEqual>::
     LinearizabilityCheckerRecursive(
-        std::map<MethodName, std::function<int(LinearSpecificationObject*)>>
-            specification_methods,
+        LinearizabilityCheckerRecursive::method_map_t specification_methods,
         LinearSpecificationObject first_state)
     : specification_methods(specification_methods), first_state(first_state) {
   if (!std::is_copy_assignable_v<LinearSpecificationObject>) {
@@ -94,7 +94,8 @@ bool LinearizabilityCheckerRecursive<LinearSpecificationObject,
           data_structure_state;
       // state is already have been copied, because it's the argument of the
       // lambda
-      int res = method(&data_structure_state_copy);
+      int res =
+          method(&data_structure_state_copy, minimal_op.GetTask().GetArgs());
       // If invoke doesn't have a response we can't check the response
       if (inv_res.find(i) == inv_res.end()) {
         linearized[i] = true;

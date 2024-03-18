@@ -10,7 +10,7 @@ struct RoundRobinStrategy : Strategy {
   explicit RoundRobinStrategy(size_t threads_count,
                               TaskBuilderList constructors);
 
-  std::pair<StackfulTask&, bool> Next() override;
+  std::tuple<StackfulTask&, bool, int> Next() override;
 
   void StartNextRound() override;
 

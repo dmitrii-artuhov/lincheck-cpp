@@ -27,19 +27,20 @@ template <class LinearSpecificationObject,
           class SpecificationObjectEqual =
               std::equal_to<LinearSpecificationObject>>
 struct LinearizabilityChecker : ModelChecker {
+  using method_t = std::function<int(LinearSpecificationObject*,
+                                     const std::vector<int>& args)>;
+  using method_map_t = std::map<MethodName, method_t>;
+
   LinearizabilityChecker() = delete;
 
-  LinearizabilityChecker(
-      std::map<MethodName, std::function<int(LinearSpecificationObject*)>>
-          specification_methods,
-      LinearSpecificationObject first_state);
+  LinearizabilityChecker(method_map_t specification_methods,
+                         LinearSpecificationObject first_state);
 
   bool Check(const std::vector<std::variant<Invoke, Response>>& fixed_history)
       override;
 
  private:
-  std::map<MethodName, std::function<int(LinearSpecificationObject*)>>
-      specification_methods;
+  method_map_t specification_methods;
   LinearSpecificationObject first_state;
 };
 
@@ -74,8 +75,7 @@ template <class LinearSpecificationObject, class SpecificationObjectHash,
 LinearizabilityChecker<LinearSpecificationObject, SpecificationObjectHash,
                        SpecificationObjectEqual>::
     LinearizabilityChecker(
-        std::map<MethodName, std::function<int(LinearSpecificationObject*)>>
-            specification_methods,
+        LinearizabilityChecker::method_map_t specification_methods,
         LinearSpecificationObject first_state)
     : specification_methods(specification_methods), first_state(first_state) {
   if (!std::is_copy_assignable_v<LinearSpecificationObject>) {
@@ -129,7 +129,7 @@ bool LinearizabilityChecker<LinearSpecificationObject, SpecificationObjectHash,
       bool was_checked = false;
       LinearSpecificationObject data_structure_state_copy =
           data_structure_state;
-      int res = method(&data_structure_state_copy);
+      int res = method(&data_structure_state_copy, inv.GetTask().GetArgs());
 
       // If invoke doesn't have a response we can't check the response
       bool doesnt_have_response =

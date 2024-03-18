@@ -16,8 +16,9 @@ struct ModelChecker {
 // will be the next one it can be implemented by different strategies, such as:
 // randomized/tla/fair
 struct Strategy {
-  // Returns the next tasks, and also the flag which tells is the task new
-  virtual std::pair<StackfulTask&, bool> Next() = 0;
+  // Returns the next tasks,
+  // the flag which tells is the task new, and the thread number.
+  virtual std::tuple<StackfulTask&, bool, int> Next() = 0;
 
   // Strategy should stop all tasks that already have been started
   virtual void StartNextRound() = 0;
@@ -31,13 +32,18 @@ struct Scheduler {
   Scheduler(Strategy& sched_class, ModelChecker& checker, size_t max_tasks,
             size_t max_rounds);
 
+  using full_history_t = std::vector<std::reference_wrapper<StackfulTask>>;
+  using seq_history_t = std::vector<std::variant<Invoke, Response>>;
+  using round_result_t =
+      std::optional<std::pair<full_history_t, seq_history_t>>;
+
   // Run returns full unliniarizable history if such a history is found. Full
   // history is a history with all events, where each element in the vector is a
   // Resume operation on the corresponding task
-  std::optional<std::vector<std::reference_wrapper<StackfulTask>>> Run();
+  round_result_t Run();
 
  private:
-  std::optional<std::vector<std::reference_wrapper<StackfulTask>>> runRound();
+  round_result_t runRound();
 
   Strategy& strategy;
 

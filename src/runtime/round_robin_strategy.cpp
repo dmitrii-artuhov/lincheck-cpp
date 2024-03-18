@@ -19,7 +19,7 @@ RoundRobinStrategy::RoundRobinStrategy(size_t threads_count,
 
 // If there aren't any non returned tasks and the amount of finished tasks
 // is equal to the max_tasks the finished task will be returned
-std::pair<StackfulTask&, bool> RoundRobinStrategy::Next() {
+std::tuple<StackfulTask&, bool, int> RoundRobinStrategy::Next() {
   size_t current_task = next_task;
   // update the next pointer
   next_task = (++next_task) % threads_count;
@@ -28,13 +28,17 @@ std::pair<StackfulTask&, bool> RoundRobinStrategy::Next() {
   if (threads[current_task].empty() ||
       threads[current_task].back().IsReturned()) {
     // a task has finished or the queue is empty, so we add a new task
+    std::vector<int> args;
     auto constructor = constructors->at(distribution(rng));
-    threads[current_task].emplace(constructor());
+    auto task = constructor(&args);
+    auto stackfulTask = StackfulTask{task};
+    stackfulTask.SetArgs(std::move(args));
 
-    return {threads[current_task].back(), true};
+    threads[current_task].emplace(stackfulTask);
+    return {threads[current_task].back(), true, current_task};
   }
 
-  return {threads[current_task].back(), false};
+  return {threads[current_task].back(), false, current_task};
 }
 
 // Have to stop all current tasks and spawn new tasks

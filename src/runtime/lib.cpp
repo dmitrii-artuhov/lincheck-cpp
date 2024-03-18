@@ -144,6 +144,12 @@ void StackfulTask::Resume() {
   }
 }
 
+void StackfulTask::SetArgs(std::vector<int> args) {
+  this->args = std::move(args);
+}
+
+const std::vector<int> &StackfulTask::GetArgs() const { return args; }
+
 bool StackfulTask::IsReturned() { return stack.empty(); }
 
 int StackfulTask::GetRetVal() const { return last_returned_value; }
@@ -159,3 +165,9 @@ StackfulTask::~StackfulTask() {
     stack[i].ClearChild();
   }
 }
+
+Invoke::Invoke(const StackfulTask &task, int thread_id)
+    : task(task), thread_id(thread_id) {}
+
+Response::Response(const StackfulTask &task, int result, int thread_id)
+    : task(task), result(result), thread_id(thread_id) {}
