@@ -2,13 +2,14 @@ cmake_minimum_required(VERSION 3.6)
 
 enable_testing()
 
+include(GoogleTest)
+
 add_library(mocks stackfulltask_mock.h)
 target_link_libraries(
         mocks
         PRIVATE
         runtime
         GTest::gmock_main
-        gmock
 )
 
 add_executable(
