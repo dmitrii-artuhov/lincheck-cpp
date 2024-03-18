@@ -15,6 +15,9 @@ add_executable(
         lin_check_test.cpp
 )
 
+set_property(TARGET lin_check_test PROPERTY CXX_STANDARD 20)
+
+
 target_compile_options(lin_check_test PRIVATE -Wall -Wextra -Werror -pedantic-errors)
 
 target_link_libraries(
