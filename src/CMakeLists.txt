@@ -9,23 +9,11 @@ find_package(LLVM REQUIRED CONFIG)
 # Uncomment for debug.
 # message("llvm location: ${LLVM_DIR}")
 
-include(FetchContent)
-
-FetchContent_Declare(
-        fuzztest
-        GIT_REPOSITORY https://github.com/google/fuzztest.git
-        GIT_TAG "main"
-        SYSTEM
-)
-
-FetchContent_MakeAvailable(fuzztest)
-
-INCLUDE_DIRECTORIES("${GMOCK_DIR}/include")
-INCLUDE_DIRECTORIES("${GTEST_DIR}/include")
-
 set(CMAKE_CXX_FLAGS "-DCMAKE_BUILD_TYPE=RelWithDebug -DFUZZTEST_FUZZING_MODE=on ${CMAKE_CXX_FLAGS}")
 add_compile_options(-fsanitize=address -DADDRESS_SANITIZER)
 add_link_options(-fsanitize=address -DADDRESS_SANITIZER)
+
+add_subdirectory(third-party)
 
 include(GoogleTest)
 
