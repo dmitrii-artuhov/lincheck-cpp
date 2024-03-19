@@ -3,8 +3,9 @@ project(lintest)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
+# need this crunch for github ci https://github.com/actions/runner-images/issues/8659
+set(CMAKE_CXX_FLAGS "-stdlib=libc++ ${CMAKE_CXX_FLAGS}")
 find_package(LLVM REQUIRED CONFIG)
-
 # Uncomment for debug.
 # message("llvm location: ${LLVM_DIR}")
 
