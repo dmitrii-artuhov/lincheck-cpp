@@ -23,4 +23,4 @@ build:
 	opt --load-pass-plugin ./build/codegen/CoroGenPass.so \
 	-passes="coro_gen" bytecode.bc -o res.bc
 	llvm-dis res.bc -o res.ll
-	clang++ -D$(FLAG) -O0 -g -std=c++2a res.ll ./verifying/run.cpp ./runtime/lib.cpp ./runtime/scheduler.cpp ./runtime/round_robin_strategy.cpp ./runtime/lin_check.cpp -o ./verifying/run
+	clang++ -D$(FLAG) -O0 -g -std=c++2a res.ll ./verifying/run.cpp ./runtime/lib.cpp ./runtime/scheduler.cpp ./runtime/round_robin_strategy.cpp ./runtime/lin_check.cpp ./runtime/logger.cpp -o ./verifying/run

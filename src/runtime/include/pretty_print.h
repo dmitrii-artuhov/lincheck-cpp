@@ -9,21 +9,38 @@
 
 namespace pretty_print {
 
-using std::cout;
 using std::string;
 using std::to_string;
 
+// Counts how much symbols is left after printing.
+template <typename Out_t>
 struct FitPrinter {
+  Out_t& out;
   int rest;
-  FitPrinter(int rest) : rest(rest) {}
+  FitPrinter(Out_t& out, int rest) : out(out), rest(rest) {}
 
   void Out(const std::string& msg) {
     rest -= msg.size();
-    cout << msg;
+    out << msg;
   }
 };
 
-void pretty_print(const std::vector<std::variant<Invoke, Response>>& result) {
+/*
+    Prints like this:
+    *--------------------------------------*
+    |        T0        |        T1         |
+    *--------------------------------------*
+    | Push(2)          |                   |
+    | Ok(2)            |                   |
+    |                  |  Pop()            |
+    |                  |  Ok(5)            |
+    *--------------------------------------*
+     <---------------->
+         cell_width
+*/
+template <typename Out_t>
+void pretty_print(const std::vector<std::variant<Invoke, Response>>& result,
+                  Out_t& out) {
   auto get_thread_num = [](const std::variant<Invoke, Response>& v) {
     // Crutch.
     if (v.index() == 0) {
@@ -38,58 +55,48 @@ void pretty_print(const std::vector<std::variant<Invoke, Response>>& result) {
     threads_num = std::max(threads_num, get_thread_num(i) + 1);
   }
 
-  /*
-      *--------------------------------------*
-      |        T0        |        T1         |
-      *--------------------------------------*
-      | Push(2)          |                   |
-      | Ok(2)            |                   |
-      |                  |  Pop()            |
-      |                  |  Ok(5)            |
-      *--------------------------------------*
-  */
-  auto print_separator = [threads_num, cell_width]() {
-    cout << "*";
+  auto print_separator = [&out, threads_num, cell_width]() {
+    out << "*";
     for (int i = 0; i < threads_num * cell_width + threads_num - 1; ++i) {
-      cout << "-";
+      out << "-";
     }
-    cout << "*\n";
+    out << "*\n";
   };
 
-  auto print_spaces = [](int count) {
+  auto print_spaces = [&out](int count) {
     for (int i = 0; i < count; ++i) {
-      cout << " ";
+      out << " ";
     }
   };
 
   print_separator();
   // Header.
-  cout << "|";
+  out << "|";
   for (int i = 0; i < threads_num; ++i) {
     int rest = cell_width - 1 /*T*/ - to_string(i).size();
     print_spaces(rest / 2);
-    cout << "T" << i;
+    out << "T" << i;
     print_spaces(rest - rest / 2);
-    cout << "|";
+    out << "|";
   }
-  cout << "\n";
+  out << "\n";
 
   print_separator();
 
   auto print_empty_cell = [&]() {
     print_spaces(cell_width);
-    cout << "|";
+    out << "|";
   };
 
   // Rows.
   for (const auto& i : result) {
     int num = get_thread_num(i);
-    cout << "|";
+    out << "|";
     for (int j = 0; j < num; ++j) {
       print_empty_cell();
     }
 
-    FitPrinter fp{cell_width};
+    FitPrinter fp{out, cell_width};
     fp.Out(" ");
     if (i.index() == 0) {
       auto inv = get<0>(i);
@@ -109,12 +116,12 @@ void pretty_print(const std::vector<std::variant<Invoke, Response>>& result) {
     }
     assert(fp.rest > 0);
     print_spaces(fp.rest);
-    cout << "|";
+    out << "|";
 
     for (int j = 0; j < threads_num - num - 1; ++j) {
       print_empty_cell();
     }
-    cout << "\n";
+    out << "\n";
   }
 
   print_separator();

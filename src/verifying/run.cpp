@@ -1,7 +1,9 @@
 #include <deque>
 #include <iostream>
+#include <memory>
 
 #include "../runtime/include/lincheck_recursive.h"
+#include "../runtime/include/logger.h"
 #include "../runtime/include/pretty_print.h"
 #include "../runtime/include/round_robin_strategy.h"
 
@@ -103,34 +105,50 @@ auto getMethods() {
 
 };  // namespace Queue
 
-// ./run <THREADS> <STRATEGY> <TASKS> <ROUNDS>
-// SPEC = queue | register
-// STRATEGY = rr
+enum StrategyType { RR, RND };
 
-void extract_args(int argc, char *argv[], size_t &threads, size_t &tasks,
-                  size_t &rounds) {
-  if (argc > 1) {
-    threads = std::stoul(argv[1]);  // Can throw.
+// ./run <THREADS> <STRATEGY> <TASKS> <ROUNDS> <VERBOSE>
+// SPEC = queue | register
+// STRATEGY = rr | rnd
+
+std::string toLower(std::string str) {
+  std::transform(str.begin(), str.end(), str.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+  return str;
+}
+
+void extract_args(int argc, char *argv[], size_t &threads, StrategyType &typ,
+                  size_t &tasks, size_t &rounds, bool &verbose) {
+  if (argc < 6) {
+    throw std::invalid_argument("all arguments should be specified");
   }
-  if (argc > 2) {
-    std::string strategy_name = argv[2];
-    if (strategy_name != "rr") {
-      throw std::invalid_argument("only rr is supported as sched now");
-    }
+  threads = std::stoul(argv[1]);  // Throws if can't transform.
+  std::string strategy_name = argv[2];
+  strategy_name = toLower(std::move(strategy_name));
+  if (strategy_name == "rr") {
+    typ = RR;
+  } else if (strategy_name == "rnd") {
+    typ = RND;
+  } else {
+    throw std::invalid_argument("unsupported strategy");
   }
-  if (argc > 3) {
-    tasks = std::stoul(argv[3]);
-  }
-  if (argc > 4) {
-    rounds = std::stoul(argv[4]);
-  }
+  tasks = std::stoul(argv[3]);
+  rounds = std::stoul(argv[4]);
+  verbose = std::stoi(argv[5]) == 1;
 }
 
 int main(int argc, char *argv[]) {
-  size_t threads = 2;
-  size_t tasks = 10;
-  size_t rounds = 5;
-  extract_args(argc, argv, threads, tasks, rounds);
+  size_t threads{};
+  size_t tasks{};
+  size_t rounds{};
+  StrategyType typ{};
+  bool verbose{};
+  extract_args(argc, argv, threads, typ, tasks, rounds, verbose);
+
+  logger_init(verbose);
+  log() << "threads  = " << threads << "\n";
+  log() << "tasks    = " << tasks << "\n";
+  log() << "rounds   = " << rounds << "\n";
 
   std::vector<TaskBuilder> l;
   std::vector<init_func_t> init_funcs;
@@ -139,7 +157,20 @@ int main(int argc, char *argv[]) {
     std::cout << "WARNING: not found any init funcs, multi-round testing could "
                  "be incorrect\n\n";
   }
-  auto strategy = RoundRobinStrategy{threads, &l, &init_funcs};
+
+  log() << "strategy = ";
+  std::unique_ptr<Strategy> strategy;
+  switch (typ) {
+    case RR:
+      log() << "round-robin";
+      strategy = std::make_unique<RoundRobinStrategy>(threads, &l, &init_funcs);
+      break;
+    case RND:
+      log() << "random";
+      strategy = std::make_unique<RoundRobinStrategy>(threads, &l, &init_funcs);
+      break;
+  }
+  log() << "\n\n";
 
 #ifdef test_register
   using lchecker_t =
@@ -154,11 +185,11 @@ int main(int argc, char *argv[]) {
                                       Queue::queueEquals>;
   lchecker_t checker{Queue::getMethods(), Queue::queue{}};
 #endif
-  auto scheduler = Scheduler{strategy, checker, tasks, rounds};
+  auto scheduler = Scheduler{*strategy.get(), checker, tasks, rounds};
   auto result = scheduler.Run();
   if (result.has_value()) {
     std::cout << "non linearized:\n";
-    pretty_print::pretty_print(result.value().second);
+    pretty_print::pretty_print(result.value().second, std::cout);
   } else {
     std::cout << "success!\n";
   }

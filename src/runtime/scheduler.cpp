@@ -1,5 +1,8 @@
 #include "include/scheduler.h"
 
+#include "include/logger.h"
+#include "include/pretty_print.h"
+
 Scheduler::Scheduler(Strategy& sched_class, ModelChecker& checker,
                      size_t max_tasks, size_t max_rounds)
     : strategy(sched_class),
@@ -31,6 +34,8 @@ Scheduler::round_result_t Scheduler::runRound() {
     }
   }
 
+  pretty_print::pretty_print(sequential_history, log());
+
   if (!checker.Check(sequential_history)) {
     return std::make_pair(full_history, sequential_history);
   }
@@ -40,10 +45,12 @@ Scheduler::round_result_t Scheduler::runRound() {
 
 Scheduler::round_result_t Scheduler::Run() {
   for (size_t i = 0; i < max_rounds; ++i) {
+    log() << "run round: " << i << "\n";
     auto seq_history = runRound();
     if (seq_history.has_value()) {
       return seq_history;
     }
+    log() << "===============================================\n\n";
     strategy.StartNextRound();
   }
 

@@ -22,6 +22,8 @@ struct Strategy {
 
   // Strategy should stop all tasks that already have been started
   virtual void StartNextRound() = 0;
+
+  virtual ~Strategy() = default;
 };
 
 // Scheduler generates different sequential histories(using Strategy) and
