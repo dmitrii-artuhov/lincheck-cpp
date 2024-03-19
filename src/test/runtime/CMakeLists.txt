@@ -11,6 +11,7 @@ target_link_libraries(
         runtime
         GTest::gmock_main
         GTest::gmock
+        gtest
 )
 
 add_executable(
