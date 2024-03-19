@@ -15,9 +15,6 @@ add_link_options(-fsanitize=address -DADDRESS_SANITIZER)
 
 add_subdirectory(third_party)
 
-find_package(fuzztest REQUIRED)
-find_package(GoogleTest REQUIRED)
-
 include(GoogleTest)
 
 fuzztest_setup_fuzzing_flags()
