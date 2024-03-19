@@ -67,10 +67,6 @@ typedef std::vector<init_func_t>* InitFuncList;
 // passed to the runtime entrypoint.
 using TaskBuilderList = std::vector<TaskBuilder>*;
 
-// Runtime entrypoint.
-// Call will be generated during LLVM pass.
-void run(TaskBuilderList l, InitFuncList init_funcs);
-
 // StackfulTask is a Task wrapper which contains the stack inside, so resume
 // method resumes the last subtask.
 struct StackfulTask {
@@ -112,6 +108,10 @@ struct StackfulTask {
   int last_returned_value{};
   std::vector<int> args{};
 };
+
+// Implementation will be generated in llvm pass.
+// Caller should call this to get all task builders and init funcs.
+void fill_ctx(TaskBuilderList, InitFuncList);
 }
 
 struct Response {

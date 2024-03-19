@@ -27,26 +27,38 @@ struct Mutex {
 
 int gen next_int() { return rand() % 5 + 1; }
 
-std::atomic<int> queue_array[1000];
+struct Queue {
+  Mutex mutex{};
+  int tail{}, head{};
+  int a[1000];
 
-int tail{}, head{};
-Mutex mutex{};
+  na void Push(int v) {
+    mutex.lock();
+    a[head++] = v;
+    mutex.unlock();
+  }
+
+  na int Pop() {
+    mutex.lock();
+    int e = 0;
+    if (head - tail > 0) {
+      e = a[tail++];
+    }
+    mutex.unlock();
+    return e;
+  }
+};
+
+Queue q{};
+
+ini void clear_queue() {
+  q.mutex.flg.store(0);
+  q.tail = q.head = 0;
+}
 
 extern "C" {
 
-void na Push(int v) {
-  mutex.lock();
-  queue_array[head++] = v;
-  mutex.unlock();
-}
+na void Push(int v) { q.Push(v); }
 
-int na Pop() {
-  mutex.lock();
-  int res = 0;
-  if (head - tail > 0) {
-    res = queue_array[tail++];
-  }
-  mutex.unlock();
-  return res;
-}
+na int Pop() { return q.Pop(); }
 }

@@ -7,14 +7,15 @@
 
 Task find_task(TaskBuilderList, InitFuncList);
 
-extern "C" {
-
 int var{};
-void tick() { ++var; }
 
-// This function runs `test` task until it and all children are terminated.
-void run(TaskBuilderList l, InitFuncList init_funcs) {
-  auto task = find_task(l, init_funcs);
+extern "C" void tick() { ++var; }
+
+int main() {
+  std::vector<TaskBuilder> task_builders;
+  std::vector<init_func_t> init_funcs;
+  fill_ctx(&task_builders, &init_funcs);
+  auto task = find_task(&task_builders, &init_funcs);
   // Keep stack that contains launched tasks.
   std::vector<Task> stack = {task};
   while (stack.size()) {
@@ -37,5 +38,4 @@ void run(TaskBuilderList l, InitFuncList init_funcs) {
       }
     }
   }
-}
 }

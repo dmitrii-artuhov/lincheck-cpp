@@ -103,10 +103,44 @@ auto getMethods() {
 
 };  // namespace Queue
 
-extern "C" void run(TaskBuilderList l, InitFuncList init_funcs) {
-  assert(init_funcs != nullptr);
-  assert(l != nullptr);
-  auto strategy = RoundRobinStrategy{2, l, init_funcs};
+// ./run <THREADS> <STRATEGY> <TASKS> <ROUNDS>
+// SPEC = queue | register
+// STRATEGY = rr
+
+void extract_args(int argc, char *argv[], size_t &threads, size_t &tasks,
+                  size_t &rounds) {
+  if (argc > 1) {
+    threads = std::stoul(argv[1]);  // Can throw.
+  }
+  if (argc > 2) {
+    std::string strategy_name = argv[2];
+    if (strategy_name != "rr") {
+      throw std::invalid_argument("only rr is supported as sched now");
+    }
+  }
+  if (argc > 3) {
+    tasks = std::stoul(argv[3]);
+  }
+  if (argc > 4) {
+    rounds = std::stoul(argv[4]);
+  }
+}
+
+int main(int argc, char *argv[]) {
+  size_t threads = 2;
+  size_t tasks = 10;
+  size_t rounds = 5;
+  extract_args(argc, argv, threads, tasks, rounds);
+
+  std::vector<TaskBuilder> l;
+  std::vector<init_func_t> init_funcs;
+  fill_ctx(&l, &init_funcs);
+  if (init_funcs.empty()) {
+    std::cout << "WARNING: not found any init funcs, multi-round testing could "
+                 "be incorrect\n\n";
+  }
+  auto strategy = RoundRobinStrategy{threads, &l, &init_funcs};
+
 #ifdef test_register
   using lchecker_t =
       LinearizabilityCheckerRecursive<Register::LinearRegister,
@@ -120,15 +154,12 @@ extern "C" void run(TaskBuilderList l, InitFuncList init_funcs) {
                                       Queue::queueEquals>;
   lchecker_t checker{Queue::getMethods(), Queue::queue{}};
 #endif
-
-  auto scheduler = Scheduler{strategy, checker, 7, 1};
+  auto scheduler = Scheduler{strategy, checker, tasks, rounds};
   auto result = scheduler.Run();
-  if (!result.has_value()) {
-    std::cout << "success!" << std::endl;
-  } else {
-    std::cout << "non linarized:" << std::endl;
+  if (result.has_value()) {
+    std::cout << "non linearized:\n";
     pretty_print::pretty_print(result.value().second);
+  } else {
+    std::cout << "success!\n";
   }
 }
-
-extern "C" void print(int x) { std::cout << "printed: " << x << std::endl; }

@@ -1,5 +1,3 @@
-#include <iostream>
-
 #include "macro.h"
 
 struct Register {
@@ -12,12 +10,7 @@ Register r{};
 
 extern "C" {
 
-void ini create_register() {
-  std::cout << "create_register" << std::endl;
-  r = Register{};
-}
-
-void ini some_init_routine() { std::cout << "some_init_routine" << std::endl; }
+void ini create_register() { r = Register{}; }
 
 na void add() { r.add(); }
 

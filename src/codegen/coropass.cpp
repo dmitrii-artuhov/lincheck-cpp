@@ -68,10 +68,12 @@ fun_index_t CreateFunIndex(const Module &M) {
 }
 
 // Generates
-// * task_builders from generated coroutines, which has not args.
-// * main where produces task builders list and call entrypoint function on it.
-struct MainGenerator final {
-  MainGenerator(Module &M) : M(M) {
+// * task_builders from generated coroutines.
+// * fillCtx where fill task builders and init funcs lists.
+struct FillCtxGenerator final {
+  const std::string fill_ctx_name = "fill_ctx";
+
+  FillCtxGenerator(Module &M) : M(M) {
     auto &ctx = M.getContext();
     void_t = Type::getVoidTy(ctx);
     ptr_t = PointerType::get(ctx, 0);
@@ -86,14 +88,6 @@ struct MainGenerator final {
     make_task = Function::Create(FunctionType::get(task_t, {ptr_t}, false),
                                  Function::ExternalLinkage, "make_task", M);
 
-    new_task_builder_list =
-        Function::Create(FunctionType::get(task_builder_list_t, {}, false),
-                         Function::ExternalLinkage, "new_task_builder_list", M);
-
-    destroy_task_builder_list = Function::Create(
-        FunctionType::get(void_t, {task_builder_list_t}, false),
-        Function::ExternalLinkage, "destroy_task_builder_list", M);
-
     push_task_builder_list = Function::Create(
         FunctionType::get(void_t, {task_builder_list_t, task_builder_t}, false),
         Function::ExternalLinkage, "push_task_builder_list", M);
@@ -105,18 +99,10 @@ struct MainGenerator final {
     register_init_func = Function::Create(
         FunctionType::get(void_t, {init_func_list_t, ptr_t}, false),
         Function::ExternalLinkage, "register_init_func", M);
-
-    new_init_func_list =
-        Function::Create(FunctionType::get(init_func_list_t, {}, false),
-                         Function::ExternalLinkage, "new_init_func_list", M);
-
-    destroy_init_func_list = Function::Create(
-        FunctionType::get(void_t, {init_func_list_t}, false),
-        Function::ExternalLinkage, "destroy_init_func_list", M);
   }
 
-  void run(const std::string &entry_point_name,
-           std::vector<Function *> &coroutines, const fun_index_t &index) {
+  void run(std::vector<Function *> &coroutines, const fun_index_t &index) {
+    // Find args generators.
     std::unordered_map<Type *, Function *> generators;
     for (const auto &it : index) {
       if (it.first != gen_annotation) {
@@ -133,12 +119,28 @@ struct MainGenerator final {
     }
 
     auto &ctx = M.getContext();
-    auto main = Function::Create(FunctionType::get(i32_t, {}, false),
-                                 Function::ExternalLinkage, "main", M);
-    auto block = BasicBlock::Create(ctx, "entry", main);
+
+    // void fill_ctx(TaskBuilderList, InitFuncList);
+    auto fill_ctx_fun = Function::Create(
+        FunctionType::get(void_t, {task_builder_list_t, init_func_list_t},
+                          false),
+        Function::ExternalLinkage, fill_ctx_name, M);
+    auto block = BasicBlock::Create(ctx, "entry", fill_ctx_fun);
     builder_t Builder(block);
-    // Create init_func_list;
-    auto init_func_list = Builder.CreateCall(new_init_func_list, {});
+
+    // Fill task builders.
+    auto task_builder_list = fill_ctx_fun->getArg(0);
+    for (const auto &coro : coroutines) {
+      auto builder_fun =
+          GenTaskBuilder(coro, coro->getName().str(), generators);
+      if (builder_fun != nullptr) {
+        Builder.CreateCall(push_task_builder_list,
+                           {task_builder_list, builder_fun});
+      }
+    }
+
+    // Fill init functions.
+    auto init_func_list = fill_ctx_fun->getArg(1);
     for (const auto &it : index) {
       if (it.first != init_func_annotation) {
         continue;
@@ -153,34 +155,8 @@ struct MainGenerator final {
       Builder.CreateCall(register_init_func, {init_func_list, fun});
     }
 
-    // Create task_builder_list.
-    auto task_builder_list = Builder.CreateCall(new_task_builder_list, {});
-
-    // Push builders to list.
-    for (const auto &coro : coroutines) {
-      auto builder_fun =
-          GenTaskBuilder(coro, coro->getName().str(), generators);
-      if (builder_fun != nullptr) {
-        Builder.CreateCall(push_task_builder_list,
-                           {task_builder_list, builder_fun});
-      }
-    }
-
-    auto entry_point = Function::Create(
-        FunctionType::get(void_t, {task_builder_list_t, init_func_list_t},
-                          false),
-        Function::ExternalLinkage, entry_point_name, M);
-    // Call entry point.
-    Builder.CreateCall(entry_point, {task_builder_list, init_func_list});
-
-    // Destroy init_func_list;
-    Builder.CreateCall(destroy_init_func_list, {init_func_list});
-
-    // Destroy task_builder_list.
-    Builder.CreateCall(destroy_task_builder_list, {task_builder_list});
-
-    // ret i32 0
-    Builder.CreateRet(ConstantInt::get(i32_t, 0));
+    // ret void
+    Builder.CreateRet(nullptr);
   }
 
  private:
@@ -236,8 +212,6 @@ struct MainGenerator final {
 
   PointerType *task_builder_t;
   PointerType *task_builder_list_t;
-  Function *new_task_builder_list;
-  Function *destroy_task_builder_list;
   Function *push_task_builder_list;
   Function *make_task;
 
@@ -246,8 +220,6 @@ struct MainGenerator final {
 
   PointerType *init_func_list_t;
   Function *register_init_func;
-  Function *new_init_func_list;
-  Function *destroy_init_func_list;
 };
 
 // Generates coro clones for functions in the module.
@@ -574,8 +546,8 @@ struct CoroGenPass : public PassInfoMixin<CoroGenPass> {
     CoroGenerator gen{M};
     auto coroutines = gen.Run(fun_index);
 
-    MainGenerator main_gen{M};
-    main_gen.run("run", coroutines, fun_index);
+    FillCtxGenerator main_gen{M};
+    main_gen.run(coroutines, fun_index);
 
     return PreservedAnalyses::none();
   };
