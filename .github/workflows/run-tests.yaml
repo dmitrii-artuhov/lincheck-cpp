@@ -24,7 +24,7 @@ jobs:
         run: cmake -DCMAKE_BUILD_TYPE=Debug ..
       - name: Build
         working-directory: ${{ github.workspace }}/src/build
-        run: cmake --build . --target lin_check_test
+        run: cmake --build . --target lin_check_test -j
       - name: Run
         working-directory: ${{ github.workspace }}/src/build
         run: ./test/runtime/lin_check_test
