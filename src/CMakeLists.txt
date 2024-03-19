@@ -3,7 +3,7 @@ project(lintest)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ")
 find_package(LLVM REQUIRED CONFIG)
 
 # Uncomment for debug.
@@ -13,7 +13,10 @@ set(CMAKE_CXX_FLAGS "-DCMAKE_BUILD_TYPE=RelWithDebug -DFUZZTEST_FUZZING_MODE=on 
 add_compile_options(-fsanitize=address -DADDRESS_SANITIZER)
 add_link_options(-fsanitize=address -DADDRESS_SANITIZER)
 
-add_subdirectory(third-party)
+add_subdirectory(third_party)
+
+find_package(fuzztest REQUIRED)
+find_package(GoogleTest REQUIRED)
 
 include(GoogleTest)
 
