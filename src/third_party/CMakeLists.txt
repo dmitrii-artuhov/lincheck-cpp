@@ -3,9 +3,9 @@ include(FetchContent)
 FetchContent_Declare(
         fuzztest
         GIT_REPOSITORY https://github.com/google/fuzztest.git
-        GIT_TAG "main"
-        SYSTEM
+        GIT_TAG main
         GIT_SHALLOW TRUE
+        SYSTEM
 )
 
 FetchContent_MakeAvailable(fuzztest)
@@ -15,6 +15,7 @@ FetchContent_Declare(
         GIT_REPOSITORY https://github.com/google/googletest.git
         GIT_TAG        v1.14.0
         GIT_SHALLOW TRUE
+        SYSTEM
 )
 
 FetchContent_MakeAvailable(googletest)

@@ -10,8 +10,6 @@ target_link_libraries(
         PRIVATE
         runtime
         GTest::gmock_main
-        GTest::gmock
-        gtest
 )
 
 add_executable(
@@ -19,13 +17,14 @@ add_executable(
         lin_check_test.cpp
 )
 
-target_compile_options(lin_check_test PRIVATE -Wall -Wextra -Werror -pedantic-errors)
+ target_compile_options(lin_check_test PRIVATE -Wall -Wextra -Werror -pedantic-errors)
 
 target_link_libraries(
         lin_check_test
         PRIVATE
         runtime
         mocks
+        GTest::gmock
 )
 
 link_fuzztest(lin_check_test)
