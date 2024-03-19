@@ -91,6 +91,14 @@ char *get_name(CoroPromise *p) {
 }
 
 void push_arg(ArgList list, int arg) { list->push_back(arg); }
+
+InitFuncList new_init_func_list() { return new std::vector<init_func_t>(); }
+
+void destroy_init_func_list(InitFuncList list) { delete list; }
+
+void register_init_func(InitFuncList list, init_func_t func) {
+  list->push_back(func);
+}
 }
 
 Task::Task(handle hdl) : hdl(hdl) {}

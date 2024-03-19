@@ -4,7 +4,8 @@
 
 #include "../../runtime/include/lib.h"
 
-Task find_task(TaskBuilderList l) {
+Task find_task(TaskBuilderList l, InitFuncList init_funcs) {
+  assert(init_funcs->empty());
   std::optional<Task> task;
   std::vector<int> args;
   for (auto task_builder : *l) {

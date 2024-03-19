@@ -21,6 +21,7 @@ const std::string coro_suf = "_coro";
 const std::string task_builder_suf = "_task_builder";
 const std::string gen_annotation = "generator";
 const std::string nonatomic_annotation = "nonatomic";
+const std::string init_func_annotation = "initfunc";
 
 template <typename T>
 void Assert(bool cond, const T &obj) {
@@ -80,6 +81,7 @@ struct MainGenerator final {
     task_builder_list_t = ptr_t;
     task_builder_t = ptr_t;
     arg_list_t = ptr_t;
+    init_func_list_t = ptr_t;
 
     make_task = Function::Create(FunctionType::get(task_t, {ptr_t}, false),
                                  Function::ExternalLinkage, "make_task", M);
@@ -99,6 +101,18 @@ struct MainGenerator final {
     push_arg =
         Function::Create(FunctionType::get(void_t, {arg_list_t, i32_t}, false),
                          Function::ExternalLinkage, "push_arg", M);
+
+    register_init_func = Function::Create(
+        FunctionType::get(void_t, {init_func_list_t, ptr_t}, false),
+        Function::ExternalLinkage, "register_init_func", M);
+
+    new_init_func_list =
+        Function::Create(FunctionType::get(init_func_list_t, {}, false),
+                         Function::ExternalLinkage, "new_init_func_list", M);
+
+    destroy_init_func_list = Function::Create(
+        FunctionType::get(void_t, {init_func_list_t}, false),
+        Function::ExternalLinkage, "destroy_init_func_list", M);
   }
 
   void run(const std::string &entry_point_name,
@@ -123,6 +137,21 @@ struct MainGenerator final {
                                  Function::ExternalLinkage, "main", M);
     auto block = BasicBlock::Create(ctx, "entry", main);
     builder_t Builder(block);
+    // Create init_func_list;
+    auto init_func_list = Builder.CreateCall(new_init_func_list, {});
+    for (const auto &it : index) {
+      if (it.first != init_func_annotation) {
+        continue;
+      }
+      auto fun = M.getFunction(it.second);
+      Assert(fun);
+      if (fun->arg_size() != 0) {
+        errs() << fun->getName()
+               << " is not valid init func: it must have 0 arguments\n";
+        continue;
+      }
+      Builder.CreateCall(register_init_func, {init_func_list, fun});
+    }
 
     // Create task_builder_list.
     auto task_builder_list = Builder.CreateCall(new_task_builder_list, {});
@@ -138,13 +167,19 @@ struct MainGenerator final {
     }
 
     auto entry_point = Function::Create(
-        FunctionType::get(void_t, {task_builder_list_t}, false),
+        FunctionType::get(void_t, {task_builder_list_t, init_func_list_t},
+                          false),
         Function::ExternalLinkage, entry_point_name, M);
     // Call entry point.
-    Builder.CreateCall(entry_point, {task_builder_list});
+    Builder.CreateCall(entry_point, {task_builder_list, init_func_list});
+
+    // Destroy init_func_list;
+    Builder.CreateCall(destroy_init_func_list, {init_func_list});
 
     // Destroy task_builder_list.
     Builder.CreateCall(destroy_task_builder_list, {task_builder_list});
+
+    // ret i32 0
     Builder.CreateRet(ConstantInt::get(i32_t, 0));
   }
 
@@ -208,6 +243,11 @@ struct MainGenerator final {
 
   PointerType *arg_list_t;
   Function *push_arg;
+
+  PointerType *init_func_list_t;
+  Function *register_init_func;
+  Function *new_init_func_list;
+  Function *destroy_init_func_list;
 };
 
 // Generates coro clones for functions in the module.

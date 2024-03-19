@@ -57,6 +57,11 @@ typedef std::vector<int>* ArgList;
 // Describes function that builds new task.
 typedef Task (*TaskBuilder)(ArgList);
 
+// Describes function that initiales state after each round.
+typedef void (*init_func_t)();
+
+typedef std::vector<init_func_t>* InitFuncList;
+
 // Contains task builders.
 // Will be created during LLVM pass and
 // passed to the runtime entrypoint.
@@ -64,7 +69,7 @@ using TaskBuilderList = std::vector<TaskBuilder>*;
 
 // Runtime entrypoint.
 // Call will be generated during LLVM pass.
-void run(TaskBuilderList l);
+void run(TaskBuilderList l, InitFuncList init_funcs);
 
 // StackfulTask is a Task wrapper which contains the stack inside, so resume
 // method resumes the last subtask.

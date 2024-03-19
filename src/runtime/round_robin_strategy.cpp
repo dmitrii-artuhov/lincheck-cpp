@@ -1,10 +1,12 @@
 #include "include/round_robin_strategy.h"
 
 RoundRobinStrategy::RoundRobinStrategy(size_t threads_count,
-                                       TaskBuilderList constructors)
+                                       TaskBuilderList constructors,
+                                       InitFuncList init_funcs)
     : next_task(0),
       threads_count(threads_count),
       constructors(constructors),
+      init_funcs(init_funcs),
       threads() {
   std::random_device dev;
   rng = std::mt19937(dev());
@@ -48,5 +50,10 @@ void RoundRobinStrategy::StartNextRound() {
     auto constructor = constructors->at(distribution(rng));
     // We don't have to keep references alive
     thread = std::queue<StackfulTask>();
+  }
+
+  // Run init funcs.
+  for (const auto& fun : *init_funcs) {
+    fun();
   }
 }

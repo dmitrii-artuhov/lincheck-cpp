@@ -62,6 +62,7 @@ void pretty_print(const std::vector<std::variant<Invoke, Response>>& result) {
     }
   };
 
+  print_separator();
   // Header.
   cout << "|";
   for (int i = 0; i < threads_num; ++i) {

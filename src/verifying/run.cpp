@@ -103,8 +103,10 @@ auto getMethods() {
 
 };  // namespace Queue
 
-extern "C" void run(TaskBuilderList l) {
-  auto strategy = RoundRobinStrategy{2, l};
+extern "C" void run(TaskBuilderList l, InitFuncList init_funcs) {
+  assert(init_funcs != nullptr);
+  assert(l != nullptr);
+  auto strategy = RoundRobinStrategy{2, l, init_funcs};
 #ifdef test_register
   using lchecker_t =
       LinearizabilityCheckerRecursive<Register::LinearRegister,

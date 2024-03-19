@@ -8,7 +8,8 @@
 
 struct RoundRobinStrategy : Strategy {
   explicit RoundRobinStrategy(size_t threads_count,
-                              TaskBuilderList constructors);
+                              TaskBuilderList constructors,
+                              InitFuncList init_funcs);
 
   std::tuple<StackfulTask&, bool, int> Next() override;
 
@@ -18,6 +19,7 @@ struct RoundRobinStrategy : Strategy {
   size_t next_task = 0;
   size_t threads_count;
   TaskBuilderList constructors;
+  InitFuncList init_funcs;
   // RoundRobinStrategy struct is the owner of all tasks, and all
   // references can't be invalidated before the end of the round,
   // so we have to contains all tasks in queues(queue doesn't invalidate the
