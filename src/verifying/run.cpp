@@ -108,7 +108,6 @@ auto getMethods() {
 enum StrategyType { RR, RND };
 
 // ./run <THREADS> <STRATEGY> <TASKS> <ROUNDS> <VERBOSE>
-// SPEC = queue | register
 // STRATEGY = rr | rnd
 
 std::string toLower(std::string str) {
