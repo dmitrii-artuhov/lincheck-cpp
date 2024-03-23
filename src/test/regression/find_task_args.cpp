@@ -1,16 +1,16 @@
 #include <cassert>
-#include <optional>
 #include <iostream>
+#include <optional>
 
 #include "../../runtime/include/lib.h"
 
 Task find_task(TaskBuilderList l, InitFuncList init_funcs) {
   assert(init_funcs->empty());
   std::optional<Task> task;
-  std::vector<int> args;
   for (auto task_builder : *l) {
-    auto cur_task = task_builder(nullptr, &args);
+    auto cur_task = Task{nullptr, task_builder};
     if (cur_task.GetName() == "test") {
+      auto args = cur_task.GetArgs();
       assert(args.size() == 3);
       assert(args[0] == 42);
       assert(args[1] == 43);

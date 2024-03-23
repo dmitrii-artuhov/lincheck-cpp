@@ -76,7 +76,7 @@ bool HasAttribute(const fun_index_t &index, const StringRef name,
 }
 
 // Generates
-// * task_builders from generated coroutines.
+// * task_builders for target root tasks.
 // * fill_ctx() where fill task builders and init funcs lists.
 struct FillCtxGenerator final {
   const std::string fill_ctx_name = "fill_ctx";
@@ -88,15 +88,10 @@ struct FillCtxGenerator final {
     i32_t = Type::getInt32Ty(ctx);
     i8_t = Type::getInt8Ty(ctx);
 
-    task_t = StructType::create("Task", ptr_t, ptr_t);
     task_builder_list_t = ptr_t;
     task_builder_t = ptr_t;
     arg_list_t = ptr_t;
     init_func_list_t = ptr_t;
-
-    make_task =
-        Function::Create(FunctionType::get(task_t, {ptr_t, ptr_t}, false),
-                         Function::ExternalLinkage, "make_task", M);
 
     push_task_builder_list = Function::Create(
         FunctionType::get(void_t, {task_builder_list_t, task_builder_t}, false),
@@ -212,17 +207,20 @@ struct FillCtxGenerator final {
     auto &ctx = M.getContext();
     auto task_builder_name = name + task_builder_suf;
 
-    // Task TaskBuilder(this, arg_list)
-    auto ftype = FunctionType::get(task_t, {ptr_t, arg_list_t}, false);
+    // Task TaskBuilder(this, arg_list, name_ptr, hndl_ptr)
+    auto ftype = FunctionType::get(void_t, {ptr_t, ptr_t, ptr_t, ptr_t}, false);
 
     Function *TaskBuilder = Function::Create(ftype, Function::ExternalLinkage,
                                              task_builder_name, M);
     auto this_arg = TaskBuilder->getArg(0);
     auto arg_list = TaskBuilder->getArg(1);
+    auto name_ptr = TaskBuilder->getArg(2);
+    auto hndl_ptr = TaskBuilder->getArg(3);
 
     auto block =
         BasicBlock::Create(ctx, "init", TaskBuilder, &TaskBuilder->front());
     builder_t Builder{block};
+
     // Generate arguments.
     std::vector<Value *> args;
     args.push_back(this_arg);
@@ -235,16 +233,18 @@ struct FillCtxGenerator final {
     }
 
     auto hdl = Builder.CreateCall(F, args);
+    Builder.CreateStore(hdl, hndl_ptr);
 
     // Declare global variable that holds the function name.
     auto name_const = createPrivateGlobalForString(M, name, false, "");
-    auto name_ptr = Builder.CreateGEP(
+    auto generated_name_ptr = Builder.CreateGEP(
         ArrayType::get(i8_t, name.size() + 1), name_const,
         {ConstantInt::get(i32_t, 0), ConstantInt::get(i32_t, 0)});
+    // char **name; *name = generate_name_ptr
+    Builder.CreateStore(generated_name_ptr, name_ptr);
 
-    auto task = Builder.CreateCall(make_task, {hdl, name_ptr});
-    Builder.CreateRet(task);
-
+    // ret void
+    Builder.CreateRet(nullptr);
     return TaskBuilder;
   }
 
@@ -253,12 +253,10 @@ struct FillCtxGenerator final {
   Type *void_t;
   Type *i32_t;
   Type *i8_t;
-  StructType *task_t;
 
   PointerType *task_builder_t;
   PointerType *task_builder_list_t;
   Function *push_task_builder_list;
-  Function *make_task;
 
   PointerType *arg_list_t;
   Function *push_arg;

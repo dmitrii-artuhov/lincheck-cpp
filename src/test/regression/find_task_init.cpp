@@ -11,11 +11,10 @@ Task find_task(TaskBuilderList l, InitFuncList init_funcs) {
   }
 
   std::optional<Task> task;
-  std::vector<int> args;
   for (auto task_builder : *l) {
-    auto cur_task = task_builder(&args);
+    auto cur_task = Task{nullptr, task_builder};
     if (cur_task.GetName() == "test") {
-      assert(args.empty() && "test must be task without args");
+      assert(cur_task.GetArgs().empty() && "test must be task without args");
       task = cur_task;
       break;
     }

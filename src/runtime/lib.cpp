@@ -69,12 +69,6 @@ int get_ret_val(CoroPromise *p) {
   return p->ret_val;
 }
 
-Task make_task(handle hdl, char *name) { return Task(hdl, name); }
-
-TaskBuilderList new_task_builder_list() {
-  return new std::vector<TaskBuilder>();
-}
-
 void destroy_task_builder_list(TaskBuilderList l) { delete l; }
 
 void push_task_builder_list(TaskBuilderList l, TaskBuilder builder) {
@@ -92,7 +86,13 @@ void register_init_func(InitFuncList list, init_func_t func) {
 }
 }
 
-Task::Task(handle hdl, char *name) : hdl(hdl), name(name) {}
+Task::Task(handle hdl) : hdl(hdl) {}
+
+Task::Task(void *this_arg, TaskBuilder builder) {
+  arg_list = std::make_shared<std::vector<int>>();
+  builder(this_arg, arg_list.get(), &name, &hdl);
+  assert(name != nullptr);
+}
 
 void Task::Resume() {
   assert(!IsReturned() && "returned task can not be resumed");
@@ -103,7 +103,7 @@ bool Task::HasChild() { return has_child_hdl(&hdl.promise()); }
 
 Task Task::GetChild() {
   assert(HasChild() && "get_child() can not be called on childless task");
-  return make_task(hdl.promise().child_hdl, nullptr);
+  return Task(hdl.promise().child_hdl);
 }
 
 void Task::ClearChild() { set_child_hdl(&hdl.promise(), nullptr); }
@@ -117,11 +117,16 @@ std::string Task::GetName() const {
   return std::string{name};
 }
 
+std::vector<int> Task::GetArgs() const {
+  assert(arg_list != nullptr);
+  return *arg_list;
+}
+
 StackfulTask::StackfulTask(Task task) : entrypoint(task) {
   stack = std::vector<Task>{task};
 }
 
-StackfulTask::StackfulTask() : entrypoint(nullptr, nullptr) {}
+StackfulTask::StackfulTask() : entrypoint(nullptr) {}
 
 void StackfulTask::Resume() {
   assert(!stack.empty());
@@ -144,11 +149,7 @@ void StackfulTask::Resume() {
   }
 }
 
-void StackfulTask::SetArgs(std::vector<int> args) {
-  this->args = std::move(args);
-}
-
-const std::vector<int> &StackfulTask::GetArgs() const { return args; }
+std::vector<int> StackfulTask::GetArgs() const { return entrypoint.GetArgs(); }
 
 bool StackfulTask::IsReturned() { return stack.empty(); }
 
