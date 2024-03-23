@@ -5,7 +5,7 @@
 
 #include "../../runtime/include/lib.h"
 
-Task find_task(TaskBuilderList, InitFuncList);
+Task find_task(TaskBuilderList);
 
 int var{};
 
@@ -13,9 +13,8 @@ extern "C" void tick() { ++var; }
 
 int main() {
   std::vector<TaskBuilder> task_builders;
-  std::vector<init_func_t> init_funcs;
-  fill_ctx(&task_builders, &init_funcs);
-  auto task = find_task(&task_builders, &init_funcs);
+  fill_ctx(&task_builders);
+  auto task = find_task(&task_builders);
   // Keep stack that contains launched tasks.
   std::vector<Task> stack = {task};
   while (stack.size()) {

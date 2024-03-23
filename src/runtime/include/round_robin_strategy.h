@@ -9,12 +9,10 @@
 template <typename TargetObj>
 struct RoundRobinStrategy : Strategy {
   explicit RoundRobinStrategy(size_t threads_count,
-                              TaskBuilderList constructors,
-                              InitFuncList init_funcs)
+                              TaskBuilderList constructors)
       : next_task(0),
         threads_count(threads_count),
         constructors(constructors),
-        init_funcs(init_funcs),
         threads() {
     std::random_device dev;
     rng = std::mt19937(dev());
@@ -53,11 +51,6 @@ struct RoundRobinStrategy : Strategy {
       thread = std::queue<StackfulTask>();
     }
 
-    // Run init funcs.
-    for (const auto& fun : *init_funcs) {
-      fun();
-    }
-
     // Reconstruct target as we start from the beginning.
     state.Reconstruct();
   }
@@ -67,7 +60,6 @@ struct RoundRobinStrategy : Strategy {
   size_t next_task = 0;
   size_t threads_count;
   TaskBuilderList constructors;
-  InitFuncList init_funcs;
   // RoundRobinStrategy struct is the owner of all tasks, and all
   // references can't be invalidated before the end of the round,
   // so we have to contains all tasks in queues(queue doesn't invalidate the

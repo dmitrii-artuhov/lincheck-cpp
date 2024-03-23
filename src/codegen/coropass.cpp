@@ -20,7 +20,6 @@ using fun_index_t = std::set<std::pair<StringRef, StringRef>>;
 // Attributes.
 const StringRef nonatomic_attr = "ltest_nonatomic";
 const StringRef gen_attr = "ltest_gen";
-const StringRef init_func_attr = "ltest_initfunc";
 const StringRef target_attr_prefix = "ltesttarget_";
 
 const StringRef coro_suf = "_coro";
@@ -91,7 +90,6 @@ struct FillCtxGenerator final {
     task_builder_list_t = ptr_t;
     task_builder_t = ptr_t;
     arg_list_t = ptr_t;
-    init_func_list_t = ptr_t;
 
     push_task_builder_list = Function::Create(
         FunctionType::get(void_t, {task_builder_list_t, task_builder_t}, false),
@@ -100,10 +98,6 @@ struct FillCtxGenerator final {
     push_arg =
         Function::Create(FunctionType::get(void_t, {arg_list_t, i32_t}, false),
                          Function::ExternalLinkage, "push_arg", M);
-
-    register_init_func = Function::Create(
-        FunctionType::get(void_t, {init_func_list_t, ptr_t}, false),
-        Function::ExternalLinkage, "register_init_func", M);
   }
 
   void run(const fun_index_t &index) {
@@ -142,10 +136,9 @@ struct FillCtxGenerator final {
 
     auto &ctx = M.getContext();
 
-    // void fill_ctx(TaskBuilderList, InitFuncList);
+    // void fill_ctx(TaskBuilderList);
     auto fill_ctx_fun = Function::Create(
-        FunctionType::get(void_t, {task_builder_list_t, init_func_list_t},
-                          false),
+        FunctionType::get(void_t, {task_builder_list_t}, false),
         Function::ExternalLinkage, fill_ctx_name, M);
     auto block = BasicBlock::Create(ctx, "entry", fill_ctx_fun);
     builder_t Builder(block);
@@ -158,22 +151,6 @@ struct FillCtxGenerator final {
         Builder.CreateCall(push_task_builder_list,
                            {task_builder_list, builder_fun});
       }
-    }
-
-    // Fill init functions.
-    auto init_func_list = fill_ctx_fun->getArg(1);
-    for (const auto &it : index) {
-      if (it.first != init_func_attr) {
-        continue;
-      }
-      auto fun = M.getFunction(it.second);
-      Assert(fun);
-      if (fun->arg_size() != 0) {
-        errs() << fun->getName()
-               << " is not valid init func: it must have 0 arguments\n";
-        continue;
-      }
-      Builder.CreateCall(register_init_func, {init_func_list, fun});
     }
 
     // ret void
@@ -260,9 +237,6 @@ struct FillCtxGenerator final {
 
   PointerType *arg_list_t;
   Function *push_arg;
-
-  PointerType *init_func_list_t;
-  Function *register_init_func;
 };
 
 // Generates coro clones for functions in the module.

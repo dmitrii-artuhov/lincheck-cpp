@@ -3,12 +3,8 @@
 #include <cassert>
 
 RandomStrategy::RandomStrategy(size_t threads_count,
-                               TaskBuilderList constructors,
-                               InitFuncList init_funcs)
-    : threads_count{threads_count},
-      constructors{constructors},
-      init_funcs{init_funcs},
-      threads{} {
+                               TaskBuilderList constructors)
+    : threads_count{threads_count}, constructors{constructors}, threads{} {
   assert(threads_count > 0);
   assert(constructors->size() > 0);
   std::random_device dev;
@@ -41,11 +37,5 @@ std::tuple<StackfulTask&, bool, int> RandomStrategy::Next() {
 void RandomStrategy::StartNextRound() {
   for (auto& thread : threads) {
     thread = std::queue<StackfulTask>();
-  }
-
-  // Run init funcs.
-  // TODO: this code can be extracted to parent.
-  for (const auto& fun : *init_funcs) {
-    fun();
   }
 }

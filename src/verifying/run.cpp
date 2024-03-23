@@ -58,12 +58,7 @@ int main(int argc, char *argv[]) {
   log() << "rounds   = " << rounds << "\n";
 
   std::vector<TaskBuilder> l;
-  std::vector<init_func_t> init_funcs;
-  fill_ctx(&l, &init_funcs);
-  if (init_funcs.empty()) {
-    std::cout << "WARNING: not found any init funcs, multi-round testing could "
-                 "be incorrect\n\n";
-  }
+  fill_ctx(&l);
 
   using spec = VerifyingSpec;
   log() << "strategy = ";
@@ -72,8 +67,8 @@ int main(int argc, char *argv[]) {
   switch (typ) {
     case RR:
       log() << "round-robin";
-      strategy = std::make_unique<RoundRobinStrategy<spec::target_t>>(
-          threads, &l, &init_funcs);
+      strategy =
+          std::make_unique<RoundRobinStrategy<spec::target_t>>(threads, &l);
       break;
       // case RND:
       //   log() << "random";

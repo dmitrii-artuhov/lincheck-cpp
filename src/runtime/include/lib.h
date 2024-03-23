@@ -78,11 +78,6 @@ struct Task {
   handle hdl;
 };
 
-// Describes function that initiales state after each round.
-typedef void (*init_func_t)();
-
-typedef std::vector<init_func_t>* InitFuncList;
-
 // Contains task builders.
 // Will be created during LLVM pass and
 // passed to the runtime entrypoint.
@@ -126,8 +121,8 @@ struct StackfulTask {
 };
 
 // Implementation will be generated in llvm pass.
-// Caller should call this to get all task builders and init funcs.
-void fill_ctx(TaskBuilderList, InitFuncList);
+// Caller should call this to get all task builders.
+void fill_ctx(TaskBuilderList);
 }
 
 struct Response {

@@ -160,17 +160,3 @@ bar(1)
 bar res: 1
 done
 """
-
-
-def test_codegen_init_funcs(tmpdir):
-    path = os.path.join(TESTDATA_DIR, "init_funcs.cpp")
-    build(path, tmpdir, "no_trace", find_task_cpp="find_task_init.cpp")
-
-    rc, output = run_command_and_get_output(["./run"], cwd=tmpdir)
-    assert rc == 0
-    assert output == """\
-super_init()
-f()
-init_func()
-test_func()
-"""
