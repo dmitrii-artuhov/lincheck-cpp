@@ -5,6 +5,9 @@
 #include <string>
 #include <vector>
 
+#define attr(attr) __attribute((__annotate__(#attr)))
+#define concat_attr(a, b) attr(a##b)
+
 extern "C" {
 // Let's begin from C-style API to make LLVM calls easier.
 

@@ -1,6 +1,6 @@
 
-basic.bc: basic.cpp
-	clang++ -O3 -c -emit-llvm basic.cpp
+basic.bc: basic.cpp ./runtime/include/verifying.h
+	clang++ -std=c++2a -O3 -c -emit-llvm basic.cpp
 
 # Run codegen and dump output to res.ll.
 run_codegen: basic.bc
