@@ -27,14 +27,14 @@ struct FitPrinter {
 
 /*
     Prints like this:
-    *--------------------------------------*
+    *------------------*-------------------*
     |        T0        |        T1         |
-    *--------------------------------------*
+    *------------------*-------------------*
     | Push(2)          |                   |
-    | Ok(2)            |                   |
+    | <--- 0           |                   |
     |                  |  Pop()            |
-    |                  |  Ok(5)            |
-    *--------------------------------------*
+    |                  |  <--- 5           |
+    *------------------*-------------------*
      <---------------->
          cell_width
 */
@@ -57,10 +57,13 @@ void pretty_print(const std::vector<std::variant<Invoke, Response>>& result,
 
   auto print_separator = [&out, threads_num, cell_width]() {
     out << "*";
-    for (int i = 0; i < threads_num * cell_width + threads_num - 1; ++i) {
-      out << "-";
+    for (int i = 0; i < threads_num; ++i) {
+      for (int j = 0; j < cell_width; ++j) {
+        out << "-";
+      }
+      out << "*";
     }
-    out << "*\n";
+    out << "\n";
   };
 
   auto print_spaces = [&out](int count) {
@@ -112,9 +115,9 @@ void pretty_print(const std::vector<std::variant<Invoke, Response>>& result,
       fp.Out(")");
     } else {
       auto resp = get<1>(i);
-      fp.Out("Ok(" + to_string(resp.GetTask().GetRetVal()) + ")");
+      fp.Out("<-- " + to_string(resp.GetTask().GetRetVal()));
     }
-    assert(fp.rest > 0);
+    assert(fp.rest > 0 && "increase cell_width in pretty printer");
     print_spaces(fp.rest);
     out << "|";
 
