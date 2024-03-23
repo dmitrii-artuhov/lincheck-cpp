@@ -2,20 +2,24 @@
 #include <iostream>
 #include <memory>
 
-#include "../runtime/include/lincheck_recursive.h"
-#include "../runtime/include/logger.h"
-#include "../runtime/include/pretty_print.h"
-#include "../runtime/include/round_robin_strategy.h"
+#include "include/lincheck_recursive.h"
+#include "include/logger.h"
+#include "include/pretty_print.h"
+#include "include/round_robin_strategy.h"
+#include "include/uniform_strategy.h"
 
 #ifndef CLI_BUILD
 // Debugging purposes.
-#include "atomic_register/spec.h"
+// Will be replace by build script.
+#include "include/dumb_spec.h"
 #endif
 
-enum StrategyType { RR, RND };
+enum StrategyType { RR, UNIFORM };
+
+const std::string kRR = "rr";
+const std::string kUniform = "uniform";
 
 // ./run <THREADS> <STRATEGY> <TASKS> <ROUNDS> <VERBOSE>
-// STRATEGY = rr | rnd
 
 std::string toLower(std::string str) {
   std::transform(str.begin(), str.end(), str.begin(),
@@ -31,11 +35,10 @@ void extract_args(int argc, char *argv[], size_t &threads, StrategyType &typ,
   threads = std::stoul(argv[1]);  // Throws if can't transform.
   std::string strategy_name = argv[2];
   strategy_name = toLower(std::move(strategy_name));
-  if (strategy_name == "rr") {
+  if (strategy_name == kRR) {
     typ = RR;
-  } else if (strategy_name == "rnd") {
-    throw std::invalid_argument("unsupported strategy");
-    typ = RND;
+  } else if (strategy_name == kUniform) {
+    typ = UNIFORM;
   } else {
     throw std::invalid_argument("unsupported strategy");
   }
@@ -70,10 +73,10 @@ int main(int argc, char *argv[]) {
       strategy =
           std::make_unique<RoundRobinStrategy<spec::target_t>>(threads, &l);
       break;
-      // case RND:
-      //   log() << "random";
-      //   strategy = std::make_unique<RoundRobinStrategy>(threads, &l,
-      //   &init_funcs); break;
+    case UNIFORM:
+      log() << "uniform";
+      strategy = std::make_unique<UniformStrategy<spec::target_t>>(threads, &l);
+      break;
   }
   log() << "\n\n";
 

@@ -105,8 +105,9 @@ def build(src, debug):
         print("target.cpp must exist in src")
         return
 
+    run_source_path = os.path.join(runtime_dir, "run.cpp")
     # Replace included spec to the specified.
-    run_content = read_file(os.path.join(file_dir, "run.cpp"))
+    run_content = read_file(run_source_path)
     run_content = f'#include "../{src}/spec.h"\n{run_content}'
     run_path = os.path.join(artifacts_dir, "run.cpp")
     write_file(run_path, run_content)
@@ -136,7 +137,7 @@ def build(src, debug):
     assert rc == 0
 
     # Build run.cpp.
-    cmd = [clang, "-DCLI_BUILD", "-I.."]
+    cmd = [clang, "-DCLI_BUILD", f"-I{runtime_dir}"]
     cmd.extend(build_flags)
     if debug:
         cmd.extend(["-g"])
