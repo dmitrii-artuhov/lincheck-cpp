@@ -7,103 +7,10 @@
 #include "../runtime/include/pretty_print.h"
 #include "../runtime/include/round_robin_strategy.h"
 
-namespace Register {
-
-struct LinearRegister {
-  int x = 0;
-  int add() {
-    ++x;
-    return 0;
-  }
-  int get() { return x; }
-};
-
-struct LinearRegisterHash {
-  size_t operator()(const LinearRegister &r) const { return r.x; }
-};
-
-struct LinearRegisterEquals {
-  bool operator()(const LinearRegister &lhs, const LinearRegister &rhs) const {
-    return lhs.x == rhs.x;
-  }
-};
-
-using method_t =
-    std::function<int(LinearRegister *l, const std::vector<int> &args)>;
-
-auto getMethods() {
-  method_t add_func = [](LinearRegister *l,
-                         const std::vector<int> &args) -> int {
-    assert(args.empty());
-    return l->add();
-  };
-
-  method_t get_func = [](LinearRegister *l,
-                         const std::vector<int> &args) -> int {
-    assert(args.empty());
-    return l->get();
-  };
-
-  return std::map<std::string, method_t>{
-      {"add", add_func},
-      {"get", get_func},
-  };
-}
-
-};  // namespace Register
-
-namespace Queue {
-
-struct queue {
-  std::deque<int> deq{};
-  int Push(int v) {
-    deq.push_back(v);
-    return 0;
-  }
-  int Pop() {
-    if (deq.empty()) return 0;
-    int res = deq.front();
-    deq.pop_front();
-    return res;
-  }
-};
-
-struct queueHash {
-  size_t operator()(const queue &r) const {
-    int res = 0;
-    for (int elem : r.deq) {
-      res += elem;
-    }
-    return res;
-  }
-};
-
-struct queueEquals {
-  bool operator()(const queue &lhs, const queue &rhs) const {
-    return lhs.deq == rhs.deq;
-  }
-};
-
-using method_t = std::function<int(queue *l, const std::vector<int> &args)>;
-
-auto getMethods() {
-  method_t push_func = [](queue *l, const std::vector<int> &args) -> int {
-    assert(args.size() == 1);
-    return l->Push(args[0]);
-  };
-
-  method_t pop_func = [](queue *l, const std::vector<int> &args) -> int {
-    assert(args.empty());
-    return l->Pop();
-  };
-
-  return std::map<std::string, method_t>{
-      {"Push", push_func},
-      {"Pop", pop_func},
-  };
-}
-
-};  // namespace Queue
+#ifndef CLI_BUILD
+// Debugging purposes.
+#include "atomic_register/spec.h"
+#endif
 
 enum StrategyType { RR, RND };
 
@@ -127,6 +34,7 @@ void extract_args(int argc, char *argv[], size_t &threads, StrategyType &typ,
   if (strategy_name == "rr") {
     typ = RR;
   } else if (strategy_name == "rnd") {
+    throw std::invalid_argument("unsupported strategy");
     typ = RND;
   } else {
     throw std::invalid_argument("unsupported strategy");
@@ -157,33 +65,26 @@ int main(int argc, char *argv[]) {
                  "be incorrect\n\n";
   }
 
+  using spec = VerifyingSpec;
   log() << "strategy = ";
+
   std::unique_ptr<Strategy> strategy;
   switch (typ) {
     case RR:
       log() << "round-robin";
-      strategy = std::make_unique<RoundRobinStrategy>(threads, &l, &init_funcs);
+      strategy = std::make_unique<RoundRobinStrategy<spec::target_t>>(
+          threads, &l, &init_funcs);
       break;
-    case RND:
-      log() << "random";
-      strategy = std::make_unique<RoundRobinStrategy>(threads, &l, &init_funcs);
-      break;
+      // case RND:
+      //   log() << "random";
+      //   strategy = std::make_unique<RoundRobinStrategy>(threads, &l,
+      //   &init_funcs); break;
   }
   log() << "\n\n";
 
-#ifdef test_register
-  using lchecker_t =
-      LinearizabilityCheckerRecursive<Register::LinearRegister,
-                                      Register::LinearRegisterHash,
-                                      Register::LinearRegisterEquals>;
-
-  lchecker_t checker{Register::getMethods(), Register::LinearRegister{}};
-#else
-  using lchecker_t =
-      LinearizabilityCheckerRecursive<Queue::queue, Queue::queueHash,
-                                      Queue::queueEquals>;
-  lchecker_t checker{Queue::getMethods(), Queue::queue{}};
-#endif
+  using lchecker_t = LinearizabilityCheckerRecursive<spec::spec_t, spec::hash_t,
+                                                     spec::equals_t>;
+  lchecker_t checker{spec::spec_t::GetMethods(), spec::spec_t{}};
   auto scheduler = Scheduler{*strategy.get(), checker, tasks, rounds};
   auto result = scheduler.Run();
   if (result.has_value()) {

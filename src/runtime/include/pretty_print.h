@@ -102,7 +102,7 @@ void pretty_print(const std::vector<std::variant<Invoke, Response>>& result,
       auto inv = get<0>(i);
       auto& task = inv.GetTask();
       fp.Out(task.GetName() + "(");
-      auto& args = task.GetArgs();
+      auto args = task.GetArgs();
       for (int i = 0; i < args.size(); ++i) {
         if (i > 0) {
           fp.Out(", ");

@@ -1,3 +1,5 @@
+#include <memory>
+
 #include "lib.h"
 
 // Public macros.
