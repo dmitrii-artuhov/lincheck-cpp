@@ -17,7 +17,7 @@ using handle = std::coroutine_handle<CoroPromise>;
 // Task describes coroutine to run.
 // Entrypoint receives list of task builders as input.
 struct Task {
-  Task(handle hdl);
+  Task(handle, char*);
 
   // Resumes task until next suspension point.
   // If task calls another coroutine during execution
@@ -51,6 +51,7 @@ struct Task {
   std::string GetName() const;
 
  private:
+  char* name{};
   handle hdl;
 };
 
@@ -58,7 +59,7 @@ struct Task {
 typedef std::vector<int>* ArgList;
 
 // Describes function that builds new task.
-typedef Task (*TaskBuilder)(ArgList);
+typedef Task (*TaskBuilder)(void*, ArgList);
 
 // Describes function that initiales state after each round.
 typedef void (*init_func_t)();

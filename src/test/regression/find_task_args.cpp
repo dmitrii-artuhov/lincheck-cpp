@@ -1,5 +1,6 @@
 #include <cassert>
 #include <optional>
+#include <iostream>
 
 #include "../../runtime/include/lib.h"
 
@@ -8,7 +9,7 @@ Task find_task(TaskBuilderList l, InitFuncList init_funcs) {
   std::optional<Task> task;
   std::vector<int> args;
   for (auto task_builder : *l) {
-    auto cur_task = task_builder(&args);
+    auto cur_task = task_builder(nullptr, &args);
     if (cur_task.GetName() == "test") {
       assert(args.size() == 3);
       assert(args[0] == 42);

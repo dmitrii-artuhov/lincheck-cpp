@@ -1,39 +1,43 @@
 #include <atomic>
 #include <iostream>
 
-#include "macro.h"
+#include "../../../runtime/include/verifying.h"
 
-std::atomic<int> queue_array[1000]{};
-std::atomic<int> tail{}, head{};
+struct Queue {
+  std::atomic<int> queue_array[1000]{};
+  std::atomic<int> tail{}, head{};
 
-int nxt{};
+  void Log(const std::string &msg) { std::cout << msg << std::endl; }
 
-extern "C" {
+  non_atomic void Push(int v) {
+    Log("Push: " + std::to_string(v));
+    int pos = head.fetch_add(1);
+    queue_array[pos].store(v);
+  }
 
-void na Push(int v) {
-  std::cout << "Push: " << v << std::endl;
-  int pos = head.fetch_add(1);
-  queue_array[pos].store(v);
-}
-
-int na Pop() {
-  int last = head.load();
-  for (int i = 0; i < last; ++i) {
-    int elem = queue_array[i].load();
-    if (elem != 0 && queue_array[i].compare_exchange_weak(elem, 0)) {
-      return elem;
+  non_atomic int Pop() {
+    int last = head.load();
+    for (int i = 0; i < last; ++i) {
+      int elem = queue_array[i].load();
+      if (elem != 0 && queue_array[i].compare_exchange_weak(elem, 0)) {
+        return elem;
+      }
     }
+    return 0;
   }
-  return 0;
-}
+};
 
-void na test() {
+struct State {
+  void test();
+};
+
+TARGET_METHOD(void, State, test, ()) {
+  Queue q{};
   for (int i = 0; i < 5; ++i) {
-    Push(i + 1);
+    q.Push(i + 1);
   }
   for (int i = 0; i < 5; ++i) {
-    int p = Pop();
+    int p = q.Pop();
     std::cout << "Got: " << p << std::endl;
   }
-}
 }

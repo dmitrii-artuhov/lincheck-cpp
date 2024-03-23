@@ -56,7 +56,8 @@ def run_command_and_get_output(
 
 def build(path, tmpdir, flags="", find_task_cpp="find_task.cpp"):
     # Compile sample to llvm bytecode.
-    cmd = [CLANG, "-emit-llvm", "-S", "-o", "bytecode.bc", path]
+    cmd = [CLANG, "-o3", "-std=c++2a", "-emit-llvm", "-S", "-o",
+           "bytecode.bc", path]
     rc, _ = run_command_and_get_output(cmd, cwd=tmpdir)
     assert rc == 0
 

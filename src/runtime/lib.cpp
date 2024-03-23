@@ -13,8 +13,6 @@ struct CoroPromise {
   int has_ret_val{};
   int ret_val{};
   handle child_hdl{};
-  char *name{};
-  int *args{};
 };
 
 CoroPromise *get_promise(std::coroutine_handle<CoroPromise> hdl) {
@@ -24,13 +22,12 @@ CoroPromise *get_promise(std::coroutine_handle<CoroPromise> hdl) {
 // We must keep promise in the stack (LLVM now doesn't support heap promises).
 // So there is no `new_promise()` function,
 // instead we allocate promise at the stack in codegen pass.
-void init_promise(CoroPromise *p, char *name) {
+void init_promise(CoroPromise *p) {
   assert(p != nullptr);
 
   p->child_hdl = nullptr;
   p->ret_val = 0;
   p->has_ret_val = 0;
-  p->name = name;
 }
 
 handle get_child_hdl(CoroPromise *p) {
@@ -72,7 +69,7 @@ int get_ret_val(CoroPromise *p) {
   return p->ret_val;
 }
 
-Task make_task(handle hdl) { return Task(hdl); }
+Task make_task(handle hdl, char *name) { return Task(hdl, name); }
 
 TaskBuilderList new_task_builder_list() {
   return new std::vector<TaskBuilder>();
@@ -82,12 +79,6 @@ void destroy_task_builder_list(TaskBuilderList l) { delete l; }
 
 void push_task_builder_list(TaskBuilderList l, TaskBuilder builder) {
   l->push_back(builder);
-}
-
-char *get_name(CoroPromise *p) {
-  assert(p != nullptr);
-  assert(p->name != nullptr);
-  return p->name;
 }
 
 void push_arg(ArgList list, int arg) { list->push_back(arg); }
@@ -101,7 +92,7 @@ void register_init_func(InitFuncList list, init_func_t func) {
 }
 }
 
-Task::Task(handle hdl) : hdl(hdl) {}
+Task::Task(handle hdl, char *name) : hdl(hdl), name(name) {}
 
 void Task::Resume() {
   assert(!IsReturned() && "returned task can not be resumed");
@@ -112,7 +103,7 @@ bool Task::HasChild() { return has_child_hdl(&hdl.promise()); }
 
 Task Task::GetChild() {
   assert(HasChild() && "get_child() can not be called on childless task");
-  return make_task(hdl.promise().child_hdl);
+  return make_task(hdl.promise().child_hdl, nullptr);
 }
 
 void Task::ClearChild() { set_child_hdl(&hdl.promise(), nullptr); }
@@ -122,14 +113,15 @@ bool Task::IsReturned() { return has_ret_val(&hdl.promise()); }
 int Task::GetRetVal() { return get_ret_val(&hdl.promise()); }
 
 std::string Task::GetName() const {
-  return std::string{get_name(&hdl.promise())};
+  assert(name != nullptr);
+  return std::string{name};
 }
 
 StackfulTask::StackfulTask(Task task) : entrypoint(task) {
   stack = std::vector<Task>{task};
 }
 
-StackfulTask::StackfulTask() : entrypoint(nullptr) {}
+StackfulTask::StackfulTask() : entrypoint(nullptr, nullptr) {}
 
 void StackfulTask::Resume() {
   assert(!stack.empty());

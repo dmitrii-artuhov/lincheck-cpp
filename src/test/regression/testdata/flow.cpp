@@ -1,11 +1,11 @@
 #include <iostream>
 #include <string>
 
-#include "macro.h"
+#include "../../../runtime/include/verifying.h"
 
 void log(const std::string &msg) { std::cout << msg << std::endl; }
 
-int na foo(int n) {
+non_atomic int foo(int n) {
   log("foo(" + std::to_string(n) + ")");
   int mult = 0;
   for (int i = 0; i < n; ++i) {
@@ -18,7 +18,7 @@ int na foo(int n) {
   return mult;
 }
 
-int na bar(int n) {
+non_atomic int bar(int n) {
   log("bar(" + std::to_string(n) + ")");
   int i = 0;
   int s = 0;
@@ -38,7 +38,7 @@ int na bar(int n) {
   return s;
 }
 
-void na f(int n) {
+non_atomic void f(int n) {
   if (n == 0) {
     log("done");
     return;
@@ -55,4 +55,8 @@ void na f(int n) {
   f(n - 1);
 }
 
-extern "C" void na test() { f(5); }
+struct State {
+  void test();
+};
+
+TARGET_METHOD(void, State, test, ()) { f(5); }

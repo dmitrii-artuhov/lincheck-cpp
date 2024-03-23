@@ -86,15 +86,17 @@ struct FillCtxGenerator final {
     void_t = Type::getVoidTy(ctx);
     ptr_t = PointerType::get(ctx, 0);
     i32_t = Type::getInt32Ty(ctx);
+    i8_t = Type::getInt8Ty(ctx);
 
-    task_t = StructType::create("Task", ptr_t);
+    task_t = StructType::create("Task", ptr_t, ptr_t);
     task_builder_list_t = ptr_t;
     task_builder_t = ptr_t;
     arg_list_t = ptr_t;
     init_func_list_t = ptr_t;
 
-    make_task = Function::Create(FunctionType::get(task_t, {ptr_t}, false),
-                                 Function::ExternalLinkage, "make_task", M);
+    make_task =
+        Function::Create(FunctionType::get(task_t, {ptr_t, ptr_t}, false),
+                         Function::ExternalLinkage, "make_task", M);
 
     push_task_builder_list = Function::Create(
         FunctionType::get(void_t, {task_builder_list_t, task_builder_t}, false),
@@ -233,7 +235,14 @@ struct FillCtxGenerator final {
     }
 
     auto hdl = Builder.CreateCall(F, args);
-    auto task = Builder.CreateCall(make_task, {hdl});
+
+    // Declare global variable that holds the function name.
+    auto name_const = createPrivateGlobalForString(M, name, false, "");
+    auto name_ptr = Builder.CreateGEP(
+        ArrayType::get(i8_t, name.size() + 1), name_const,
+        {ConstantInt::get(i32_t, 0), ConstantInt::get(i32_t, 0)});
+
+    auto task = Builder.CreateCall(make_task, {hdl, name_ptr});
     Builder.CreateRet(task);
 
     return TaskBuilder;
@@ -243,6 +252,7 @@ struct FillCtxGenerator final {
   PointerType *ptr_t;
   Type *void_t;
   Type *i32_t;
+  Type *i8_t;
   StructType *task_t;
 
   PointerType *task_builder_t;
@@ -269,7 +279,7 @@ struct CoroGenerator final {
     token_t = Type::getTokenTy(ctx);
     // This signature must be as in runtime declaration.
     // TODO: validate this by some way.
-    promise_t = StructType::create("CoroPromise", i32_t, i32_t, ptr_t, ptr_t);
+    promise_t = StructType::create("CoroPromise", i32_t, i32_t, ptr_t);
 
     promise_ptr_t = PointerType::get(promise_t, 0);
     task_builder_t = ptr_t;
@@ -287,7 +297,7 @@ struct CoroGenerator final {
         Function::Create(FunctionType::get(i32_t, {promise_ptr_t}, false),
                          Function::ExternalLinkage, "get_ret_val", M);
     init_promise =
-        Function::Create(FunctionType::get(void_t, {ptr_t, ptr_t}, false),
+        Function::Create(FunctionType::get(void_t, {ptr_t}, false),
                          Function::ExternalLinkage, "init_promise", M);
     get_promise =
         Function::Create(FunctionType::get(promise_ptr_t, {ptr_t}, false),
@@ -351,11 +361,11 @@ struct CoroGenerator final {
     auto old_ret_t = F->getReturnType();
     auto newF = utils::CloneFuncChangeRetType(F, ptr_t, coro_name);
     assert(newF != nullptr && "Generated function is nullptr");
-    return RawGenCoroFunc(newF, old_ret_t, F->getName().str(), index);
+    return RawGenCoroFunc(newF, old_ret_t, index);
   }
 
   // TODO: rewrite it using one pass.
-  Function *RawGenCoroFunc(Function *F, Type *old_ret_t, std::string old_name,
+  Function *RawGenCoroFunc(Function *F, Type *old_ret_t,
                            const fun_index_t &index) {
     auto int_gen = utils::SeqGenerator{};
     auto &ctx = M.getContext();
@@ -435,13 +445,7 @@ struct CoroGenerator final {
     Builder.SetInsertPoint(init);
     auto promise = Builder.CreateAlloca(promise_t, nullptr, "promise");
 
-    // Declare global variable that hold function name.
-    auto name_const = createPrivateGlobalForString(M, old_name, false, "");
-    auto name_ptr = Builder.CreateGEP(
-        ArrayType::get(i8_t, old_name.length() + 1), name_const,
-        {ConstantInt::get(i32_t, 0), ConstantInt::get(i32_t, 0)});
-
-    Builder.CreateCall(init_promise, {promise, name_ptr});
+    Builder.CreateCall(init_promise, {promise});
     auto id = Builder.CreateIntrinsic(token_t, Intrinsic::coro_id,
                                       {i32_0, promise, ptr_null, ptr_null},
                                       nullptr, "id");
