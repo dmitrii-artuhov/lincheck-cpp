@@ -18,7 +18,7 @@ TARGET_METHOD(void, Register, add, ()) { x.fetch_add(1); }
 
 TARGET_METHOD(int, Register, get, ()) { return x.load(); }
 
-using spec_t = Spec<Register, spec::LinearRegister, spec::LinearRegisterHash,
+using spec_t = ltest::Spec<Register, spec::LinearRegister, spec::LinearRegisterHash,
                     spec::LinearRegisterEquals>;
 
 LTEST_ENTRYPOINT(spec_t);

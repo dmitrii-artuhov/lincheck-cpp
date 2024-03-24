@@ -36,6 +36,6 @@ TARGET_METHOD(int, Queue, Pop, ()) {
   return 0;
 }
 
-using spec_t = Spec<Queue, spec::Queue, spec::QueueHash, spec::QueueEquals>;
+using spec_t = ltest::Spec<Queue, spec::Queue, spec::QueueHash, spec::QueueEquals>;
 
 LTEST_ENTRYPOINT(spec_t);
