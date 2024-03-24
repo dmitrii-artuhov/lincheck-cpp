@@ -89,6 +89,7 @@ Task::Task(void *this_arg, TaskBuilder builder) {
 
 void Task::Resume() {
   assert(!IsReturned() && "returned task can not be resumed");
+  assert(!has_child_hdl(&hdl.promise()));
   hdl.resume();
 }
 
@@ -145,6 +146,9 @@ void StackfulTask::Resume() {
 std::vector<int> StackfulTask::GetArgs() const { return entrypoint.GetArgs(); }
 
 bool StackfulTask::IsReturned() { return stack.empty(); }
+
+// TODO: implement this
+bool StackfulTask::IsBusy() { return false;}
 
 int StackfulTask::GetRetVal() const { return last_returned_value; }
 

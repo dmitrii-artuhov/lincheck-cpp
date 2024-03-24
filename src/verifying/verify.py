@@ -23,6 +23,7 @@ clang = "clang++"
 opt = "opt"
 llvm_dis = "llvm-dis"
 build_flags = ["-O3", "-std=c++2a"]
+# build_flags = ["-O3", "-g", "-std=c++2a", "-fsanitize=address", "-DADDRESS_SANITIZER"]
 
 
 def read_file(path):
@@ -132,8 +133,8 @@ def build(src, debug):
     cmd.extend([res_bytecode_path])
     cmd.extend(deps)
     cmd.extend(["-o", os.path.join(artifacts_dir, "run")])
-    rc, _ = run_command_and_get_output(cmd, cwd=artifacts_dir)
-    assert rc == 0
+    rc, out = run_command_and_get_output(cmd, cwd=artifacts_dir)
+    assert rc == 0, out
 
 
 cli = click.CommandCollection(sources=[cmd])

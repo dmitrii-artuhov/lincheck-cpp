@@ -10,4 +10,5 @@ class MockStackfulTask : public StackfulTask {
   MOCK_METHOD(bool, IsReturned, (), (override));
   MOCK_METHOD(int, GetRetVal, (), (const, override));
   MOCK_METHOD(std::string, GetName, (), (const, override));
+  MOCK_METHOD(std::vector<int>, GetArgs, (), (const, override));
 };

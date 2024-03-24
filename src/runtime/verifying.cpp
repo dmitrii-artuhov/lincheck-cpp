@@ -10,6 +10,7 @@ std::string toLower(std::string str) {
 
 const std::string kRR = "rr";
 const std::string kUniform = "uniform";
+const std::string pct = "pct";
 
 void extract_args(int argc, char *argv[], size_t &threads, StrategyType &typ,
                   size_t &tasks, size_t &rounds, bool &verbose) {
@@ -23,6 +24,8 @@ void extract_args(int argc, char *argv[], size_t &threads, StrategyType &typ,
     typ = RR;
   } else if (strategy_name == kUniform) {
     typ = UNIFORM;
+  } else if (strategy_name == pct) {
+    typ = PCT;
   } else {
     throw std::invalid_argument("unsupported strategy");
   }

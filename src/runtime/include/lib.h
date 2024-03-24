@@ -97,6 +97,9 @@ struct StackfulTask {
   // Haven't the first task finished yet?
   virtual bool IsReturned();
 
+  // Returns whether this thread is waiting
+  virtual bool IsBusy();
+
   // Returns the value that was returned from the first task, have to be called
   // only when IsReturned is true
   // TODO: after a while int will be replaced with the trait

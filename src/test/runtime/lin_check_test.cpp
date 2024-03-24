@@ -29,15 +29,19 @@ using ::testing::AnyNumber;
 using ::testing::Return;
 
 TEST(LinearizabilityCheckerCounterTest, SmallLinearizableHistory) {
-  std::function<int(Counter*)> fetch_and_add = [](Counter* c) {
+  std::function<int(Counter*, const std::vector<int>&)> fetch_and_add = [](Counter* c, [[maybe_unused]] const std::vector<int>& args) {
+    assert(args.empty());
     c->count += 1;
     return c->count - 1;
   };
-  std::function<int(Counter*)> get = [](Counter* c) { return c->count; };
+  std::function<int(Counter*, const std::vector<int>&)> get = [](Counter* c, [[maybe_unused]] const std::vector<int>& args) {
+    assert(args.empty());
+    return c->count;
+  };
   Counter c{};
 
   LinearizabilityChecker<Counter> checker(
-      std::map<MethodName, std::function<int(Counter*)>>{
+      std::map<MethodName, std::function<int(Counter*, const std::vector<int>&)>>{
           {"faa", fetch_and_add},
           {"get", get},
       },
@@ -51,6 +55,8 @@ TEST(LinearizabilityCheckerCounterTest, SmallLinearizableHistory) {
   EXPECT_CALL(first_task, GetName())
       .Times(AnyNumber())
       .WillRepeatedly(Return(first_task_name));
+  // TODO: factory
+  EXPECT_CALL(first_task, GetArgs()).Times(AnyNumber()).WillRepeatedly(Return(std::vector<int>{}));
 
   MockStackfulTask second_task;
   std::string second_task_name("get");
@@ -60,6 +66,7 @@ TEST(LinearizabilityCheckerCounterTest, SmallLinearizableHistory) {
   EXPECT_CALL(second_task, GetName())
       .Times(AnyNumber())
       .WillRepeatedly(Return(second_task_name));
+  EXPECT_CALL(second_task, GetArgs()).Times(AnyNumber()).WillRepeatedly(Return(std::vector<int>{}));
 
   MockStackfulTask third_task;
   std::string third_task_name("faa");
@@ -69,6 +76,7 @@ TEST(LinearizabilityCheckerCounterTest, SmallLinearizableHistory) {
   EXPECT_CALL(third_task, GetName())
       .Times(AnyNumber())
       .WillRepeatedly(Return(third_task_name));
+  EXPECT_CALL(third_task, GetArgs()).Times(AnyNumber()).WillRepeatedly(Return(std::vector<int>{}));
 
   MockStackfulTask fourth_task;
   std::string fourth_task_name("faa");
@@ -78,6 +86,7 @@ TEST(LinearizabilityCheckerCounterTest, SmallLinearizableHistory) {
   EXPECT_CALL(fourth_task, GetName())
       .Times(AnyNumber())
       .WillRepeatedly(Return(fourth_task_name));
+  EXPECT_CALL(fourth_task, GetArgs()).Times(AnyNumber()).WillRepeatedly(Return(std::vector<int>{}));
 
   MockStackfulTask fifth_task;
   std::string fifth_task_name("faa");
@@ -87,32 +96,37 @@ TEST(LinearizabilityCheckerCounterTest, SmallLinearizableHistory) {
   EXPECT_CALL(fifth_task, GetName())
       .Times(AnyNumber())
       .WillRepeatedly(Return(fifth_task_name));
+  EXPECT_CALL(fifth_task, GetArgs()).Times(AnyNumber()).WillRepeatedly(Return(std::vector<int>{}));
 
   std::vector<std::variant<Invoke, Response>> history{};
-  history.emplace_back(Invoke(first_task));
-  history.emplace_back(Invoke(second_task));
-  history.emplace_back(Invoke(third_task));
-  history.emplace_back(Invoke(fourth_task));
-  history.emplace_back(Invoke(fifth_task));
-  history.emplace_back(Response(fifth_task, 0));
-  history.emplace_back(Response(fourth_task, 1));
-  history.emplace_back(Response(third_task, 2));
-  history.emplace_back(Response(second_task, 3));
-  history.emplace_back(Response(first_task, 3));
+  history.emplace_back(Invoke(first_task, 0));
+  history.emplace_back(Invoke(second_task, 1));
+  history.emplace_back(Invoke(third_task, 2));
+  history.emplace_back(Invoke(fourth_task, 3));
+  history.emplace_back(Invoke(fifth_task, 4));
+  history.emplace_back(Response(fifth_task, 0, 4));
+  history.emplace_back(Response(fourth_task, 1, 3));
+  history.emplace_back(Response(third_task, 2, 2));
+  history.emplace_back(Response(second_task, 3, 1));
+  history.emplace_back(Response(first_task, 3, 0));
 
   EXPECT_EQ(checker.Check(history), true);
 }
 
 TEST(LinearizabilityCheckerCounterTest, SmallUnlinearizableHistory) {
-  std::function<int(Counter*)> fetch_and_add = [](Counter* c) {
+  std::function<int(Counter*, const std::vector<int>&)> fetch_and_add = [](Counter* c, [[maybe_unused]] const std::vector<int>& args) {
+    assert(args.empty());
     c->count += 1;
     return c->count - 1;
   };
-  std::function<int(Counter*)> get = [](Counter* c) { return c->count; };
+  std::function<int(Counter*, const std::vector<int>&)> get = [](Counter* c, [[maybe_unused]] const std::vector<int>& args) {
+    assert(args.empty());
+    return c->count;
+  };
   Counter c{};
 
   LinearizabilityChecker<Counter> checker(
-      std::map<MethodName, std::function<int(Counter*)>>{
+      std::map<MethodName, std::function<int(Counter*, const std::vector<int>&)>>{
           {"faa", fetch_and_add},
           {"get", get},
       },
@@ -126,6 +140,7 @@ TEST(LinearizabilityCheckerCounterTest, SmallUnlinearizableHistory) {
   EXPECT_CALL(first_task, GetName())
       .Times(AnyNumber())
       .WillRepeatedly(Return(first_task_name));
+  EXPECT_CALL(first_task, GetArgs()).Times(AnyNumber()).WillRepeatedly(Return(std::vector<int>{}));
 
   MockStackfulTask second_task;
   std::string second_task_name("get");
@@ -135,6 +150,7 @@ TEST(LinearizabilityCheckerCounterTest, SmallUnlinearizableHistory) {
   EXPECT_CALL(second_task, GetName())
       .Times(AnyNumber())
       .WillRepeatedly(Return(second_task_name));
+  EXPECT_CALL(second_task, GetArgs()).Times(AnyNumber()).WillRepeatedly(Return(std::vector<int>{}));
 
   MockStackfulTask third_task;
   std::string third_task_name("faa");
@@ -144,6 +160,7 @@ TEST(LinearizabilityCheckerCounterTest, SmallUnlinearizableHistory) {
   EXPECT_CALL(third_task, GetName())
       .Times(AnyNumber())
       .WillRepeatedly(Return(third_task_name));
+  EXPECT_CALL(third_task, GetArgs()).Times(AnyNumber()).WillRepeatedly(Return(std::vector<int>{}));
 
   MockStackfulTask fourth_task;
   std::string fourth_task_name("faa");
@@ -153,6 +170,7 @@ TEST(LinearizabilityCheckerCounterTest, SmallUnlinearizableHistory) {
   EXPECT_CALL(fourth_task, GetName())
       .Times(AnyNumber())
       .WillRepeatedly(Return(fourth_task_name));
+  EXPECT_CALL(fourth_task, GetArgs()).Times(AnyNumber()).WillRepeatedly(Return(std::vector<int>{}));
 
   MockStackfulTask fifth_task;
   std::string fifth_task_name("faa");
@@ -162,32 +180,37 @@ TEST(LinearizabilityCheckerCounterTest, SmallUnlinearizableHistory) {
   EXPECT_CALL(fifth_task, GetName())
       .Times(AnyNumber())
       .WillRepeatedly(Return(fifth_task_name));
+  EXPECT_CALL(fifth_task, GetArgs()).Times(AnyNumber()).WillRepeatedly(Return(std::vector<int>{}));
 
   std::vector<std::variant<Invoke, Response>> history{};
-  history.emplace_back(Invoke(first_task));
-  history.emplace_back(Invoke(second_task));
-  history.emplace_back(Invoke(third_task));
-  history.emplace_back(Invoke(fourth_task));
-  history.emplace_back(Invoke(fifth_task));
-  history.emplace_back(Response(fifth_task, 0));
-  history.emplace_back(Response(fourth_task, 1));
-  history.emplace_back(Response(third_task, 100));
-  history.emplace_back(Response(second_task, 3));
-  history.emplace_back(Response(first_task, 3));
+  history.emplace_back(Invoke(first_task, 0));
+  history.emplace_back(Invoke(second_task, 1));
+  history.emplace_back(Invoke(third_task, 2));
+  history.emplace_back(Invoke(fourth_task, 3));
+  history.emplace_back(Invoke(fifth_task, 4));
+  history.emplace_back(Response(fifth_task, 0, 4));
+  history.emplace_back(Response(fourth_task, 1, 3));
+  history.emplace_back(Response(third_task, 100, 2));
+  history.emplace_back(Response(second_task, 3, 1));
+  history.emplace_back(Response(first_task, 3, 0));
 
   EXPECT_EQ(checker.Check(history), false);
 }
 
 TEST(LinearizabilityCheckerCounterTest, ExtendedLinearizableHistory) {
-  std::function<int(Counter*)> fetch_and_add = [](Counter* c) {
+  std::function<int(Counter*, const std::vector<int>&)> fetch_and_add = [](Counter* c, [[maybe_unused]] const std::vector<int>& args) {
+    assert(args.empty());
     c->count += 1;
     return c->count - 1;
   };
-  std::function<int(Counter*)> get = [](Counter* c) { return c->count; };
+  std::function<int(Counter*, const std::vector<int>&)> get = [](Counter* c, [[maybe_unused]] const std::vector<int>& args) {
+    assert(args.empty());
+    return c->count;
+  };
   Counter c{};
 
   LinearizabilityChecker<Counter> checker(
-      std::map<MethodName, std::function<int(Counter*)>>{
+      std::map<MethodName, std::function<int(Counter*, const std::vector<int>&)>>{
           {"faa", fetch_and_add},
           {"get", get},
       },
@@ -201,6 +224,7 @@ TEST(LinearizabilityCheckerCounterTest, ExtendedLinearizableHistory) {
   EXPECT_CALL(first_task, GetName())
       .Times(AnyNumber())
       .WillRepeatedly(Return(first_task_name));
+  EXPECT_CALL(first_task, GetArgs()).Times(AnyNumber()).WillRepeatedly(Return(std::vector<int>{}));
 
   MockStackfulTask second_task;
   std::string second_task_name("get");
@@ -210,6 +234,7 @@ TEST(LinearizabilityCheckerCounterTest, ExtendedLinearizableHistory) {
   EXPECT_CALL(second_task, GetName())
       .Times(AnyNumber())
       .WillRepeatedly(Return(second_task_name));
+  EXPECT_CALL(second_task, GetArgs()).Times(AnyNumber()).WillRepeatedly(Return(std::vector<int>{}));
 
   MockStackfulTask third_task;
   std::string third_task_name("faa");
@@ -219,6 +244,7 @@ TEST(LinearizabilityCheckerCounterTest, ExtendedLinearizableHistory) {
   EXPECT_CALL(third_task, GetName())
       .Times(AnyNumber())
       .WillRepeatedly(Return(third_task_name));
+  EXPECT_CALL(third_task, GetArgs()).Times(AnyNumber()).WillRepeatedly(Return(std::vector<int>{}));
 
   MockStackfulTask fourth_task;
   std::string fourth_task_name("faa");
@@ -228,6 +254,7 @@ TEST(LinearizabilityCheckerCounterTest, ExtendedLinearizableHistory) {
   EXPECT_CALL(fourth_task, GetName())
       .Times(AnyNumber())
       .WillRepeatedly(Return(fourth_task_name));
+  EXPECT_CALL(fourth_task, GetArgs()).Times(AnyNumber()).WillRepeatedly(Return(std::vector<int>{}));
 
   MockStackfulTask fifth_task;
   std::string fifth_task_name("faa");
@@ -237,13 +264,14 @@ TEST(LinearizabilityCheckerCounterTest, ExtendedLinearizableHistory) {
   EXPECT_CALL(fifth_task, GetName())
       .Times(AnyNumber())
       .WillRepeatedly(Return(fifth_task_name));
+  EXPECT_CALL(fifth_task, GetArgs()).Times(AnyNumber()).WillRepeatedly(Return(std::vector<int>{}));
 
   std::vector<std::variant<Invoke, Response>> history{};
-  history.emplace_back(Invoke(first_task));
-  history.emplace_back(Invoke(second_task));
-  history.emplace_back(Invoke(third_task));
-  history.emplace_back(Invoke(fourth_task));
-  history.emplace_back(Invoke(fifth_task));
+  history.emplace_back(Invoke(first_task, 0));
+  history.emplace_back(Invoke(second_task, 1));
+  history.emplace_back(Invoke(third_task, 2));
+  history.emplace_back(Invoke(fourth_task, 3));
+  history.emplace_back(Invoke(fifth_task, 4));
 
   EXPECT_EQ(checker.Check(history), true);
 }
@@ -265,6 +293,7 @@ std::vector<std::unique_ptr<MockStackfulTask>> create_mocks(
       EXPECT_CALL(*add_task, GetName())
           .Times(AnyNumber())
           .WillRepeatedly(Return(std::string("faa")));
+      EXPECT_CALL(*add_task, GetArgs()).Times(AnyNumber()).WillRepeatedly(Return(std::vector<int>{}));
 
       adds++;
     } else {
@@ -277,6 +306,7 @@ std::vector<std::unique_ptr<MockStackfulTask>> create_mocks(
       EXPECT_CALL(*get_task, GetName())
           .Times(AnyNumber())
           .WillRepeatedly(Return(std::string("get")));
+      EXPECT_CALL(*get_task, GetArgs()).Times(AnyNumber()).WillRepeatedly(Return(std::vector<int>{}));
     }
   }
 
@@ -288,9 +318,9 @@ std::vector<std::variant<Invoke, Response>> create_history(
   std::vector<std::variant<Invoke, Response>> history;
   history.reserve(2 * mocks.size());
 
-  for (auto& m : mocks) {
-    history.emplace_back(Invoke(*m));
-    history.emplace_back(Response(*m, m->GetRetVal()));
+  for (size_t i = 0; i < mocks.size(); ++i) {
+    history.emplace_back(Invoke(*mocks[i], i));
+    history.emplace_back(Response(*mocks[i], mocks[i]->GetRetVal(), i));
   }
 
   std::random_device rd;
@@ -350,22 +380,26 @@ std::string draw_history(
 }
 
 void CheckersAreTheSame(const std::vector<bool>& b_history) {
-  std::function<int(Counter*)> fetch_and_add = [](Counter* c) {
+  std::function<int(Counter*, const std::vector<int>&)> fetch_and_add = [](Counter* c, [[maybe_unused]] const std::vector<int>& args) {
+    assert(args.empty());
     c->count += 1;
     return c->count - 1;
   };
-  std::function<int(Counter*)> get = [](Counter* c) { return c->count; };
+  std::function<int(Counter*, const std::vector<int>&)> get = [](Counter* c, [[maybe_unused]] const std::vector<int>& args) {
+    assert(args.empty());
+    return c->count;
+  };
   Counter c{};
 
   LinearizabilityChecker<Counter> fast(
-      std::map<MethodName, std::function<int(Counter*)>>{
+      std::map<MethodName, std::function<int(Counter*, const std::vector<int>&)>>{
           {"faa", fetch_and_add},
           {"get", get},
       },
       c);
 
   LinearizabilityCheckerRecursive<Counter> slow(
-      std::map<MethodName, std::function<int(Counter*)>>{
+      std::map<MethodName, std::function<int(Counter*, const std::vector<int>&)>>{
           {"faa", fetch_and_add},
           {"get", get},
       },

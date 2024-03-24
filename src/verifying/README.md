@@ -18,7 +18,7 @@
 
 Далее собираем бинарь верификатора:
 ```sh
-./verify.py build --src ./targets/atomic_register
+./verify.py build --src ./targets/atomic_register.cpp
 ```
 
 Можно указать `-g`, если хочется погонять в отладчике получившийся бинарь или посмотреть на получившийся llvm IR.

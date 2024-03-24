@@ -8,6 +8,7 @@
 #include "round_robin_strategy.h"
 #include "scheduler.h"
 #include "uniform_strategy.h"
+#include "pct_strategy.h"
 
 // Public macros.
 #define non_atomic attr(ltest_nonatomic)
@@ -16,7 +17,7 @@
 #define TARGET_METHOD(ret, cls, symbol, args) \
   concat_attr(ltesttarget_, symbol) non_atomic ret cls::symbol args
 
-enum StrategyType { RR, UNIFORM };
+enum StrategyType { RR, UNIFORM, PCT };
 
 template <class TargetObj, class LinearSpec,
           class LinearSpecHash = std::hash<LinearSpec>,
@@ -64,6 +65,13 @@ struct Entrypoint {
         strategy =
             std::make_unique<UniformStrategy<typename Spec::target_obj_t>>(
                 threads, &l);
+        break;
+      case PCT:
+        log() << "pct";
+        // TODO: k
+        strategy =
+            std::make_unique<PctStrategy<typename Spec::target_obj_t>>(
+                threads, &l, 100);
         break;
     }
     log() << "\n\n";

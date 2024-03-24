@@ -25,6 +25,7 @@ Scheduler::round_result_t Scheduler::runRound() {
     }
     full_history.emplace_back(next_task);
 
+    assert(!next_task.IsReturned());
     next_task.Resume();
     if (next_task.IsReturned()) {
       finished_tasks++;
