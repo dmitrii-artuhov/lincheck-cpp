@@ -16,6 +16,7 @@ llvm_plugin_path = os.path.join(
 
 deps = list(map(lambda f: os.path.join(runtime_dir, f), [
     "lib.cpp", "scheduler.cpp", "lin_check.cpp", "logger.cpp",
+    "verifying.cpp",
 ]))
 
 clang = "clang++"
@@ -94,24 +95,10 @@ def run(threads, tasks, strategy, rounds, verbose):
 
 
 @cmd.command()
-@click.option("-s", "--src", required=True, help="source directory name")
+@click.option("-s", "--src", required=True, help="source directory name",
+              type=click.File("r"))
 @click.option("-g", "--debug", help="build with -g", type=bool, is_flag=True)
 def build(src, debug):
-    src_dir = os.path.join(file_dir, src)
-    if not os.path.exists(os.path.join(src_dir, "spec.h")):
-        print("spec.h must exist in src")
-        return
-    if not os.path.exists(os.path.join(src_dir, "target.cpp")):
-        print("target.cpp must exist in src")
-        return
-
-    run_source_path = os.path.join(runtime_dir, "run.cpp")
-    # Replace included spec to the specified.
-    run_content = read_file(run_source_path)
-    run_content = f'#include "../{src}/spec.h"\n{run_content}'
-    run_path = os.path.join(artifacts_dir, "run.cpp")
-    write_file(run_path, run_content)
-
     # Create artifacts dir.
     if not os.path.exists(artifacts_dir):
         os.mkdir(artifacts_dir)
@@ -119,9 +106,9 @@ def build(src, debug):
     # Build target.
     cmd = [clang]
     cmd.extend(build_flags)
-    cmd.extend(["-c", "-emit-llvm", "target.cpp",
+    cmd.extend(["-c", "-emit-llvm", src.name,
                 "-o", os.path.join(artifacts_dir, "bytecode.bc")])
-    rc, _ = run_command_and_get_output(cmd, cwd=src_dir)
+    rc, _ = run_command_and_get_output(cmd, cwd=file_dir)
     assert rc == 0
 
     # Run llvm pass.
@@ -132,18 +119,18 @@ def build(src, debug):
     assert rc == 0
 
     # Run llvm-dis (debug purposes).
-    cmd = [llvm_dis, "res.bc", "-o", "res.ll"]
-    rc, _ = run_command_and_get_output(cmd, cwd=artifacts_dir)
-    assert rc == 0
+    if debug:
+        cmd = [llvm_dis, "res.bc", "-o", "res.ll"]
+        rc, _ = run_command_and_get_output(cmd, cwd=artifacts_dir)
+        assert rc == 0
 
-    # Build run.cpp.
-    cmd = [clang, "-DCLI_BUILD", f"-I{runtime_dir}"]
+    # Build run binary.
+    cmd = [clang]
     cmd.extend(build_flags)
     if debug:
         cmd.extend(["-g"])
-    cmd.extend([run_path])
-    cmd.extend(deps)
     cmd.extend([res_bytecode_path])
+    cmd.extend(deps)
     cmd.extend(["-o", os.path.join(artifacts_dir, "run")])
     rc, _ = run_command_and_get_output(cmd, cwd=artifacts_dir)
     assert rc == 0

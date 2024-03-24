@@ -1,13 +1,22 @@
-#include "spec.h"
+#include <atomic>
 
-namespace target {
+#include "../specs/queue.h"
 
-Queue::Queue() {}
+const int N = 10'000;
 
-void Queue::Reconstruct() {
-  head.store(0);
-  std::fill(a, a + N, 0);
-}
+struct Queue {
+  Queue() {}
+  void Reconstruct() {
+    head.store(0);
+    std::fill(a, a + N, 0);
+  }
+
+  void Push(int v);
+  int Pop();
+
+  std::atomic<int> a[N];
+  std::atomic<int> head{};
+};
 
 generator int gen_int() { return rand() % 10 + 1; }
 
@@ -27,4 +36,6 @@ TARGET_METHOD(int, Queue, Pop, ()) {
   return 0;
 }
 
-}  // namespace target
+using spec_t = Spec<Queue, spec::Queue, spec::QueueHash, spec::QueueEquals>;
+
+LTEST_ENTRYPOINT(spec_t);

@@ -136,10 +136,13 @@ struct FillCtxGenerator final {
 
     auto &ctx = M.getContext();
 
+    auto fill_ctx_fun = M.getFunction(fill_ctx_name);
+    Assert(fill_ctx_fun, "fill_ctx declaration not found");
+
     // void fill_ctx(TaskBuilderList);
-    auto fill_ctx_fun = Function::Create(
-        FunctionType::get(void_t, {task_builder_list_t}, false),
-        Function::ExternalLinkage, fill_ctx_name, M);
+    // auto fill_ctx_fun = Function::Create(
+    //     FunctionType::get(void_t, {task_builder_list_t}, false),
+    //     Function::ExternalLinkage, fill_ctx_name, M);
     auto block = BasicBlock::Create(ctx, "entry", fill_ctx_fun);
     builder_t Builder(block);
 
