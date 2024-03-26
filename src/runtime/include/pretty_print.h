@@ -40,7 +40,7 @@ struct FitPrinter {
 */
 template <typename Out_t>
 void pretty_print(const std::vector<std::variant<Invoke, Response>>& result,
-                  Out_t& out) {
+                  Out_t& out, int threads_num) {
   auto get_thread_num = [](const std::variant<Invoke, Response>& v) {
     // Crutch.
     if (v.index() == 0) {
@@ -50,10 +50,6 @@ void pretty_print(const std::vector<std::variant<Invoke, Response>>& result,
   };
 
   int cell_width = 20;  // Up it if necessary. Enough for now.
-  int threads_num = 0;
-  for (const auto& i : result) {
-    threads_num = std::max(threads_num, get_thread_num(i) + 1);
-  }
 
   auto print_separator = [&out, threads_num, cell_width]() {
     out << "*";
