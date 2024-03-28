@@ -28,14 +28,15 @@ const std::string kTLA = "tla";
 
 // Extracts required opts, returns the rest of args.
 std::vector<std::string> parse_opts(std::vector<std::string> args, Opts &opts) {
-  if (args.size() < 5) {
+  if (args.size() < 7) {
     throw std::invalid_argument("all required opts should be specified");
   }
   opts.threads = std::stoul(args[0]);  // Throws if can't transform.
   opts.tasks = std::stoul(args[1]);
-  opts.rounds = std::stoul(args[2]);
-  opts.verbose = std::stoi(args[3]) == 1;
-  std::string strategy_name = args[4];
+  opts.switches = std::stoul(args[2]);
+  opts.rounds = std::stoul(args[3]);
+  opts.verbose = std::stoi(args[4]) == 1;
+  std::string strategy_name = args[5];
   strategy_name = toLower(std::move(strategy_name));
   if (strategy_name == kRR) {
     opts.typ = RR;
@@ -46,7 +47,19 @@ std::vector<std::string> parse_opts(std::vector<std::string> args, Opts &opts) {
   } else {
     throw std::invalid_argument("unsupported strategy");
   }
-  args.erase(args.begin(), args.begin() + 5);
+
+  std::string weights_str = args[6];
+  std::vector<int> thread_weights;
+  if (weights_str != "") {
+    auto splited = split(weights_str, ',');
+    thread_weights.reserve(splited.size());
+    for (auto &s : splited) {
+      thread_weights.push_back(std::stoi(s));
+    }
+  }
+  opts.thread_weights = std::move(thread_weights);
+
+  args.erase(args.begin(), args.begin() + 7);
   return args;
 }
 
