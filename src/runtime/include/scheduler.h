@@ -29,21 +29,31 @@ struct Strategy {
   virtual ~Strategy() = default;
 };
 
-// Scheduler generates different sequential histories(using Strategy) and
-// then checks them with the ModelChecker
 struct Scheduler {
+  using full_history_t = std::vector<std::reference_wrapper<StackfulTask>>;
+  using seq_history_t = std::vector<std::variant<Invoke, Response>>;
+  using result_t = std::optional<std::pair<full_history_t, seq_history_t>>;
+
+  virtual result_t Run() = 0;
+
+  virtual ~Scheduler() = default;
+};
+
+// StrategyScheduler generates different sequential histories(using Strategy)
+// and then checks them with the ModelChecker
+struct StrategyScheduler : Scheduler {
   // max_switches represents the maximal count of switches. After this count
   // scheduler will end execution of the Run function
-  Scheduler(Strategy& sched_class, ModelChecker& checker, size_t max_tasks,
-            size_t max_rounds);
+  StrategyScheduler(Strategy& sched_class, ModelChecker& checker,
+                    size_t max_tasks, size_t max_rounds, size_t threads_count);
 
   // Run returns full unliniarizable history if such a history is found. Full
   // history is a history with all events, where each element in the vector is a
   // Resume operation on the corresponding task
-  std::optional<std::vector<std::reference_wrapper<StackfulTask>>> Run();
+  result_t Run() override;
 
  private:
-  std::optional<std::vector<std::reference_wrapper<StackfulTask>>> runRound();
+  result_t runRound();
 
   Strategy& strategy;
 
@@ -52,12 +62,15 @@ struct Scheduler {
   size_t max_tasks;
 
   size_t max_rounds;
+
+  // For pretty printing.
+  size_t threads_count;
 };
 
 // TLAScheduler generates all executions satisfying some conditions.
 template <typename TargetObj>
-struct TLAScheduler : IScheduler {
-  TLAScheduler(int max_tasks, int max_rounds, int threads_count,
+struct TLAScheduler : Scheduler {
+  TLAScheduler(size_t max_tasks, size_t max_rounds, size_t threads_count,
                TaskBuilderList constructors, ModelChecker& checker)
       : max_tasks{max_tasks},
         max_rounds{max_rounds},
@@ -69,6 +82,12 @@ struct TLAScheduler : IScheduler {
     }
   };
 
+  result_t Run() override {
+    auto [_, res] = run(0);
+    return res;
+  }
+
+ private:
   using thread_t = StableVector<StackfulTask>;
 
   // TLAScheduler enumerates all possible executions with finished max_tasks.
@@ -94,10 +113,10 @@ struct TLAScheduler : IScheduler {
   };
 
   // Replays all actions from step_begin to the step_end.
-  void replay(int step_begin, int step_end) {
+  void replay(size_t step_begin, size_t step_end) {
     // In histories we store references, so there's no need to update it.
     state = frames[step_begin].state;
-    for (int step = step_begin; step < step_end; ++step) {
+    for (size_t step = step_begin; step < step_end; ++step) {
       auto& frame = frames[step];
       auto position = frame.position;
       assert(position);
@@ -114,7 +133,7 @@ struct TLAScheduler : IScheduler {
 
   // Resumes choosed task.
   // If task is finished and finished tasks == max_tasks, stops.
-  std::tuple<bool, result_t> resume_task(frame_t& frame, int step,
+  std::tuple<bool, result_t> resume_task(frame_t& frame, size_t step,
                                          size_t thread_id, thread_t& thread,
                                          std::optional<Task> raw_task) {
     bool is_new = raw_task.has_value();
@@ -124,7 +143,7 @@ struct TLAScheduler : IScheduler {
     auto& task = thread.back();
     frame.position = &task;
 
-    full_history.push_back({thread_id, task});
+    full_history.push_back(/*{thread_id, task}*/ {task});
     if (is_new) {
       sequential_history.emplace_back(Invoke(task, thread_id));
     }
@@ -177,7 +196,7 @@ struct TLAScheduler : IScheduler {
     return {false, {}};
   }
 
-  std::tuple<bool, result_t> run(int step) {
+  std::tuple<bool, result_t> run(size_t step) {
     // Push frame to the stack.
     frames.emplace_back(frame_t{state});
     auto& frame = frames.back();
@@ -210,24 +229,18 @@ struct TLAScheduler : IScheduler {
     return {false, {}};
   }
 
-  result_t Run() override {
-    auto [_, res] = run(0);
-    return res;
-  }
-
-  int threads_count;
-  int max_tasks;
-  int max_rounds;
+  size_t threads_count;
+  size_t max_tasks;
+  size_t max_rounds;
   TaskBuilderList constructors;
   ModelChecker& checker;
 
   // Running state.
-  int finished_tasks{};
-  int finished_rounds{};
+  size_t finished_tasks{};
+  size_t finished_rounds{};
   TargetObj state{};
   std::vector<std::variant<Invoke, Response>> sequential_history;
-  std::vector<std::pair<int, std::reference_wrapper<StackfulTask>>>
-      full_history;
+  std::vector<std::reference_wrapper<StackfulTask>> full_history;
   StableVector<thread_t> threads;
   StableVector<frame_t> frames;
 };

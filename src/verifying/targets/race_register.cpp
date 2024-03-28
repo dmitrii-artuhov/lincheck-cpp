@@ -7,6 +7,10 @@ struct Register {
 
   void Reconstruct() { x = 0; }
   Register(const Register& oth) { x = oth.x; }
+  Register& operator=(const Register& oth) {
+    x = oth.x;
+    return *this;
+  }
   Register(){};
 
   int x{};
