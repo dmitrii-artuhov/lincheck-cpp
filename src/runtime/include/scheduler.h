@@ -1,4 +1,5 @@
 #pragma once
+#include <limits>
 #include <map>
 #include <optional>
 #include <variant>
@@ -71,10 +72,12 @@ struct StrategyScheduler : Scheduler {
 template <typename TargetObj>
 struct TLAScheduler : Scheduler {
   TLAScheduler(size_t max_tasks, size_t max_rounds, size_t threads_count,
-               TaskBuilderList constructors, ModelChecker& checker)
+               size_t max_switches, TaskBuilderList constructors,
+               ModelChecker& checker)
       : max_tasks{max_tasks},
         max_rounds{max_rounds},
         threads_count{threads_count},
+        max_switches{max_switches},
         constructors{constructors},
         checker{checker} {
     for (int i = 0; i < threads_count; ++i) {
@@ -83,7 +86,7 @@ struct TLAScheduler : Scheduler {
   };
 
   result_t Run() override {
-    auto [_, res] = run(0);
+    auto [_, res] = run(0, 0);
     return res;
   }
 
@@ -134,16 +137,31 @@ struct TLAScheduler : Scheduler {
   // Resumes choosed task.
   // If task is finished and finished tasks == max_tasks, stops.
   std::tuple<bool, result_t> resume_task(frame_t& frame, size_t step,
-                                         size_t thread_id, thread_t& thread,
+                                         size_t thread_id, size_t switches,
+                                         thread_t& thread,
                                          std::optional<Task> raw_task) {
+    size_t previous_thread_id = thread_id_history.empty()
+                                    ? std::numeric_limits<size_t>::max()
+                                    : thread_id_history.back();
     bool is_new = raw_task.has_value();
+    size_t nxt_switches = switches;
     if (is_new) {
       thread.emplace_back(StackfulTask{raw_task.value()});
+    } else {
+      if (thread_id != previous_thread_id) {
+        ++nxt_switches;
+      }
+      if (nxt_switches > max_switches) {
+        // The limit of switches is achieved.
+        // So, do not resume task.
+        return {false, {}};
+      }
     }
     auto& task = thread.back();
     frame.position = &task;
 
-    full_history.push_back(/*{thread_id, task}*/ {task});
+    full_history.push_back({task});
+    thread_id_history.push_back(thread_id);
     if (is_new) {
       sequential_history.emplace_back(Invoke(task, thread_id));
     }
@@ -159,7 +177,7 @@ struct TLAScheduler : Scheduler {
     bool stop = finished_tasks == max_tasks;
     if (!stop) {
       // Run recursive step.
-      auto [is_over, res] = run(step + 1);
+      auto [is_over, res] = run(step + 1, nxt_switches);
       if (is_over || res.has_value()) {
         return {is_over, res};
       }
@@ -178,6 +196,7 @@ struct TLAScheduler : Scheduler {
       }
     }
 
+    thread_id_history.pop_back();
     full_history.pop_back();
     if (is_finished) {
       --finished_tasks;
@@ -196,7 +215,7 @@ struct TLAScheduler : Scheduler {
     return {false, {}};
   }
 
-  std::tuple<bool, result_t> run(size_t step) {
+  std::tuple<bool, result_t> run(size_t step, size_t switches) {
     // Push frame to the stack.
     frames.emplace_back(frame_t{state});
     auto& frame = frames.back();
@@ -207,7 +226,8 @@ struct TLAScheduler : Scheduler {
       if (!thread.empty() && !thread.back().IsReturned()) {
         // Task exists.
         frame.builder = nullptr;
-        auto [is_over, res] = resume_task(frame, step, thread_id, thread, {});
+        auto [is_over, res] =
+            resume_task(frame, step, thread_id, switches, thread, {});
         if (is_over || res.has_value()) {
           return {is_over, res};
         }
@@ -218,7 +238,8 @@ struct TLAScheduler : Scheduler {
       for (auto cons : *constructors) {
         frame.builder = cons;
         auto task = Task{&state, cons};
-        auto [is_over, res] = resume_task(frame, step, thread_id, thread, task);
+        auto [is_over, res] =
+            resume_task(frame, step, thread_id, switches, thread, task);
         if (is_over || res.has_value()) {
           return {is_over, res};
         }
@@ -232,6 +253,7 @@ struct TLAScheduler : Scheduler {
   size_t threads_count;
   size_t max_tasks;
   size_t max_rounds;
+  size_t max_switches;
   TaskBuilderList constructors;
   ModelChecker& checker;
 
@@ -241,6 +263,7 @@ struct TLAScheduler : Scheduler {
   TargetObj state{};
   std::vector<std::variant<Invoke, Response>> sequential_history;
   std::vector<std::reference_wrapper<StackfulTask>> full_history;
+  std::vector<size_t> thread_id_history;
   StableVector<thread_t> threads;
   StableVector<frame_t> frames;
 };
