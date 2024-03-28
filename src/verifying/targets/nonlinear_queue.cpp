@@ -8,10 +8,6 @@ const int N = 100;
 
 struct Queue {
   Queue() {}
-  void Reconstruct() {
-    head.store(0);
-    std::fill(a, a + N, 0);
-  }
 
   Queue &operator=(const Queue &oth) {
     head.store(oth.head.load());
