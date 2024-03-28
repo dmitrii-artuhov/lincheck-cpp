@@ -18,7 +18,7 @@
 
 namespace ltest {
 
-enum StrategyType { RR, RND };
+enum StrategyType { RR, RND, TLA };
 
 template <class TargetObj, class LinearSpec,
           class LinearSpecHash = std::hash<LinearSpec>,
@@ -45,13 +45,13 @@ std::vector<std::string> split(const std::string &s, char delim);
 template <typename TargetObj>
 std::unique_ptr<Strategy> MakeStrategy(Opts &opts, TaskBuilderList l,
                                        std::vector<std::string> args) {
-  log() << "strategy = ";
   switch (opts.typ) {
-    case RR:
-      log() << "round-robin";
+    case RR: {
+      log() << "round-robin\n";
       return std::make_unique<RoundRobinStrategy<TargetObj>>(opts.threads, l);
-    case RND:
-      log() << "random";
+    }
+    case RND: {
+      log() << "random\n";
       std::vector<int> weights;
       if (args.empty()) {
         weights.assign(opts.threads, 1);
@@ -67,6 +67,45 @@ std::unique_ptr<Strategy> MakeStrategy(Opts &opts, TaskBuilderList l,
       }
       return std::make_unique<RandomStrategy<TargetObj>>(opts.threads, l,
                                                          weights);
+    }
+    default:
+      assert(false && "unexpected typ");
+  }
+}
+
+// Keeps pointer to strategy to pass reference to base scheduler.
+// TODO: refactor.
+struct StrategySchedulerWrapper : StrategyScheduler {
+  StrategySchedulerWrapper(std::unique_ptr<Strategy> strategy,
+                           ModelChecker &checker, size_t max_tasks,
+                           size_t max_rounds, size_t threads_count)
+      : strategy(std::move(strategy)),
+        StrategyScheduler(*strategy.get(), checker, max_tasks, max_rounds,
+                          threads_count){};
+
+ private:
+  std::unique_ptr<Strategy> strategy;
+};
+
+template <typename TargetObj>
+std::unique_ptr<Scheduler> MakeScheduler(ModelChecker &checker, Opts &opts,
+                                         TaskBuilderList l,
+                                         std::vector<std::string> args) {
+  log() << "strategy = ";
+  switch (opts.typ) {
+    case RR:
+    case RND: {
+      auto strategy = MakeStrategy<TargetObj>(opts, l, std::move(args));
+      auto scheduler = std::make_unique<StrategySchedulerWrapper>(
+          std::move(strategy), checker, opts.tasks, opts.rounds, opts.threads);
+      return scheduler;
+    }
+    case TLA: {
+      log() << "tla\n";
+      auto scheduler = std::make_unique<TLAScheduler<TargetObj>>(
+          opts.tasks, opts.rounds, opts.threads, l, checker);
+      return scheduler;
+    }
   }
 }
 
@@ -87,22 +126,21 @@ void Run(int argc, char *argv[]) {
   std::vector<TaskBuilder> l;
   fill_ctx(&l);
 
-  auto strategy =
-      MakeStrategy<typename Spec::target_obj_t>(opts, &l, std::move(args));
-
-  log() << "\n\n";
-
   using lchecker_t =
       LinearizabilityCheckerRecursive<typename Spec::linear_spec_t,
                                       typename Spec::linear_spec_hash_t,
                                       typename Spec::linear_spec_equals_t>;
   lchecker_t checker{Spec::linear_spec_t::GetMethods(),
                      typename Spec::linear_spec_t{}};
-  auto scheduler = Scheduler{*strategy.get(), checker, opts.tasks, opts.rounds};
-  auto result = scheduler.Run();
+
+  auto scheduler = MakeScheduler<typename Spec::target_obj_t>(checker, opts, &l,
+                                                              std::move(args));
+  log() << "\n\n";
+
+  auto result = scheduler->Run();
   if (result.has_value()) {
     std::cout << "non linearized:\n";
-    pretty_print::pretty_print(result.value().second, std::cout);
+    pretty_print::pretty_print(result.value().second, std::cout, opts.threads);
   } else {
     std::cout << "success!\n";
   }

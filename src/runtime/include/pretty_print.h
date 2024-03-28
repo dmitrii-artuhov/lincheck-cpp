@@ -40,7 +40,7 @@ struct FitPrinter {
 */
 template <typename Out_t>
 void pretty_print(const std::vector<std::variant<Invoke, Response>>& result,
-                  Out_t& out, int threads_num) {
+                  Out_t& out, size_t threads_num) {
   auto get_thread_num = [](const std::variant<Invoke, Response>& v) {
     // Crutch.
     if (v.index() == 0) {

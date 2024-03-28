@@ -1,14 +1,27 @@
 #include <atomic>
+#include <cstring>
+#include <iostream>
 
 #include "../specs/queue.h"
 
-const int N = 10'000;
+const int N = 100;
 
 struct Queue {
   Queue() {}
   void Reconstruct() {
     head.store(0);
     std::fill(a, a + N, 0);
+  }
+
+  Queue &operator=(const Queue &oth) {
+    head.store(oth.head.load());
+    std::memcpy(a, oth.a, N);
+    return *this;
+  }
+
+  Queue(const Queue &oth) {
+    head.store(oth.head.load());
+    std::memcpy(a, oth.a, N);
   }
 
   void Push(int v);
@@ -36,6 +49,7 @@ TARGET_METHOD(int, Queue, Pop, ()) {
   return 0;
 }
 
-using spec_t = ltest::Spec<Queue, spec::Queue, spec::QueueHash, spec::QueueEquals>;
+using spec_t =
+    ltest::Spec<Queue, spec::Queue, spec::QueueHash, spec::QueueEquals>;
 
 LTEST_ENTRYPOINT(spec_t);
