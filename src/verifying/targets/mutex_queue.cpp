@@ -1,8 +1,9 @@
 #include <atomic>
+#include <cstring>
 
 #include "../specs/queue.h"
 
-const int N = 10'000;
+const int N = 100;
 
 struct Mutex {
   std::atomic<bool> flg{};
@@ -27,11 +28,21 @@ struct Mutex {
 
 struct Queue {
   Queue() {}
-  void Reconstruct() {
+
+  Queue(const Queue &oth) {
+    // Reinit mutex unconditionally.
     mutex.flg.store(false);
-    tail = 0;
-    head = 0;
-    std::fill(a, a + N, 0);
+    tail = oth.tail;
+    head = oth.head;
+    std::memcpy(a, oth.a, N);
+  }
+  Queue &operator=(const Queue &oth) {
+    // Reinit mutex unconditionally.
+    mutex.flg.store(false);
+    tail = oth.tail;
+    head = oth.head;
+    std::memcpy(a, oth.a, N);
+    return *this;
   }
 
   void Push(int v);
@@ -60,6 +71,7 @@ TARGET_METHOD(int, Queue, Pop, ()) {
   return e;
 }
 
-using spec_t = ltest::Spec<Queue, spec::Queue, spec::QueueHash, spec::QueueEquals>;
+using spec_t =
+    ltest::Spec<Queue, spec::Queue, spec::QueueHash, spec::QueueEquals>;
 
 LTEST_ENTRYPOINT(spec_t);

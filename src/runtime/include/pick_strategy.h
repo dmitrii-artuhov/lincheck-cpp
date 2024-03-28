@@ -48,11 +48,12 @@ struct PickStrategy : Strategy {
       thread = std::queue<StackfulTask>();
     }
 
-    // Reconstruct target as we start from the beginning.
-    state.Reconstruct();
+    // Reinitial target as we start from the beginning.
+    state = initial_state;
   }
 
  protected:
+  TargetObj initial_state{};
   TargetObj state{};
   size_t next_task = 0;
   size_t threads_count;
