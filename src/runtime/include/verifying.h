@@ -33,9 +33,11 @@ struct Spec {
 struct Opts {
   size_t threads;
   size_t tasks;
+  size_t switches;
   size_t rounds;
   bool verbose;
   StrategyType typ;
+  std::vector<int> thread_weights;
 };
 
 std::vector<std::string> parse_opts(std::vector<std::string> args, Opts &opts);
@@ -43,30 +45,24 @@ std::vector<std::string> parse_opts(std::vector<std::string> args, Opts &opts);
 std::vector<std::string> split(const std::string &s, char delim);
 
 template <typename TargetObj>
-std::unique_ptr<Strategy> MakeStrategy(Opts &opts, TaskBuilderList l,
-                                       std::vector<std::string> args) {
+std::unique_ptr<Strategy> MakeStrategy(Opts &opts, TaskBuilderList l) {
   switch (opts.typ) {
     case RR: {
-      log() << "round-robin\n";
+      std::cout << "round-robin\n";
       return std::make_unique<RoundRobinStrategy<TargetObj>>(opts.threads, l);
     }
     case RND: {
-      log() << "random\n";
-      std::vector<int> weights;
-      if (args.empty()) {
+      std::cout << "random\n";
+      std::vector<int> weights = opts.thread_weights;
+      if (weights.empty()) {
         weights.assign(opts.threads, 1);
-      } else {
-        auto splited = split(args[0], ',');
-        if (splited.size() != opts.threads) {
-          throw std::invalid_argument{
-              "number of threads not equal to number of weights"};
-        }
-        for (const auto &s : splited) {
-          weights.push_back(std::stoul(s));
-        }
+      }
+      if (weights.size() != opts.threads) {
+        throw std::invalid_argument{
+            "number of threads not equal to number of weights"};
       }
       return std::make_unique<RandomStrategy<TargetObj>>(opts.threads, l,
-                                                         weights);
+                                                         std::move(weights));
     }
     default:
       assert(false && "unexpected typ");
@@ -89,26 +85,20 @@ struct StrategySchedulerWrapper : StrategyScheduler {
 
 template <typename TargetObj>
 std::unique_ptr<Scheduler> MakeScheduler(ModelChecker &checker, Opts &opts,
-                                         TaskBuilderList l,
-                                         std::vector<std::string> args) {
-  log() << "strategy = ";
+                                         TaskBuilderList l) {
+  std::cout << "strategy = ";
   switch (opts.typ) {
     case RR:
     case RND: {
-      auto strategy = MakeStrategy<TargetObj>(opts, l, std::move(args));
+      auto strategy = MakeStrategy<TargetObj>(opts, l);
       auto scheduler = std::make_unique<StrategySchedulerWrapper>(
           std::move(strategy), checker, opts.tasks, opts.rounds, opts.threads);
       return scheduler;
     }
     case TLA: {
-      size_t max_swithces = std::numeric_limits<size_t>::max();
-      if (!args.empty()) {
-        max_swithces = std::stoull(args[0]);
-      }
-      log() << "tla\n";
-      log() << "max_switches = " << max_swithces << "\n";
+      std::cout << "tla\n";
       auto scheduler = std::make_unique<TLAScheduler<TargetObj>>(
-          opts.tasks, opts.rounds, opts.threads, max_swithces, l, checker);
+          opts.tasks, opts.rounds, opts.threads, opts.switches, l, checker);
       return scheduler;
     }
   }
@@ -124,9 +114,10 @@ void Run(int argc, char *argv[]) {
   args = parse_opts(std::move(args), opts);
 
   logger_init(opts.verbose);
-  log() << "threads  = " << opts.threads << "\n";
-  log() << "tasks    = " << opts.tasks << "\n";
-  log() << "rounds   = " << opts.rounds << "\n";
+  std::cout << "threads  = " << opts.threads << "\n";
+  std::cout << "tasks    = " << opts.tasks << "\n";
+  std::cout << "switches = " << opts.switches << "\n";
+  std::cout << "rounds   = " << opts.rounds << "\n";
 
   std::vector<TaskBuilder> l;
   fill_ctx(&l);
@@ -138,8 +129,8 @@ void Run(int argc, char *argv[]) {
   lchecker_t checker{Spec::linear_spec_t::GetMethods(),
                      typename Spec::linear_spec_t{}};
 
-  auto scheduler = MakeScheduler<typename Spec::target_obj_t>(checker, opts, &l,
-                                                              std::move(args));
+  auto scheduler =
+      MakeScheduler<typename Spec::target_obj_t>(checker, opts, &l);
   log() << "\n\n";
 
   auto result = scheduler->Run();

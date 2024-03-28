@@ -75,24 +75,28 @@ def cmd():
 @cmd.command()
 @click.option("-t", "--threads", help="threads count", type=int)
 @click.option("--tasks", help="tasks per round", type=int)
+@click.option("--switches", help="max switches per round", type=int,
+              default=None)
 @click.option("-r", "--rounds", help="number of rounds", type=int)
 @click.option("-v", "--verbose", help="verbose output", type=bool,
               is_flag=True)
-@click.argument("strategy", type=str, nargs=-1)
-def run(threads, tasks, rounds, verbose, strategy):
+@click.option("-s", "--strategy", type=str)
+@click.option("-w", "--weights", help="weights for random strategy", type=str)
+def run(threads, tasks, switches, rounds, verbose, strategy, weights):
     if not os.path.exists(os.path.join(artifacts_dir, "run")):
         print("firstly, build run")
         return
-    strategy = list(strategy)
-    if len(strategy) == 0:
-        strategy.append("rr")
 
     threads = threads or 2
     tasks = tasks or 15
+    if switches != 0:
+        switches = switches or 100000000
     rounds = rounds or 5
+    strategy = strategy or "rr"
+    weights = weights or ""
     args = list(
-        map(str, [threads, tasks, rounds, 1 if verbose else 0]))
-    args.extend(strategy)
+        map(str, [threads, tasks, switches, rounds, 1 if verbose else 0,
+                  strategy, weights]))
     cmd = ["./run"]
     cmd.extend(args)
     run_command_and_get_output(cmd, cwd=artifacts_dir)
