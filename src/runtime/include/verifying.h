@@ -101,9 +101,14 @@ std::unique_ptr<Scheduler> MakeScheduler(ModelChecker &checker, Opts &opts,
       return scheduler;
     }
     case TLA: {
+      size_t max_swithces = std::numeric_limits<size_t>::max();
+      if (!args.empty()) {
+        max_swithces = std::stoull(args[0]);
+      }
       log() << "tla\n";
+      log() << "max_switches = " << max_swithces << "\n";
       auto scheduler = std::make_unique<TLAScheduler<TargetObj>>(
-          opts.tasks, opts.rounds, opts.threads, l, checker);
+          opts.tasks, opts.rounds, opts.threads, max_swithces, l, checker);
       return scheduler;
     }
   }
