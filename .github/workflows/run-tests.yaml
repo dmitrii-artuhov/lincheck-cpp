@@ -10,7 +10,7 @@ jobs:
       - name: Update
         run: sudo apt update
       - name: Setup clang
-        run: wget https://apt.llvm.org/llvm.sh && chmod u+x llvm.sh && ./llvm.sh 17 all
+        run: wget https://apt.llvm.org/llvm.sh && chmod u+x llvm.sh && sudo ./llvm.sh 17 all
       - name: Setup cmake
         run: sudo apt install cmake
       - name: Check out repository code
@@ -35,7 +35,11 @@ jobs:
       - name: Update
         run: sudo apt update
       - name: Setup clang
-        run: wget https://apt.llvm.org/llvm.sh && chmod u+x llvm.sh && ./llvm.sh 17 all
+        run: wget https://apt.llvm.org/llvm.sh && chmod u+x llvm.sh && sudo ./llvm.sh 17 all
+      - name: Delete old clang
+        run: rm -r /usr/lib/llvm-15 && rm /usr/bin/clang  && rm /usr/bin/clang++
+      - name: Rename clang-17 to clang
+        run: cp /usr/bin/clang-17 /usr/bin/clang && cp /usr/bin/clang++-17 /usr/bin/clang++ && cp /usr/bin/opt-17 /usr/bin/opt && cp /usr/bin/llvm-dis-17 /usr/bin/llvm-dis
       - name: Setup cmake
         run: sudo apt install cmake
       - name: Check out repository code
@@ -44,7 +48,7 @@ jobs:
         run: mkdir ${{ github.workspace }}/src/build
       - name: Index
         working-directory: ${{ github.workspace }}/src/build
-        run: CC=clang CXX=clang++ cmake -DCMAKE_BUILD_TYPE=Debug ..
+        run: CC=clang-17 CXX=clang++-17 cmake -DCMAKE_BUILD_TYPE=Debug ..
       - name: Build
         working-directory: ${{ github.workspace }}/src/build
         run: cmake --build codegen -j
