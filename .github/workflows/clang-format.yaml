@@ -10,7 +10,7 @@ jobs:
       - name: Update
         run: sudo apt update
       - name: Setup clang
-        run: wget https://apt.llvm.org/llvm.sh && chmod u+x llvm.sh && sudo ./llvm.sh 17
+        run: wget https://apt.llvm.org/llvm.sh && chmod u+x llvm.sh && ./llvm.sh 17
       - name: Check out repository code
         uses: actions/checkout@v4
       - name: Run clang-format

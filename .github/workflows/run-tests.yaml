@@ -10,9 +10,7 @@ jobs:
       - name: Update
         run: sudo apt update
       - name: Setup clang
-        run: wget https://apt.llvm.org/llvm.sh && chmod u+x llvm.sh && sudo ./llvm.sh 17 all
-      - name: Delete old llvm
-        run: sudo rm -r /usr/lib/llvm-15
+        run: wget https://apt.llvm.org/llvm.sh && chmod u+x llvm.sh && ./llvm.sh 17 all
       - name: Setup cmake
         run: sudo apt install cmake
       - name: Check out repository code
@@ -21,7 +19,7 @@ jobs:
         run: mkdir ${{ github.workspace }}/src/build
       - name: Index
         working-directory: ${{ github.workspace }}/src/build
-        run: CC=clang-17 CXX=clang++-17 cmake -D_CMAKE_TOOLCHAIN_PREFIX=llvm-17 -DCMAKE_BUILD_TYPE=Debug ..
+        run: CC=clang CXX=clang++ cmake -DCMAKE_BUILD_TYPE=Debug ..
       - name: Build
         working-directory: ${{ github.workspace }}/src/build
         run: cmake --build . --target lin_check_test -j
@@ -37,9 +35,7 @@ jobs:
       - name: Update
         run: sudo apt update
       - name: Setup clang
-        run: wget https://apt.llvm.org/llvm.sh && chmod u+x llvm.sh && sudo ./llvm.sh 17 all
-      - name: Delete old llvm
-        run: sudo rm -r /usr/lib/llvm-15
+        run: wget https://apt.llvm.org/llvm.sh && chmod u+x llvm.sh && ./llvm.sh 17 all
       - name: Setup cmake
         run: sudo apt install cmake
       - name: Check out repository code
@@ -48,13 +44,13 @@ jobs:
         run: mkdir ${{ github.workspace }}/src/build
       - name: Index
         working-directory: ${{ github.workspace }}/src/build
-        run: CC=clang-17 CXX=clang++-17 cmake -D_CMAKE_TOOLCHAIN_PREFIX=llvm-17 -DCMAKE_BUILD_TYPE=Debug ..
+        run: CC=clang CXX=clang++ cmake -DCMAKE_BUILD_TYPE=Debug ..
       - name: Build
         working-directory: ${{ github.workspace }}/src/build
         run: cmake --build codegen -j
       - name: Build nonlinear_queue
         working-directory: ${{ github.workspace }}/src/verifying
-        run: ./verify.py build --nondefault_opt=opt-17 -g --src ./targets/nonlinear_queue.cpp
+        run: ./verify.py build -g --src ./targets/nonlinear_queue.cpp
       - name: Check pct strategy
         working-directory: ${{ github.workspace }}/src/verifying
         run: if [[ "$(./verify.py run --strategy pct --tasks 10 --rounds 240)" =~ .*"success".* ]]; then exit 1; fi;
