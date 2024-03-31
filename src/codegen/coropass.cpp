@@ -21,6 +21,7 @@ using fun_index_t = std::set<std::pair<StringRef, StringRef>>;
 const StringRef nonatomic_attr = "ltest_nonatomic";
 const StringRef gen_attr = "ltest_gen";
 const StringRef target_attr_prefix = "ltesttarget_";
+const StringRef target_suspension_points = "ltest_suspension_points";
 
 const StringRef coro_suf = "_coro";
 const StringRef task_builder_suf = "_task_builder";
@@ -106,6 +107,8 @@ struct FillCtxGenerator final {
       Function *fun;
       // Real function name which will be saved in the promise.
       StringRef name;
+      // The number of suspend points inside the coroutine
+      uint64_t suspension_points;
     };
 
     // find args generators and target functions.
@@ -115,9 +118,20 @@ struct FillCtxGenerator final {
       if (attr.starts_with(target_attr_prefix)) {
         auto real_name = attr.slice(target_attr_prefix.size(), attr.size());
         auto coro = M.getFunction(ToCoro(symbol).str());
+
         Assert(coro != nullptr,
                "The coroutine was not generated for target: " + real_name);
-        coroutines.emplace_back(TargetCoro{.fun = coro, .name = real_name});
+
+        // Add suspend points count to the task builder
+        auto coro_attrs = coro->getAttributes().getFnAttrs();
+        Assert(coro_attrs.hasAttribute(target_suspension_points));
+        uint64_t suspend_points_attr =
+            coro_attrs.getAttribute(target_suspension_points).getValueAsInt();
+
+        coroutines.emplace_back(
+            TargetCoro{.fun = coro,
+                       .name = real_name,
+                       .suspension_points = suspend_points_attr});
         continue;
       }
 
@@ -149,7 +163,8 @@ struct FillCtxGenerator final {
     // Fill task builders.
     auto task_builder_list = fill_ctx_fun->getArg(0);
     for (const auto &coro : coroutines) {
-      auto builder_fun = GenTaskBuilder(coro.fun, coro.name, generators);
+      auto builder_fun = GenTaskBuilder(coro.fun, coro.name,
+                                        coro.suspension_points, generators);
       if (builder_fun != nullptr) {
         Builder.CreateCall(push_task_builder_list,
                            {task_builder_list, builder_fun});
@@ -162,7 +177,7 @@ struct FillCtxGenerator final {
 
  private:
   Function *GenTaskBuilder(
-      Function *F, const StringRef name,
+      Function *F, const StringRef name, const uint64_t suspension_points,
       const std::unordered_map<Type *, Function *> &generators) {
     assert(F != nullptr && "F is nullptr");
 
@@ -188,7 +203,8 @@ struct FillCtxGenerator final {
     auto task_builder_name = name + task_builder_suf;
 
     // Task TaskBuilder(this, arg_list, name_ptr, hndl_ptr)
-    auto ftype = FunctionType::get(void_t, {ptr_t, ptr_t, ptr_t, ptr_t}, false);
+    auto ftype =
+        FunctionType::get(void_t, {ptr_t, ptr_t, ptr_t, ptr_t, ptr_t}, false);
 
     Function *TaskBuilder = Function::Create(ftype, Function::ExternalLinkage,
                                              task_builder_name, M);
@@ -196,6 +212,7 @@ struct FillCtxGenerator final {
     auto arg_list = TaskBuilder->getArg(1);
     auto name_ptr = TaskBuilder->getArg(2);
     auto hndl_ptr = TaskBuilder->getArg(3);
+    auto suspension_points_ptr = TaskBuilder->getArg(4);
 
     auto block =
         BasicBlock::Create(ctx, "init", TaskBuilder, &TaskBuilder->front());
@@ -222,6 +239,10 @@ struct FillCtxGenerator final {
         {ConstantInt::get(i32_t, 0), ConstantInt::get(i32_t, 0)});
     // char **name; *name = generate_name_ptr
     Builder.CreateStore(generated_name_ptr, name_ptr);
+
+    // Declare constant that holds suspension_points
+    auto points_const = ConstantInt::get(i32_t, suspension_points);
+    Builder.CreateStore(points_const, suspension_points_ptr);
 
     // ret void
     Builder.CreateRet(nullptr);
@@ -355,6 +376,8 @@ struct CoroGenerator final {
 
     builder_t Builder(&*F->begin());
 
+    size_t suspension_points = 0;
+
     // * Add suspension points after suitable operations.
     for (auto b_it = (*F).begin(); b_it != (*F).end();) {
       auto cb = b_it;
@@ -397,7 +420,12 @@ struct CoroGenerator final {
         Builder.SetInsertPoint(new_block);
         Builder.CreateIntrinsic(i8_t, Intrinsic::coro_suspend,
                                 {token_none, i1_false});
+        suspension_points++;
       }
+      // Add attribute with the number of suspension_points
+      F->addFnAttr(target_suspension_points,
+                   StringRef(std::to_string(suspension_points)));
+
       b_it++;
       cb->setName("terminator." + std::to_string(int_gen.next()));
       if (new_entry_block.has_value()) {

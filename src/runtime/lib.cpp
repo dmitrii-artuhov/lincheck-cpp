@@ -76,15 +76,17 @@ void push_task_builder_list(TaskBuilderList l, TaskBuilder builder) {
 }
 
 void push_arg(ArgList list, int arg) { list->push_back(arg); }
-
 }
 
 Task::Task(handle hdl) : hdl(hdl) {}
 
 Task::Task(void *this_arg, TaskBuilder builder) {
   arg_list = std::make_shared<std::vector<int>>();
-  builder(this_arg, arg_list.get(), &name, &hdl);
+  int32_t suspension_points_int;
+  builder(this_arg, arg_list.get(), &name, &hdl, &suspension_points_int);
   assert(name != nullptr);
+  assert(suspension_points_int >= 0);
+  suspension_points = suspension_points_int;
 }
 
 void Task::Resume() {
@@ -115,6 +117,8 @@ std::vector<int> Task::GetArgs() const {
   assert(arg_list != nullptr);
   return *arg_list;
 }
+
+size_t Task::GetSuspensionPoints() const { return suspension_points; }
 
 StackfulTask::StackfulTask(Task task) : entrypoint(task) {
   stack = std::vector<Task>{task};
@@ -148,11 +152,15 @@ std::vector<int> StackfulTask::GetArgs() const { return entrypoint.GetArgs(); }
 bool StackfulTask::IsReturned() { return stack.empty(); }
 
 // TODO: implement this
-bool StackfulTask::IsBusy() { return false;}
+bool StackfulTask::IsBusy() { return false; }
 
 int StackfulTask::GetRetVal() const { return last_returned_value; }
 
 std::string StackfulTask::GetName() const { return entrypoint.GetName(); }
+
+size_t StackfulTask::GetSuspensionPoints() const {
+  return entrypoint.GetSuspensionPoints();
+}
 
 const StackfulTask &Invoke::GetTask() const { return this->task.get(); }
 

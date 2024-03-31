@@ -4,11 +4,11 @@
 #include "lib.h"
 #include "lincheck_recursive.h"
 #include "logger.h"
+#include "pct_strategy.h"
 #include "pretty_print.h"
 #include "round_robin_strategy.h"
 #include "scheduler.h"
 #include "uniform_strategy.h"
-#include "pct_strategy.h"
 
 // Public macros.
 #define non_atomic attr(ltest_nonatomic)
@@ -68,10 +68,8 @@ struct Entrypoint {
         break;
       case PCT:
         log() << "pct";
-        // TODO: k
-        strategy =
-            std::make_unique<PctStrategy<typename Spec::target_obj_t>>(
-                threads, &l, 100);
+        strategy = std::make_unique<PctStrategy<typename Spec::target_obj_t>>(
+            threads, &l, log());
         break;
     }
     log() << "\n\n";

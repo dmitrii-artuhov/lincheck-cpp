@@ -104,13 +104,14 @@ bool LinearizabilityChecker<LinearSpecificationObject, SpecificationObjectHash,
   std::vector<LinearSpecificationObject> states_stack;
   std::map<size_t, size_t> inv_res = get_inv_res_mapping(history);
   std::vector<bool> linearized(history.size(), false);
+  size_t linearized_entries_count = 0;
   std::unordered_set<
       std::pair<std::vector<bool>, LinearSpecificationObject>,
       PairHash<LinearSpecificationObject, SpecificationObjectHash>,
       PairEqual<LinearSpecificationObject, SpecificationObjectEqual>>
       states_cache;
 
-  while (open_sections_stack.size() != history.size() / 2) {
+  while (linearized_entries_count != history.size()) {
     // This event is already in the stack, don't need lift function with this
     // predicate
     if (linearized[current_section_start]) {
@@ -138,8 +139,10 @@ bool LinearizabilityChecker<LinearSpecificationObject, SpecificationObjectHash,
       if (doesnt_have_response || res == inv.GetTask().GetRetVal()) {
         // We can append this event to a linearization
         linearized[current_section_start] = true;
+        linearized_entries_count++;
         if (!doesnt_have_response) {
           linearized[inv_res[current_section_start]] = true;
+          linearized_entries_count++;
         }
 
         was_checked =
@@ -150,8 +153,10 @@ bool LinearizabilityChecker<LinearSpecificationObject, SpecificationObjectHash,
         } else {
           // already checked equal state, don't want to Check it again
           linearized[current_section_start] = false;
+          linearized_entries_count--;
           if (!doesnt_have_response) {
             linearized[inv_res[current_section_start]] = false;
+            linearized_entries_count--;
           }
         }
       }
@@ -188,8 +193,10 @@ bool LinearizabilityChecker<LinearSpecificationObject, SpecificationObjectHash,
       bool have_response = (inv_res.find(last_inv) != inv_res.end());
       current_section_start = last_inv;
       linearized[last_inv] = false;
+      linearized_entries_count--;
       if (have_response) {
         linearized[inv_res[last_inv]] = false;
+        linearized_entries_count--;
       }
 
       open_sections_stack.pop_back();

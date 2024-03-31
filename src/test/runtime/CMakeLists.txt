@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.6)
 
 enable_testing()
+#fuzztest_setup_fuzzing_flags()
 
 add_library(mocks stackfulltask_mock.h)
 target_link_libraries(
