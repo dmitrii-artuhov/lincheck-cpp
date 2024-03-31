@@ -99,7 +99,7 @@ def run(threads, tasks, strategy, rounds, verbose):
 @click.option("-s", "--src", required=True, help="source directory name",
               type=click.File("r"))
 @click.option("-g", "--debug", help="build with -g", type=bool, is_flag=True)
-@click.option("-o", "--opt", help="build with -g", type=str, is_flag=True)
+@click.option("-o", "--opt", help="build with -g", type=str)
 def build(src, debug, opt_u):
     # Create artifacts dir.
     if not os.path.exists(artifacts_dir):
