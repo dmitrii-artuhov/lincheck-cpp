@@ -1,0 +1,56 @@
+name: run-tests
+on: [push]
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    env:
+      CC: /usr/bin/clang
+      CXX: /usr/bin/clang++
+    steps:
+      - name: Update
+        run: sudo apt update
+      - name: Setup clang
+        run: sudo apt install clang
+      - name: Setup cmake
+        run: sudo apt install cmake
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - name: Prepare for build
+        run: mkdir ${{ github.workspace }}/src/build
+      - name: Index
+        working-directory: ${{ github.workspace }}/src/build
+        run: cmake -DCMAKE_BUILD_TYPE=Debug ..
+      - name: Build
+        working-directory: ${{ github.workspace }}/src/build
+        run: cmake --build . --target lin_check_test -j
+      - name: Run
+        working-directory: ${{ github.workspace }}/src/build
+        run: ./test/runtime/lin_check_test
+  verifying-test:
+    runs-on: ubuntu-latest
+    env:
+      CC: /usr/bin/clang
+      CXX: /usr/bin/clang++
+    steps:
+      - name: Update
+        run: sudo apt update
+      - name: Setup clang
+        run: sudo apt install clang
+      - name: Setup cmake
+        run: sudo apt install cmake
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - name: Prepare for build
+        run: mkdir ${{ github.workspace }}/src/build
+      - name: Index
+        working-directory: ${{ github.workspace }}/src/build
+        run: cmake -DCMAKE_BUILD_TYPE=Debug ..
+      - name: Build
+        working-directory: ${{ github.workspace }}/src/build
+        run: cmake --build . -j
+      - name: Build nonlinear_queue
+        working-directory: ${{ github.workspace }}/src/verifying
+        run: ./verify.py build -g --src ./targets/nonlinear_queue.cpp
+      - name: Check pct strategy
+        working-directory: ${{ github.workspace }}/src/verifying
+        run: [["$(./verify.py run --strategy pct --tasks 10 --rounds 240)" =~ "success"]] && exit 1

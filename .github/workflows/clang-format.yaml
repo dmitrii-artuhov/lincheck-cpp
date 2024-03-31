@@ -1,0 +1,21 @@
+name: clang-format
+on: [push]
+jobs:
+  clang-format:
+    runs-on: ubuntu-latest
+    env:
+      CC: /usr/bin/clang
+      CXX: /usr/bin/clang++
+    steps:
+      - name: Update
+        run: sudo apt update
+      - name: Setup clang
+        run: sudo apt install clang
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - name: Run clang-format
+        working-directory: ${{ github.workspace }}/src/
+        run: ./format_code.sh
+      - name: Check
+        working-directory: ${{ github.workspace }}/src/
+        run: if [[ `git status --porcelain` ]]; then exit 1 fi
