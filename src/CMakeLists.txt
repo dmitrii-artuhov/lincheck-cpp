@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 find_package(LLVM REQUIRED CONFIG)
 
 # need this crunch for github ci https://github.com/actions/runner-images/issues/8659
-set(CMAKE_CXX_FLAGS "-stdlib=libc++ ${CMAKE_CXX_FLAGS}")
+#set(CMAKE_CXX_FLAGS "-stdlib=libc++ ${CMAKE_CXX_FLAGS}")
 
 # Uncomment for debug.
 # message("llvm location: ${LLVM_DIR}")
