@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <functional>
 
 #define attr(attr) __attribute((__annotate__(#attr)))
 #define concat_attr(a, b) attr(a##b)

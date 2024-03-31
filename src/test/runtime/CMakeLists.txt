@@ -23,6 +23,7 @@ target_link_libraries(
         PRIVATE
         runtime
         mocks
+        GTest::gmock
 )
 
 link_fuzztest(lin_check_test)
