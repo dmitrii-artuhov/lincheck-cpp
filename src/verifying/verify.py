@@ -19,9 +19,9 @@ deps = list(map(lambda f: os.path.join(runtime_dir, f), [
     "verifying.cpp",
 ]))
 
-clang = "clang++"
+clang = "clang++-17"
 opt = "opt"
-llvm_dis = "llvm-dis"
+llvm_dis = "llvm-dis-17"
 build_flags = ["-O3", "-std=c++2a"]
 # build_flags = ["-O3", "-g", "-std=c++2a", "-fsanitize=address", "-DADDRESS_SANITIZER"]
 
