@@ -99,7 +99,8 @@ def run(threads, tasks, strategy, rounds, verbose):
 @click.option("-s", "--src", required=True, help="source directory name",
               type=click.File("r"))
 @click.option("-g", "--debug", help="build with -g", type=bool, is_flag=True)
-def build(src, debug):
+@click.option("-o", "--opt", help="build with -g", type=str, is_flag=True)
+def build(src, debug, opt_u):
     # Create artifacts dir.
     if not os.path.exists(artifacts_dir):
         os.mkdir(artifacts_dir)
@@ -114,8 +115,13 @@ def build(src, debug):
 
     # Run llvm pass.
     res_bytecode_path = os.path.join(artifacts_dir, "res.bc")
-    cmd = [opt, "--load-pass-plugin", llvm_plugin_path,
-           "-passes=coro_gen", "bytecode.bc", "-o", "res.bc"]
+    if opt_u != "":
+        cmd = [opt_u, "--load-pass-plugin", llvm_plugin_path,
+               "-passes=coro_gen", "bytecode.bc", "-o", "res.bc"]
+    else:
+        cmd = [opt, "--load-pass-plugin", llvm_plugin_path,
+              "-passes=coro_gen", "bytecode.bc", "-o", "res.bc"]
+
     rc, _ = run_command_and_get_output(cmd, cwd=artifacts_dir)
     assert rc == 0
 
