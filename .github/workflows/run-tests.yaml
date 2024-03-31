@@ -19,7 +19,7 @@ jobs:
         run: mkdir ${{ github.workspace }}/src/build
       - name: Index
         working-directory: ${{ github.workspace }}/src/build
-        run: cmake -DCMAKE_BUILD_TYPE=Debug ..
+        run: CC=clang-17 CXX=clang++-17 cmake -DCMAKE_BUILD_TYPE=Debug ..
       - name: Build
         working-directory: ${{ github.workspace }}/src/build
         run: cmake --build . --target lin_check_test -j
@@ -44,7 +44,7 @@ jobs:
         run: mkdir ${{ github.workspace }}/src/build
       - name: Index
         working-directory: ${{ github.workspace }}/src/build
-        run: cmake -DCMAKE_BUILD_TYPE=Debug ..
+        run: CC=clang-17 CXX=clang++-17 cmake -DCMAKE_BUILD_TYPE=Debug ..
       - name: Build
         working-directory: ${{ github.workspace }}/src/build
         run: cmake --build codegen -j
