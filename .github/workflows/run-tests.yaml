@@ -10,7 +10,7 @@ jobs:
       - name: Update
         run: sudo apt update
       - name: Setup clang
-        run: sudo apt install clang
+        run: wget https://apt.llvm.org/llvm.sh && chmod u+x llvm.sh && sudo ./llvm.sh 17
       - name: Setup cmake
         run: sudo apt install cmake
       - name: Check out repository code
@@ -35,7 +35,7 @@ jobs:
       - name: Update
         run: sudo apt update
       - name: Setup clang
-        run: sudo apt install clang
+        run: wget https://apt.llvm.org/llvm.sh && chmod u+x llvm.sh && sudo ./llvm.sh 17
       - name: Setup cmake
         run: sudo apt install cmake
       - name: Check out repository code
