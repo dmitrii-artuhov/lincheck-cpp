@@ -10,7 +10,7 @@ jobs:
       - name: Update
         run: sudo apt update
       - name: Setup clang
-        run: wget https://apt.llvm.org/llvm.sh && chmod u+x llvm.sh && sudo ./llvm.sh 17
+        run: wget https://apt.llvm.org/llvm.sh && chmod u+x llvm.sh && sudo ./llvm.sh 17 all
       - name: Setup cmake
         run: sudo apt install cmake
       - name: Check out repository code
@@ -19,7 +19,7 @@ jobs:
         run: mkdir ${{ github.workspace }}/src/build
       - name: Index
         working-directory: ${{ github.workspace }}/src/build
-        run: CC=clang-17 CXX=clang++-17 cmake -DCMAKE_BUILD_TYPE=Debug ..
+        run: CC=clang-17 CXX=clang++-17 cmake -D_CMAKE_TOOLCHAIN_PREFIX=llvm-17 -DCMAKE_BUILD_TYPE=Debug ..
       - name: Build
         working-directory: ${{ github.workspace }}/src/build
         run: cmake --build . --target lin_check_test -j
@@ -35,7 +35,7 @@ jobs:
       - name: Update
         run: sudo apt update
       - name: Setup clang
-        run: wget https://apt.llvm.org/llvm.sh && chmod u+x llvm.sh && sudo ./llvm.sh 17
+        run: wget https://apt.llvm.org/llvm.sh && chmod u+x llvm.sh && sudo ./llvm.sh 17 all
       - name: Setup cmake
         run: sudo apt install cmake
       - name: Check out repository code
@@ -44,7 +44,7 @@ jobs:
         run: mkdir ${{ github.workspace }}/src/build
       - name: Index
         working-directory: ${{ github.workspace }}/src/build
-        run: CC=clang-17 CXX=clang++-17 cmake -DCMAKE_BUILD_TYPE=Debug ..
+        run: CC=clang-17 CXX=clang++-17 cmake -D_CMAKE_TOOLCHAIN_PREFIX=llvm-17 -DCMAKE_BUILD_TYPE=Debug ..
       - name: Build
         working-directory: ${{ github.workspace }}/src/build
         run: cmake --build codegen -j
