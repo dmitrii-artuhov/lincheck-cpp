@@ -4,25 +4,19 @@ project(lintest)
 set(CMAKE_CXX_STANDARD 20)
 find_package(LLVM REQUIRED CONFIG)
 
+# need this crunch for github ci https://github.com/actions/runner-images/issues/8659
+set(CMAKE_CXX_FLAGS "-stdlib=libc++ ${CMAKE_CXX_FLAGS}")
+
 # Uncomment for debug.
 # message("llvm location: ${LLVM_DIR}")
-
-include(FetchContent)
-
-FetchContent_Declare(
-        fuzztest
-        GIT_REPOSITORY https://github.com/google/fuzztest.git
-        GIT_TAG "main"
-        SYSTEM
-)
-
-FetchContent_MakeAvailable(fuzztest)
 
 #set(CMAKE_CXX_FLAGS "-DCMAKE_BUILD_TYPE=RelWithDebug -DFUZZTEST_FUZZING_MODE=on ${CMAKE_CXX_FLAGS}")
 #add_compile_options(-fsanitize=address -DADDRESS_SANITIZER)
 add_compile_options(-g)
 #add_link_options(-fsanitize=address -DADDRESS_SANITIZER)
 add_link_options(-g)
+
+add_subdirectory(third_party)
 
 include(GoogleTest)
 
