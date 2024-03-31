@@ -54,7 +54,7 @@ jobs:
         run: cmake --build codegen -j
       - name: Build nonlinear_queue
         working-directory: ${{ github.workspace }}/src/verifying
-        run: ./verify.py build --opt=opt-17 -g --src ./targets/nonlinear_queue.cpp
+        run: ./verify.py build --nondefault_opt=opt-17 -g --src ./targets/nonlinear_queue.cpp
       - name: Check pct strategy
         working-directory: ${{ github.workspace }}/src/verifying
         run: if [[ "$(./verify.py run --strategy pct --tasks 10 --rounds 240)" =~ .*"success".* ]]; then exit 1; fi;
