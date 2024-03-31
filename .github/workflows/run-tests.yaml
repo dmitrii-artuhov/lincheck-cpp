@@ -39,7 +39,7 @@ jobs:
       - name: Delete old clang
         run: sudo rm -r /usr/lib/llvm-15 && sudo rm /usr/bin/clang  && sudo rm /usr/bin/clang++
       - name: Rename clang-17 to clang
-        run: sudo cp /usr/bin/clang-17 /usr/bin/clang && sudo cp /usr/bin/clang++-17 /usr/bin/clang++ && sudo cp /usr/bin/opt-17 /usr/bin/opt && sudo cp /usr/bin/llvm-dis-17 /usr/bin/llvm-dis && sudo cp /usr/bin/llvm-symbolizer-17 /urs/bin/llvm-symbolizer
+        run: sudo cp /usr/bin/clang-17 /usr/bin/clang && sudo cp /usr/bin/clang++-17 /usr/bin/clang++ && sudo cp /usr/bin/opt-17 /usr/bin/opt && sudo cp /usr/bin/llvm-dis-17 /usr/bin/llvm-dis && sudo mv /usr/bin/llvm-symbolizer-17 /urs/bin/llvm-symbolizer
       - name: Setup cmake
         run: sudo apt install cmake
       - name: Check out repository code
