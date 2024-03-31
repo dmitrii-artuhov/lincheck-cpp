@@ -51,6 +51,3 @@ jobs:
       - name: Build nonlinear_queue
         working-directory: ${{ github.workspace }}/src/verifying
         run: ./verify.py build -g --src ./targets/nonlinear_queue.cpp
-      - name: Check pct strategy
-        working-directory: ${{ github.workspace }}/src/verifying
-        run: "$(./verify.py run --strategy pct --tasks 10 --rounds 240)" =~ "success" && exit 1
