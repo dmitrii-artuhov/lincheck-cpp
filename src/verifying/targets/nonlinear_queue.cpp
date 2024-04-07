@@ -21,20 +21,31 @@ struct Queue {
   }
 
   void Push(int v);
-  int Pop();
+  int Pop(void);
 
   std::atomic<int> a[N];
   std::atomic<int> head{};
 };
 
-generator int gen_int() { return rand() % 10 + 1; }
+namespace ltest {
 
-TARGET_METHOD(void, Queue, Push, (int v)) {
+template <>
+std::string to_string<int>(const int &a) {
+  return std::to_string(a);
+}
+
+}  // namespace ltest
+
+auto generate_int() {
+  return ltest::generators::make_single_arg(rand() % 10 + 1);
+}
+
+target_method(generate_int, void, Queue, Push, int v) {
   int pos = head.fetch_add(1);
   a[pos] = v;
 }
 
-TARGET_METHOD(int, Queue, Pop, ()) {
+target_method(ltest::generators::empty_gen, int, Queue, Pop) {
   int last = head.load();
   for (int i = 0; i < last; ++i) {
     int e = a[i].load();

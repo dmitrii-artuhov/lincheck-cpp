@@ -9,11 +9,12 @@ namespace spec {
 
 struct Queue;
 
-using method_t = std::function<int(Queue *l, const std::vector<int> &args)>;
+using method_t = std::function<int(Queue *l, void *args)>;
 
 struct Queue {
   std::deque<int> deq{};
   int Push(int v) {
+    // std::cout << "Spec: push " << v << std::endl;
     deq.push_back(v);
     return 0;
   }
@@ -23,14 +24,15 @@ struct Queue {
     deq.pop_front();
     return res;
   }
+
   static auto GetMethods() {
-    method_t push_func = [](Queue *l, const std::vector<int> &args) -> int {
-      assert(args.size() == 1);
-      return l->Push(args[0]);
+    method_t push_func = [](Queue *l, void *args) -> int {
+      auto real_args = reinterpret_cast<std::tuple<int> *>(args);
+      return l->Push(std::get<0>(*real_args));
     };
 
-    method_t pop_func = [](Queue *l, const std::vector<int> &args) -> int {
-      assert(args.empty());
+    method_t pop_func = [](Queue *l, void *args) -> int {
+      auto real_args = reinterpret_cast<std::tuple<> *>(args);
       return l->Pop();
     };
 
@@ -48,7 +50,7 @@ struct QueueHash {
       res += elem;
     }
     return res;
-  }
+  }  // namespace spec
 };
 
 struct QueueEquals {

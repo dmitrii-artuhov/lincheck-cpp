@@ -7,7 +7,7 @@ import click
 file_dir = os.path.join(
     os.path.dirname(__file__))
 
-artifacts_dir = os.path.join(file_dir, "artifacts")
+artifacts_dir_default = os.path.join(file_dir, "artifacts")
 runtime_dir = os.path.join(file_dir, "..", "runtime")
 
 # Don't forget rebuild llvm pass after changes.
@@ -16,7 +16,7 @@ llvm_plugin_path = os.path.join(
 
 deps = list(map(lambda f: os.path.join(runtime_dir, f), [
     "lib.cpp", "scheduler.cpp", "lin_check.cpp", "logger.cpp",
-    "verifying.cpp",
+    "verifying.cpp", "generators.cpp", "builders.cpp",
 ]))
 
 clang = "clang++"
@@ -83,7 +83,7 @@ def cmd():
 @click.option("-s", "--strategy", type=str)
 @click.option("-w", "--weights", help="weights for random strategy", type=str)
 def run(threads, tasks, switches, rounds, verbose, strategy, weights):
-    if not os.path.exists(os.path.join(artifacts_dir, "run")):
+    if not os.path.exists(os.path.join(artifacts_dir_default, "run")):
         print("firstly, build run")
         return
 
@@ -99,48 +99,39 @@ def run(threads, tasks, switches, rounds, verbose, strategy, weights):
                   strategy, weights]))
     cmd = ["./run"]
     cmd.extend(args)
-    run_command_and_get_output(cmd, cwd=artifacts_dir)
+    run_command_and_get_output(cmd, cwd=artifacts_dir_default)
 
 
 @cmd.command()
-@click.option("-s", "--src", required=True, help="source directory name",
+@click.option("-s", "--src", required=True, help="source path",
               type=click.File("r"))
 @click.option("-g", "--debug", help="build with -g", type=bool, is_flag=True)
-def build(src, debug):
+@click.option("-a", "--artifacts_dir", help="dir for artifacts", type=str,
+              default=None)
+def build(src, debug, artifacts_dir):
+    artifacts_dir = artifacts_dir or artifacts_dir_default
+
     # Create artifacts dir.
     if not os.path.exists(artifacts_dir):
         os.mkdir(artifacts_dir)
 
-    # Build target.
+    # Compile target to bytecode.
     cmd = [clang]
     cmd.extend(build_flags)
-    cmd.extend(["-c", "-emit-llvm", src.name,
-                "-o", os.path.join(artifacts_dir, "bytecode.bc")])
+    cmd.extend(["-emit-llvm", "-S", "-fno-discard-value-names"])
+    cmd.append(src.name)
+    cmd.extend(["-o", os.path.join(artifacts_dir, "bytecode.bc")])
     rc, _ = run_command_and_get_output(cmd, cwd=file_dir)
     assert rc == 0
 
-    # Run llvm pass.
-    res_bytecode_path = os.path.join(artifacts_dir, "res.bc")
-    cmd = [opt, "--load-pass-plugin", llvm_plugin_path,
-           "-passes=coro_gen", "bytecode.bc", "-o", "res.bc"]
-    rc, _ = run_command_and_get_output(cmd, cwd=artifacts_dir)
-    assert rc == 0
-
-    # Run llvm-dis (debug purposes).
-    if debug:
-        cmd = [llvm_dis, "res.bc", "-o", "res.ll"]
-        rc, _ = run_command_and_get_output(cmd, cwd=artifacts_dir)
-        assert rc == 0
-
-    # Build run binary.
+    # Run llvm pass on optimized code.
     cmd = [clang]
     cmd.extend(build_flags)
-    if debug:
-        cmd.extend(["-g"])
-    cmd.extend([res_bytecode_path])
+    cmd.append(f"-fpass-plugin={llvm_plugin_path}")
     cmd.extend(deps)
+    cmd.append(os.path.join(artifacts_dir, "bytecode.bc"))
     cmd.extend(["-o", os.path.join(artifacts_dir, "run")])
-    rc, _ = run_command_and_get_output(cmd, cwd=artifacts_dir)
+    rc, _ = run_command_and_get_output(cmd, cwd=file_dir)
     assert rc == 0
 
 

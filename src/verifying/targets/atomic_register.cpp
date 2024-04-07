@@ -17,9 +17,13 @@ struct Register {
   std::atomic<int> x{};
 };
 
-TARGET_METHOD(void, Register, add, ()) { x.fetch_add(1); }
+target_method(ltest::generators::empty_gen, void, Register, add) {
+  x.fetch_add(1);
+}
 
-TARGET_METHOD(int, Register, get, ()) { return x.load(); }
+target_method(ltest::generators::empty_gen, int, Register, get) {
+  return x.load();
+}
 
 using spec_t =
     ltest::Spec<Register, spec::LinearRegister, spec::LinearRegisterHash,

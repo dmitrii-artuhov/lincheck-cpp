@@ -10,6 +10,10 @@
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/PassPlugin.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Transforms/Coroutines/CoroCleanup.h"
+#include "llvm/Transforms/Coroutines/CoroEarly.h"
+#include "llvm/Transforms/Coroutines/CoroElide.h"
+#include "llvm/Transforms/Coroutines/CoroSplit.h"
 #include "utils.h"
 
 using namespace llvm;
@@ -19,6 +23,7 @@ using fun_index_t = std::set<std::pair<StringRef, StringRef>>;
 
 // Attributes.
 const StringRef nonatomic_attr = "ltest_nonatomic";
+const StringRef nonatomic_manual_attr = "ltest_nonatomic_manual";
 const StringRef gen_attr = "ltest_gen";
 const StringRef target_attr_prefix = "ltesttarget_";
 
@@ -47,7 +52,16 @@ Value *GenerateCall(builder_t *builder, Function *fun) {
   return builder->CreateCall(fun, {alloca});
 }
 
-Twine ToCoro(const StringRef name) { return name + coro_suf; }
+Twine ToCoro(const StringRef name,
+             const std::map<StringRef, StringRef> &unmangled_name) {
+  if (auto it = unmangled_name.find(name); it != unmangled_name.end()) {
+    // For root tasks (with ltesttarget attr) we generate coroutines with
+    // unmangled names, because we need to call this tasks from cpp code. See
+    // runtime/verifying.h for the details.
+    return it->second + coro_suf;
+  }
+  return name + coro_suf;
+}
 
 fun_index_t CreateFunIndex(const Module &M) {
   fun_index_t index{};
@@ -74,176 +88,6 @@ bool HasAttribute(const fun_index_t &index, const StringRef name,
   return index.find({attr, name}) != index.end();
 }
 
-// Generates
-// * task_builders for target root tasks.
-// * fill_ctx() where fill task builders and init funcs lists.
-struct FillCtxGenerator final {
-  const std::string fill_ctx_name = "fill_ctx";
-
-  FillCtxGenerator(Module &M) : M(M) {
-    auto &ctx = M.getContext();
-    void_t = Type::getVoidTy(ctx);
-    ptr_t = PointerType::get(ctx, 0);
-    i32_t = Type::getInt32Ty(ctx);
-    i8_t = Type::getInt8Ty(ctx);
-
-    task_builder_list_t = ptr_t;
-    task_builder_t = ptr_t;
-    arg_list_t = ptr_t;
-
-    push_task_builder_list = Function::Create(
-        FunctionType::get(void_t, {task_builder_list_t, task_builder_t}, false),
-        Function::ExternalLinkage, "push_task_builder_list", M);
-
-    push_arg =
-        Function::Create(FunctionType::get(void_t, {arg_list_t, i32_t}, false),
-                         Function::ExternalLinkage, "push_arg", M);
-  }
-
-  void run(const fun_index_t &index) {
-    struct TargetCoro {
-      // A pointer to the generated coroutine.
-      Function *fun;
-      // Real function name which will be saved in the promise.
-      StringRef name;
-    };
-
-    // find args generators and target functions.
-    std::unordered_map<Type *, Function *> generators;
-    std::vector<TargetCoro> coroutines;
-    for (const auto &[attr, symbol] : index) {
-      if (attr.starts_with(target_attr_prefix)) {
-        auto real_name = attr.slice(target_attr_prefix.size(), attr.size());
-        auto coro = M.getFunction(ToCoro(symbol).str());
-        Assert(coro != nullptr,
-               "The coroutine was not generated for target: " + real_name);
-        coroutines.emplace_back(TargetCoro{.fun = coro, .name = real_name});
-        continue;
-      }
-
-      if (attr != gen_attr) {
-        continue;
-      }
-      auto fun = M.getFunction(symbol);
-      Assert(fun);
-      if (fun->arg_size() == 0) {
-        generators[fun->getReturnType()] = fun;
-        continue;
-      }
-      errs() << fun->getName()
-             << " is not valid generator: it must have 0 arguments\n";
-    }
-
-    auto &ctx = M.getContext();
-
-    auto fill_ctx_fun = M.getFunction(fill_ctx_name);
-    if (fill_ctx_fun == nullptr) {
-      // void fill_ctx(TaskBuilderList);
-      fill_ctx_fun = Function::Create(
-          FunctionType::get(void_t, {task_builder_list_t}, false),
-          Function::ExternalLinkage, fill_ctx_name, M);
-    }
-    Assert(fill_ctx_fun, "fill_ctx declaration not found");
-
-    auto block = BasicBlock::Create(ctx, "entry", fill_ctx_fun);
-    builder_t Builder(block);
-
-    // Fill task builders.
-    auto task_builder_list = fill_ctx_fun->getArg(0);
-    for (const auto &coro : coroutines) {
-      auto builder_fun = GenTaskBuilder(coro.fun, coro.name, generators);
-      if (builder_fun != nullptr) {
-        Builder.CreateCall(push_task_builder_list,
-                           {task_builder_list, builder_fun});
-      }
-    }
-
-    // ret void
-    Builder.CreateRet(nullptr);
-  }
-
- private:
-  Function *GenTaskBuilder(
-      Function *F, const StringRef name,
-      const std::unordered_map<Type *, Function *> &generators) {
-    assert(F != nullptr && "F is nullptr");
-
-    auto arg_size = F->arg_size();
-    if (arg_size < 1 || !F->getArg(0)->getType()->isPointerTy()) {
-      errs() << "Generator must have `this` as first argument\n";
-      return nullptr;
-    }
-
-    // Try to find generator for each argument except `this`.
-    for (size_t i = 1; i < F->arg_size(); ++i) {
-      auto arg_typ = F->getArg(i)->getType();
-      if (generators.find(arg_typ) == generators.end()) {
-        errs() << "Skip TaskBuilder generation for " << name
-               << ": there is no generator for argument with type " << *arg_typ
-               << "\n";
-        return nullptr;
-      }
-    }
-
-    errs() << "Generate TaskBuilder for " << F->getName() << "\n";
-    auto &ctx = M.getContext();
-    auto task_builder_name = name + task_builder_suf;
-
-    // Task TaskBuilder(this, arg_list, name_ptr, hndl_ptr)
-    auto ftype = FunctionType::get(void_t, {ptr_t, ptr_t, ptr_t, ptr_t}, false);
-
-    Function *TaskBuilder = Function::Create(ftype, Function::ExternalLinkage,
-                                             task_builder_name, M);
-    auto this_arg = TaskBuilder->getArg(0);
-    auto arg_list = TaskBuilder->getArg(1);
-    auto name_ptr = TaskBuilder->getArg(2);
-    auto hndl_ptr = TaskBuilder->getArg(3);
-
-    auto block =
-        BasicBlock::Create(ctx, "init", TaskBuilder, &TaskBuilder->front());
-    builder_t Builder{block};
-
-    // Generate arguments.
-    std::vector<Value *> args;
-    args.push_back(this_arg);
-    for (size_t i = 1; i < F->arg_size(); ++i) {
-      auto generator = generators.find(F->getArg(i)->getType())->second;
-      auto arg = GenerateCall(&Builder,
-                              generator);  // Builder.CreateCall(generator, {});
-      args.push_back(arg);
-      Builder.CreateCall(push_arg, {arg_list, arg});
-    }
-
-    auto hdl = Builder.CreateCall(F, args);
-    Builder.CreateStore(hdl, hndl_ptr);
-
-    // Declare global variable that holds the function name.
-    auto name_const = createPrivateGlobalForString(M, name, false, "");
-    auto generated_name_ptr = Builder.CreateGEP(
-        ArrayType::get(i8_t, name.size() + 1), name_const,
-        {ConstantInt::get(i32_t, 0), ConstantInt::get(i32_t, 0)});
-    // char **name; *name = generate_name_ptr
-    Builder.CreateStore(generated_name_ptr, name_ptr);
-
-    // ret void
-    Builder.CreateRet(nullptr);
-    return TaskBuilder;
-  }
-
-  Module &M;
-  PointerType *ptr_t;
-  Type *void_t;
-  Type *i32_t;
-  Type *i8_t;
-
-  PointerType *task_builder_t;
-  PointerType *task_builder_list_t;
-  Function *push_task_builder_list;
-
-  PointerType *arg_list_t;
-  Function *push_arg;
-};
-
 // Generates coro clones for functions in the module.
 struct CoroGenerator final {
   CoroGenerator(Module &M) : M(M) {
@@ -257,9 +101,7 @@ struct CoroGenerator final {
     // This signature must be as in runtime declaration.
     // TODO: validate this by some way.
     promise_t = StructType::create("CoroPromise", i32_t, i32_t, ptr_t);
-
     promise_ptr_t = PointerType::get(promise_t, 0);
-    task_builder_t = ptr_t;
 
     // Names clashes?
     set_child_hdl = Function::Create(
@@ -282,10 +124,18 @@ struct CoroGenerator final {
   }
 
   void Run(const fun_index_t &index) {
+    std::map<StringRef, StringRef> unmangled_name;
+    for (const auto &[attr, symbol] : index) {
+      if (attr.starts_with(target_attr_prefix)) {
+        auto real_name = attr.slice(target_attr_prefix.size(), attr.size());
+        unmangled_name[symbol] = real_name;
+      }
+    }
+
     for (auto &F : M) {
       if (IsCoroTarget(F.getName(), index)) {
         // Generate coroutine.
-        GenCoroFunc(&F, index);
+        GenCoroFunc(&F, index, unmangled_name);
       }
     }
   }
@@ -303,7 +153,6 @@ struct CoroGenerator final {
 
   PointerType *ptr_t;
   PointerType *promise_ptr_t;
-  PointerType *task_builder_t;
 
   Function *set_child_hdl;
   Function *set_ret_val;
@@ -312,38 +161,92 @@ struct CoroGenerator final {
   Function *init_promise;
 
   bool IsCoroTarget(const StringRef fun_name, const fun_index_t &index) {
-    return HasAttribute(index, fun_name, nonatomic_attr);
+    return HasAttribute(index, fun_name, nonatomic_attr) ||
+           HasAttribute(index, fun_name, nonatomic_manual_attr);
   }
 
-  bool NeedInterrupt(Instruction *insn) {
-    if (isa<LoadInst>(insn) || isa<StoreInst>(insn) || isa<CallInst>(insn) ||
-        isa<AtomicRMWInst>(insn)) {
+  bool NeedInterrupt(Instruction *insn, bool only_manual_suspends,
+                     const fun_index_t &index) {
+    bool is_manual_suspend = false;
+    bool is_required_suspend_call = false;
+
+    if (auto call = dyn_cast<CallInst>(insn)) {
+      auto called = call->getCalledFunction();
+      if (called && called->hasName()) {
+        auto called_name = called->getName();
+        is_manual_suspend |= called_name == "coro_yield";
+        is_manual_suspend |=
+            HasAttribute(index, called_name, nonatomic_manual_attr);
+
+        is_required_suspend_call = IsCoroTarget(called_name, index);
+      }
+    }
+    if (only_manual_suspends) {
+      return is_manual_suspend;
+    }
+
+    if (is_manual_suspend || isa<LoadInst>(insn) || isa<StoreInst>(insn) ||
+        is_required_suspend_call || isa<AtomicRMWInst>(insn) /*||
+        isa<InvokeInst>(insn)*/) {
       return true;
     }
     return false;
   }
 
-  Function *GenCoroFunc(Function *F, const fun_index_t &index) {
+  Function *GenCoroFunc(Function *F, const fun_index_t &index,
+                        const std::map<StringRef, StringRef> &unmangled_name) {
+    auto name = F->getName();
     if (F->empty()) {
-      errs() << "Skip generation for " << F->getName() << ": it's empty\n";
+      errs() << "Skip generation for " << name << ": it's empty\n";
       return nullptr;
     }
-    auto coro_name = ToCoro(F->getName());
-    if (auto func = M.getFunction(coro_name.str())) {
-      // Was generated later.
-      // TODO: what if this symbol is defined in user code?
+
+    auto coro_name = ToCoro(name, unmangled_name);
+    auto func = M.getFunction(coro_name.str());
+    if (func != nullptr && !func->empty()) {
+      // Was generated later or defined in user code.
+      errs() << coro_name << " is generated already" << "\n";
       return func;
     }
-    errs() << "Gen " << coro_name << "\n";
+    if (func == nullptr) {
+      // Not target method. Just a regular method that could be non atomic too.
+      func = utils::CloneFuncChangeRetType(F, ptr_t, coro_name);
+    } else {
+      errs() << "See target method: " << func->getName() << "\n";
+      // It's target method as it's coro signature is declared in module
+      // already. So clone the body from non coroutine.
+      Function::arg_iterator DestI = func->arg_begin();
+      ValueToValueMapTy vmap{};
+      for (const auto &I : F->args()) {
+        DestI->setName(I.getName());
+        vmap[&I] = &*DestI++;
+      }
+      SmallVector<ReturnInst *, 8> Returns;
+      CloneFunctionInto(func, F, vmap,
+                        CloneFunctionChangeType::LocalChangesOnly, Returns, "",
+                        nullptr);
+    }
+    errs() << "Gen " << coro_name << " for " << name << "\n";
+    bool only_manual_suspends =
+        HasAttribute(index, name, nonatomic_manual_attr);
+    errs() << "Only manual suspends = " << only_manual_suspends << "\n";
     auto old_ret_t = F->getReturnType();
-    auto newF = utils::CloneFuncChangeRetType(F, ptr_t, coro_name);
-    assert(newF != nullptr && "Generated function is nullptr");
-    return RawGenCoroFunc(newF, old_ret_t, index);
+    assert(func != nullptr);
+    auto generated = RawGenCoroFunc(func, old_ret_t, index, unmangled_name,
+                                    only_manual_suspends);
+
+    // errs() << "GENERATED:\n";
+    // errs() << *generated << "\n";
+    // errs() << "==========================================\n\n";
+
+    return generated;
   }
 
   // TODO: rewrite it using one pass.
   Function *RawGenCoroFunc(Function *F, Type *old_ret_t,
-                           const fun_index_t &index) {
+                           const fun_index_t &index,
+                           const std::map<StringRef, StringRef> &umangled_name,
+                           bool only_manual_suspends) {
     auto int_gen = utils::SeqGenerator{};
     auto &ctx = M.getContext();
 
@@ -357,9 +260,29 @@ struct CoroGenerator final {
 
     builder_t Builder(&*F->begin());
 
+#ifdef REPLACE_CORO_INVOKES
+    // Generate fictive normal_dest blocks for invoke instructions.
+    // Because, we must suspend function after invoke.
+    for (auto b_it = (*F).begin(); b_it != (*F).end(); ++b_it) {
+      auto terminator = b_it->getTerminator();
+      if (auto invoke = dyn_cast<InvokeInst>(terminator)) {
+        auto normal_dest_new =
+            BasicBlock::Create(ctx, "coro_normal_dest", F, &*std::next(b_it));
+        Builder.SetInsertPoint(normal_dest_new);
+        Builder.CreateBr(invoke->getNormalDest());
+        invoke->setNormalDest(normal_dest_new);
+      }
+    }
+#endif
+
     // * Add suspension points after suitable operations.
     for (auto b_it = (*F).begin(); b_it != (*F).end();) {
       auto cb = b_it;
+      if (cb->getName().starts_with("coro_normal_dest")) {
+        ++b_it;
+        continue;
+      }
+
       std::optional<BasicBlock *> new_entry_block;
 
       auto current_block = BasicBlock::Create(
@@ -370,10 +293,11 @@ struct CoroGenerator final {
           break;
         }
         auto start = insn_it;
-        while (insn_it != cb->end() && !NeedInterrupt(&*insn_it)) {
+        while (std::next(insn_it) != cb->end() &&
+               !NeedInterrupt(&*insn_it, only_manual_suspends, index)) {
           ++insn_it;
         }
-        if (insn_it == cb->end()) {
+        if (std::next(insn_it) == cb->end()) {
           // This is the last segment, leave them in this block.
           break;
         }
@@ -458,7 +382,8 @@ struct CoroGenerator final {
       auto b_name = b.getName();
 
       if (!b_name.starts_with("execution") && !b_name.starts_with("init") &&
-          !b_name.starts_with("cleanup") && !b_name.starts_with("suspend")) {
+          !b_name.starts_with("cleanup") && !b_name.starts_with("suspend") &&
+          !b_name.starts_with("coro_normal_dest")) {
         auto instr = &*b.rbegin();
         // Check if terminate instruction is `ret`.
         if (auto ret = dyn_cast<ReturnInst>(instr)) {
@@ -479,7 +404,77 @@ struct CoroGenerator final {
           _switch->addCase(ConstantInt::get(i8_t, 1), cleanup);
           instr->eraseFromParent();
         }
+
+#ifdef REPLACE_CORO_INVOKES
+        // Check if terminate instruction is `invoke`.
+        // We must replace raw invokes with coroutine invokes.
+        if (auto invoke = dyn_cast<InvokeInst>(instr)) {
+          auto f = invoke->getCalledFunction();
+          if (!f || !f->hasName()) {
+            continue;
+          }
+          auto f_name = f->getName();
+          if (IsCoroTarget(f_name, index)) {
+            auto coro_f = GenCoroFunc(f, index, umangled_name);
+            if (coro_f != nullptr) {
+              errs() << "Replace " << f_name << " invoke\n";
+
+              //   ...
+              //    %hdl = invoke ptr call_coro() to normal_dest unwind ...
+              Builder.SetInsertPoint(invoke);
+              std::vector<Value *> args(invoke->arg_size());
+              for (int i = 0; i < invoke->arg_size(); ++i) {
+                args[i] = invoke->getArgOperand(i);
+              }
+
+              // Generated by the our pass normal dest.
+              auto generated_normal_dest = invoke->getNormalDest();
+              auto hdl = Builder.CreateInvoke(coro_f, generated_normal_dest,
+                                              invoke->getUnwindDest(), args);
+              // generated_normal_dest:
+              //   call void set_child_hdl(...)
+              //   %suspend = @llvm.coro.suspend()
+              //   switch
+              //
+              auto br =
+                  dyn_cast<BranchInst>(generated_normal_dest->getTerminator());
+              auto normal_dest = br->getSuccessor(0);
+              Builder.SetInsertPoint(&*generated_normal_dest->begin());
+              Builder.CreateCall(set_child_hdl, {promise, hdl});
+
+              // normal_dest:
+              //   %as_promise = call Promise* @get_promise(hdl)
+              //   %ret_val    = call i32 @get_ret(as_promise)
+              //   operate with %ret_val
+              //   ...
+              Builder.SetInsertPoint(&*normal_dest->begin());
+              auto as_promise = Builder.CreateCall(get_promise, {hdl});
+              auto ret_val = Builder.CreateCall(get_ret_val, {as_promise});
+              for (auto &use : invoke->uses()) {
+                User *user = use.getUser();
+                user->setOperand(use.getOperandNo(), ret_val);
+              }
+              invoke->eraseFromParent();
+            }
+          }
+        }
+#endif
       }
+
+#ifdef REPLACE_CORO_INVOKES
+      if (b_name.starts_with("coro_normal_dest")) {
+        // Replace br with suspension.
+        auto term = b.getTerminator();
+        auto br = dyn_cast<BranchInst>(term);
+        Builder.SetInsertPoint(&b);
+        auto suspend_res = Builder.CreateIntrinsic(
+            i8_t, Intrinsic::coro_suspend, {token_none, i1_false});
+        auto _switch = Builder.CreateSwitch(suspend_res, suspend, 2);
+        _switch->addCase(ConstantInt::get(i8_t, 0), br->getSuccessor(0));
+        _switch->addCase(ConstantInt::get(i8_t, 1), cleanup);
+        br->eraseFromParent();
+      }
+#endif
 
       if (!b_name.starts_with("execution")) {
         continue;
@@ -506,14 +501,15 @@ struct CoroGenerator final {
         }
         auto f_name = f->getName();
         if (IsCoroTarget(f_name, index)) {
-          // TODO: remove after debug.
-          errs() << "Replace " << f_name << " call\n";
-          auto coro_f = GenCoroFunc(f, index);
+          auto coro_f = GenCoroFunc(f, index, umangled_name);
           if (coro_f == nullptr) {
             // We can't generate this call because
             // can't generate coro clone for callee.
             continue;
           }
+          // TODO: remove after debug.
+          errs() << "Replace " << f_name << " call\n";
+          Assert(NeedInterrupt(insn, only_manual_suspends, index));
 
           Builder.SetInsertPoint(call);
           std::vector<Value *> args(call->arg_size());
@@ -525,6 +521,7 @@ struct CoroGenerator final {
           Builder.SetInsertPoint(call);
           Builder.CreateCall(set_child_hdl, {promise, hdl});
           // %hdl = ptr call @call_coro()
+          // call void set_child_hdl(...)
           // %suspend = @llvm.coro.suspend()
           // switch
           //
@@ -558,9 +555,6 @@ struct CoroGenPass : public PassInfoMixin<CoroGenPass> {
     CoroGenerator gen{M};
     gen.Run(fun_index);
 
-    FillCtxGenerator main_gen{M};
-    main_gen.run(fun_index);
-
     return PreservedAnalyses::none();
   };
 };
@@ -573,14 +567,9 @@ llvmGetPassPluginInfo() {
           .PluginName = "coro_gen",
           .PluginVersion = "v0.1",
           .RegisterPassBuilderCallbacks = [](PassBuilder &PB) {
-            PB.registerPipelineParsingCallback(
-                [](StringRef Name, ModulePassManager &MPM,
-                   ArrayRef<PassBuilder::PipelineElement>) {
-                  if (Name == "coro_gen") {
-                    MPM.addPass(CoroGenPass{});
-                    return true;
-                  }
-                  return false;
+            PB.registerPipelineStartEPCallback(
+                [](ModulePassManager &MPM, OptimizationLevel Level) {
+                  MPM.addPass(CoroGenPass());
                 });
           }};
 }
