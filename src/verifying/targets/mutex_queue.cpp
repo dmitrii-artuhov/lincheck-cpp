@@ -53,15 +53,26 @@ struct Queue {
   int a[N]{};
 };
 
-generator int next_int() { return rand() % 5 + 1; }
+namespace ltest {
 
-TARGET_METHOD(void, Queue, Push, (int v)) {
+template <>
+std::string to_string<int>(const int &a) {
+  return std::to_string(a);
+}
+
+}  // namespace ltest
+
+auto generate_int() {
+  return ltest::generators::make_single_arg(rand() % 10 + 1);
+}
+
+target_method(generate_int, void, Queue, Push, int v) {
   mutex.lock();
   a[head++] = v;
   mutex.unlock();
 }
 
-TARGET_METHOD(int, Queue, Pop, ()) {
+target_method(ltest::generators::empty_gen, int, Queue, Pop) {
   mutex.lock();
   int e = 0;
   if (head - tail > 0) {

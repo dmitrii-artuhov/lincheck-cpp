@@ -8,15 +8,16 @@ template <typename TargetObj>
 struct PickStrategy : Strategy {
   virtual size_t Pick() = 0;
 
-  explicit PickStrategy(size_t threads_count, TaskBuilderList constructors)
+  explicit PickStrategy(size_t threads_count,
+                        std::vector<task_builder_t> constructors)
       : next_task(0),
         threads_count(threads_count),
-        constructors(constructors),
+        constructors(std::move(constructors)),
         threads() {
     std::random_device dev;
     rng = std::mt19937(dev());
     distribution = std::uniform_int_distribution<std::mt19937::result_type>(
-        0, constructors->size() - 1);
+        0, this->constructors.size() - 1);
 
     // Create queues.
     for (size_t i = 0; i < threads_count; ++i) {
@@ -33,8 +34,8 @@ struct PickStrategy : Strategy {
     if (threads[current_task].empty() ||
         threads[current_task].back().IsReturned()) {
       // a task has finished or the queue is empty, so we add a new task
-      auto constructor = constructors->at(distribution(rng));
-      threads[current_task].emplace(Task{&state, constructor});
+      auto constructor = constructors.at(distribution(rng));
+      threads[current_task].emplace(constructor(&state));
       return {threads[current_task].back(), true, current_task};
     }
 
@@ -43,7 +44,7 @@ struct PickStrategy : Strategy {
 
   void StartNextRound() override {
     for (auto& thread : threads) {
-      auto constructor = constructors->at(distribution(rng));
+      auto constructor = constructors.at(distribution(rng));
       // We don't have to keep references alive
       thread = std::queue<StackfulTask>();
     }
@@ -57,7 +58,7 @@ struct PickStrategy : Strategy {
   TargetObj state{};
   size_t next_task = 0;
   size_t threads_count;
-  TaskBuilderList constructors;
+  std::vector<task_builder_t> constructors;
   // RoundRobinStrategy struct is the owner of all tasks, and all
   // references can't be invalidated before the end of the round,
   // so we have to contains all tasks in queues(queue doesn't invalidate the

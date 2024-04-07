@@ -3,12 +3,16 @@
 
 @llvm.global.annotations = appending global [2 x { ptr, ptr, ptr, i32, ptr }] [{ ptr, ptr, ptr, i32, ptr } { ptr @test, ptr @.str.1, ptr null, i32 12, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @test, ptr @.str.2, ptr null, i32 12, ptr null }], section "llvm.metadata"
 
+declare void @coro_yield();
+
 declare void @tick();
 
-define i32 @test(ptr %this) {
+define i32 @test() {
     call void @tick();
+    call void @coro_yield();
     %x = add i32 0, 0
     call void @tick();
+    call void @coro_yield();
     %y = add i32 %x, 42
     ret i32 %y
 }

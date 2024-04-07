@@ -6,15 +6,6 @@
 
 extern "C" {
 
-// This structure must be equal to the clone in LLVM pass.
-struct CoroPromise {
-  using handle = std::coroutine_handle<CoroPromise>;
-
-  int has_ret_val{};
-  int ret_val{};
-  handle child_hdl{};
-};
-
 CoroPromise *get_promise(std::coroutine_handle<CoroPromise> hdl) {
   return &hdl.promise();
 }
@@ -69,23 +60,16 @@ int get_ret_val(CoroPromise *p) {
   return p->ret_val;
 }
 
-void destroy_task_builder_list(TaskBuilderList l) { delete l; }
-
-void push_task_builder_list(TaskBuilderList l, TaskBuilder builder) {
-  l->push_back(builder);
+void coro_yield() noexcept {}
 }
 
-void push_arg(ArgList list, int arg) { list->push_back(arg); }
-
-}
+// ------------------------------ TASK ----------------------------------------
 
 Task::Task(handle hdl) : hdl(hdl) {}
 
-Task::Task(void *this_arg, TaskBuilder builder) {
-  arg_list = std::make_shared<std::vector<int>>();
-  builder(this_arg, arg_list.get(), &name, &hdl);
-  assert(name != nullptr);
-}
+Task::Task(handle hdl, task_cloner_t cloner) : hdl{hdl}, cloner{cloner} {}
+
+void Task::SetMeta(std::shared_ptr<Meta> meta) { this->meta = meta; }
 
 void Task::Resume() {
   assert(!IsReturned() && "returned task can not be resumed");
@@ -105,15 +89,27 @@ bool Task::IsReturned() { return has_ret_val(&hdl.promise()); }
 
 int Task::GetRetVal() { return get_ret_val(&hdl.promise()); }
 
-std::string Task::GetName() const {
-  assert(name != nullptr);
-  return std::string{name};
+void Task::StartFromTheBeginning(void *state) {
+  assert(meta);
+  hdl = cloner(state, meta->args.get());
 }
 
-std::vector<int> Task::GetArgs() const {
-  assert(arg_list != nullptr);
-  return *arg_list;
+const std::string &Task::GetName() const {
+  assert(meta);
+  return meta->name;
 }
+
+void *Task::GetArgs() const {
+  assert(meta);
+  return meta->args.get();
+}
+
+const std::vector<std::string> &Task::GetStrArgs() const {
+  assert(meta);
+  return meta->str_args;
+}
+
+// ------------------------ STACKFUL TASK ------------------------
 
 StackfulTask::StackfulTask(Task task) : entrypoint(task) {
   stack = std::vector<Task>{task};
@@ -136,19 +132,26 @@ void StackfulTask::Resume() {
 
     // if it wasn't the first task clean up children
     if (!stack.empty()) {
-      auto previous = stack.back();
-      previous.ClearChild();
+      stack.back().ClearChild();
     }
   }
 }
 
-std::vector<int> StackfulTask::GetArgs() const { return entrypoint.GetArgs(); }
+const std::string &StackfulTask::GetName() const {
+  return entrypoint.GetName();
+}
+
+void *StackfulTask::GetArgs() const { return entrypoint.GetArgs(); }
+
+const std::vector<std::string> &StackfulTask::GetStrArgs() const {
+  return entrypoint.GetStrArgs();
+}
+
+Task StackfulTask::GetEntrypoint() const { return entrypoint; }
 
 bool StackfulTask::IsReturned() { return stack.empty(); }
 
 int StackfulTask::GetRetVal() const { return last_returned_value; }
-
-std::string StackfulTask::GetName() const { return entrypoint.GetName(); }
 
 const StackfulTask &Invoke::GetTask() const { return this->task.get(); }
 
@@ -158,6 +161,14 @@ StackfulTask::~StackfulTask() {
   for (int i = static_cast<int>(stack.size()) - 1; i > -1; i--) {
     stack[i].ClearChild();
   }
+}
+
+void StackfulTask::StartFromTheBeginning(void *state) {
+  entrypoint.StartFromTheBeginning(state);
+  for (int i = static_cast<int>(stack.size()) - 1; i > -1; i--) {
+    stack[i].ClearChild();
+  }
+  stack = {entrypoint};
 }
 
 Invoke::Invoke(const StackfulTask &task, int thread_id)

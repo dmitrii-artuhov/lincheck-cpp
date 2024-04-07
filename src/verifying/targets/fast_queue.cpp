@@ -23,7 +23,18 @@ struct alignas(512) Node {
 
 const int size = 2;
 
-generator int next_int() { return rand() % 5 + 1; }
+namespace ltest {
+
+template <>
+std::string to_string<int>(const int &a) {
+  return std::to_string(a);
+}
+
+}  // namespace ltest
+
+auto generate_int() {
+  return ltest::generators::make_single_arg(rand() % 10 + 1);
+}
 
 class MPMCBoundedQueue {
  public:
@@ -60,7 +71,15 @@ class MPMCBoundedQueue {
   std::atomic<size_t> tail_{};
 };
 
-TARGET_METHOD(int, MPMCBoundedQueue, Push, (int value)) {
+// 0 1 2 3 4 5 6 7
+// h = 0
+// PUSH 5
+// 5
+// 7 1 2 3 4 5 6 7
+// POP
+// 1 == tail + 1? 1 == 1
+
+target_method(generate_int, int, MPMCBoundedQueue, Push, int value) {
   while (true) {
     auto h = head_.load(/*std::memory_order_relaxed*/);
     auto hid = h & max_size_;
@@ -79,7 +98,7 @@ TARGET_METHOD(int, MPMCBoundedQueue, Push, (int value)) {
   }
 }
 
-TARGET_METHOD(int, MPMCBoundedQueue, Pop, ()) {
+target_method(ltest::generators::empty_gen, int, MPMCBoundedQueue, Pop) {
   while (true) {
     auto t = tail_.load(/*std::memory_order_relaxed*/);
     auto tid = t & max_size_;

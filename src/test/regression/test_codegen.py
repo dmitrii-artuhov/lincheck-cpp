@@ -1,8 +1,9 @@
+
 import os
-import subprocess
 
 import pytest
 import yaml
+from utils import run_command_and_get_output
 
 CLANG = "clang++"
 OPT = "opt"
@@ -17,98 +18,34 @@ COROGEN_PATH = os.path.join(SRC_DIR, "build", "codegen", "CoroGenPass.so")
 assert COROGEN_PATH, "To tun tests build coro gen pass firstly"
 
 
-def get_test_names():
+def build(path, tmpdir, flag=None):
+    cmd = [CLANG, "-O3", "-std=c++2a",
+           "-fno-discard-value-names",
+           f"-fpass-plugin={COROGEN_PATH}", path, LIB,
+           os.path.join(DIR, "codegen_runner.cpp"), "-o", "run"]
+    if flag:
+        cmd.append(f"-D{flag}")
+    rc, _ = run_command_and_get_output(cmd, cwd=tmpdir)
+    assert rc == 0
+
+
+def get_suspends_test_filenames():
     return [f.replace(".ll", "") for f in os.listdir(TESTDATA_DIR)
             if f.endswith(".ll")]
 
 
-def run_command_and_get_output(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        cwd=None,
-        env=None,
-        input=None,
-):
-    if env is None:
-        env = os.environ
-    if cwd is not None:
-        env["PWD"] = str(cwd)
-    process = subprocess.Popen(
-        cmd,
-        env=env,
-        cwd=cwd,
-        stderr=stderr,
-        stdout=stdout,
-        stdin=subprocess.PIPE,
-    )
-
-    if input is not None:
-        input = bytes(input, 'utf-8')
-    out, _ = process.communicate(input)
-    out = out.decode('utf-8')
-
-    # This print is here to make running tests with -s flag more verbose
-    print(out)
-
-    return process.returncode, out
-
-
-def build(path, tmpdir, flags="", find_task_cpp="find_task.cpp"):
-    # Compile sample to llvm bytecode.
-    cmd = [CLANG, "-o3", "-std=c++2a", "-emit-llvm", "-S", "-o",
-           "bytecode.bc", path]
-    rc, _ = run_command_and_get_output(cmd, cwd=tmpdir)
-    assert rc == 0
-
-    # Run coro-gen pass.
-    cmd = [OPT, "--load-pass-plugin", COROGEN_PATH,
-           "-passes", "coro_gen",
-           "bytecode.bc",
-           "-o", "res.bc"]
-    rc, _ = run_command_and_get_output(cmd, cwd=tmpdir)
-    assert rc == 0
-
-    cmd = [LLVM_DIS, "res.bc", "-o", "res.ll"]
-    rc, _ = run_command_and_get_output(cmd, cwd=tmpdir)
-    assert rc == 0
-    with open(os.path.join(tmpdir, "res.ll")) as f:
-        print(f.read())
-
-    # Compile test_func.
-    cmd = [CLANG]
-    if flags:
-        cmd.append(f"-D{flags}")
-    cmd.extend(["res.bc", "-std=c++2a",
-                LIB,
-                os.path.join(DIR, "test_func.cpp"),
-                os.path.join(DIR, find_task_cpp),
-                "-o", "run"])
-    rc, _ = run_command_and_get_output(cmd, cwd=tmpdir)
-    assert rc == 0
-
-
-@pytest.mark.parametrize('name', get_test_names())
+@pytest.mark.parametrize('name', get_suspends_test_filenames())
 def test_codegen_suspends(name, tmpdir):
     path = os.path.join(TESTDATA_DIR, name)
     path_ll = f"{path}.ll"
     build(path_ll, tmpdir)
 
-    # Run test_func and compare result with expected.
+    # Execute runner and compare result with expected.
     with open(os.path.join(TESTDATA_DIR, f"{name}.yml")) as f:
         expected = yaml.safe_load(f.read())
     rc, output = run_command_and_get_output(["./run"], cwd=tmpdir)
     assert rc == 0
     assert output.rstrip("\n") == "\n".join([str(i) for i in expected])
-
-
-def test_codegen_generators(tmpdir):
-    path = os.path.join(TESTDATA_DIR, "generator.cpp")
-    build(path, tmpdir, "no_trace", find_task_cpp="find_task_args.cpp")
-
-    rc, output = run_command_and_get_output(["./run"], cwd=tmpdir)
-    assert rc == 0
-    assert output == "42\n43\n44\n"
 
 
 def test_codegen_queue(tmpdir):

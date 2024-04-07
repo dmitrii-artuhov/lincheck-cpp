@@ -13,3 +13,9 @@ run_codegen: basic.bc
 regression:
 	make -Cbuild
 	pytest -v ./test/regression
+
+DEPS=./runtime/verifying.cpp ./runtime/lib.cpp ./runtime/generators.cpp ./runtime/builders.cpp ./runtime/logger.cpp ./runtime/lin_check.cpp
+
+build_basic: basic.bc
+	clang++ -emit-llvm -S -O3 -std=c++2a -fno-discard-value-names basic.cpp -o res.ll
+	clang++ -O3 -std=c++2a  -fpass-plugin=./build/codegen/CoroGenPass.so  -fno-discard-value-names res.ll $(DEPS)

@@ -5,16 +5,14 @@
 
 #include "../../runtime/include/lib.h"
 
-Task find_task(TaskBuilderList);
-
 int var{};
 
 extern "C" void tick() { ++var; }
 
+extern "C" handle test_coro();
+
 int main() {
-  std::vector<TaskBuilder> task_builders;
-  fill_ctx(&task_builders);
-  auto task = find_task(&task_builders);
+  auto task = Task{test_coro()};
   // Keep stack that contains launched tasks.
   std::vector<Task> stack = {task};
   while (stack.size()) {

@@ -72,13 +72,13 @@ struct StrategyScheduler : Scheduler {
 template <typename TargetObj>
 struct TLAScheduler : Scheduler {
   TLAScheduler(size_t max_tasks, size_t max_rounds, size_t threads_count,
-               size_t max_switches, TaskBuilderList constructors,
+               size_t max_switches, std::vector<task_builder_t> constructors,
                ModelChecker& checker)
       : max_tasks{max_tasks},
         max_rounds{max_rounds},
         threads_count{threads_count},
         max_switches{max_switches},
-        constructors{constructors},
+        constructors{std::move(constructors)},
         checker{checker} {
     for (int i = 0; i < threads_count; ++i) {
       threads.emplace_back();
@@ -112,11 +112,12 @@ struct TLAScheduler : Scheduler {
     // Pointer to the position in task thread.
     StackfulTask* position{};
     // Builder is non nullptr if the task was created at this step.
-    TaskBuilder builder{};
+    task_builder_t builder{};
   };
 
   // Replays all actions from step_begin to the step_end.
   void replay(size_t step_begin, size_t step_end) {
+    // std::cout << "replay" << std::endl;
     // In histories we store references, so there's no need to update it.
     state = frames[step_begin].state;
     for (size_t step = step_begin; step < step_end; ++step) {
@@ -125,8 +126,10 @@ struct TLAScheduler : Scheduler {
       assert(position);
       if (frame.builder != nullptr) {
         // It was a new task.
-        // So recreate it and replace.
-        *position = StackfulTask{Task{&state, frame.builder}};
+        // So restart it from the beginning with the same args.
+        auto entrypoint = position->GetEntrypoint();
+        entrypoint.StartFromTheBeginning(&state);
+        *position = StackfulTask{entrypoint};
       } else {
         // It was a not new task, hence, we recreated in early.
       }
@@ -160,7 +163,7 @@ struct TLAScheduler : Scheduler {
     auto& task = thread.back();
     frame.position = &task;
 
-    full_history.push_back({task});
+    full_history.push_back({thread_id, task});
     thread_id_history.push_back(thread_id);
     if (is_new) {
       sequential_history.emplace_back(Invoke(task, thread_id));
@@ -188,7 +191,7 @@ struct TLAScheduler : Scheduler {
       // Stop, check if the the generated history is linearizable.
       ++finished_rounds;
       if (!checker.Check(sequential_history)) {
-        return {false, std::make_pair(full_history, sequential_history)};
+        return {false, std::make_pair(full_history_t{}, sequential_history)};
       }
       if (finished_rounds == max_rounds) {
         // It was the last round.
@@ -235,9 +238,9 @@ struct TLAScheduler : Scheduler {
       }
 
       // Choose constructor to create task.
-      for (auto cons : *constructors) {
+      for (auto cons : constructors) {
         frame.builder = cons;
-        auto task = Task{&state, cons};
+        auto task = cons(&state);
         auto [is_over, res] =
             resume_task(frame, step, thread_id, switches, thread, task);
         if (is_over || res.has_value()) {
@@ -254,7 +257,7 @@ struct TLAScheduler : Scheduler {
   size_t max_tasks;
   size_t max_rounds;
   size_t max_switches;
-  TaskBuilderList constructors;
+  std::vector<task_builder_t> constructors;
   ModelChecker& checker;
 
   // Running state.
@@ -262,7 +265,7 @@ struct TLAScheduler : Scheduler {
   size_t finished_rounds{};
   TargetObj state{};
   std::vector<std::variant<Invoke, Response>> sequential_history;
-  std::vector<std::reference_wrapper<StackfulTask>> full_history;
+  std::vector<std::pair<int, std::reference_wrapper<StackfulTask>>> full_history;
   std::vector<size_t> thread_id_history;
   StableVector<thread_t> threads;
   StableVector<frame_t> frames;

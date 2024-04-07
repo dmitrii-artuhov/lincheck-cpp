@@ -2,6 +2,7 @@
 #include <deque>
 #include <functional>
 #include <map>
+#include <tuple>
 
 #include "../../runtime/include/verifying.h"
 
@@ -9,12 +10,13 @@ namespace spec {
 
 struct Queue;
 
-using method_t = std::function<int(Queue *l, const std::vector<int> &args)>;
+using method_t = std::function<int(Queue *l, void *)>;
 
 const int size = 2;
 
 struct Queue {
   std::deque<int> deq{};
+
   int Push(int v) {
     if (deq.size() >= size) {
       return 0;
@@ -29,15 +31,12 @@ struct Queue {
     return res;
   }
   static auto GetMethods() {
-    method_t push_func = [](Queue *l, const std::vector<int> &args) -> int {
-      assert(args.size() == 1);
-      return l->Push(args[0]);
+    method_t push_func = [](Queue *l, void *args) -> int {
+      auto real_args = reinterpret_cast<std::tuple<int> *>(args);
+      return l->Push(std::get<0>(*real_args));
     };
 
-    method_t pop_func = [](Queue *l, const std::vector<int> &args) -> int {
-      assert(args.empty());
-      return l->Pop();
-    };
+    method_t pop_func = [](Queue *l, void *args) -> int { return l->Pop(); };
 
     return std::map<std::string, method_t>{
         {"Push", push_func},
