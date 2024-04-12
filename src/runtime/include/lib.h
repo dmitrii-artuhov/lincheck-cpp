@@ -5,6 +5,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 
 #define attr(attr) __attribute((__annotate__(#attr)))
@@ -106,7 +107,12 @@ struct StackfulTask {
   virtual bool IsReturned();
 
   // Returns whether this thread is waiting
-  virtual bool IsBusy();
+  virtual bool IsSuspended() const;
+
+  // Returns whether synchronous task
+  // if so, then this task should be presented as inv_req, inv_follow_up and res_req, res_follow_up
+  // in a history
+  virtual bool IsBlocking() const;
 
   // Returns the value that was returned from the first task, have to be called
   // only when IsReturned is true
@@ -138,6 +144,17 @@ struct StackfulTask {
 void fill_ctx(TaskBuilderList);
 }
 
+struct Invoke {
+  explicit Invoke(const StackfulTask& task, int thread_id);
+
+  [[nodiscard]] const StackfulTask& GetTask() const;
+
+  int thread_id;
+
+private:
+  std::reference_wrapper<const StackfulTask> task;
+};
+
 struct Response {
   Response(const StackfulTask& task, int result, int thread_id);
 
@@ -150,13 +167,24 @@ struct Response {
   std::reference_wrapper<const StackfulTask> task;
 };
 
-struct Invoke {
-  explicit Invoke(const StackfulTask& task, int thread_id);
-
-  [[nodiscard]] const StackfulTask& GetTask() const;
-
-  int thread_id;
-
- private:
-  std::reference_wrapper<const StackfulTask> task;
+// Types for dual data structures
+// Use them in the pattern matching
+struct RequestInvoke : Invoke {
+  RequestInvoke(const StackfulTask &task, int thread_id)
+      : Invoke(task, thread_id) {
+  }
 };
+struct RequestResponse : Response {
+  RequestResponse(const StackfulTask& task, int result, int thread_id) : Response(task, result, thread_id) {}
+};
+
+struct FollowUpInvoke : Invoke {
+  FollowUpInvoke(const StackfulTask &task, int thread_id)
+      : Invoke(task, thread_id) {
+  }
+};
+struct FollowUpResponse : Response {
+  FollowUpResponse(const StackfulTask& task, int result, int thread_id) : Response(task, result, thread_id) {}
+};
+
+using HistoryEvent = std::variant<Invoke, Response, RequestInvoke, RequestResponse, FollowUpInvoke, FollowUpResponse>;

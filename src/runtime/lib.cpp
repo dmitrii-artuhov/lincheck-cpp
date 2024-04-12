@@ -152,7 +152,9 @@ std::vector<int> StackfulTask::GetArgs() const { return entrypoint.GetArgs(); }
 bool StackfulTask::IsReturned() { return stack.empty(); }
 
 // TODO: implement this
-bool StackfulTask::IsBusy() { return false; }
+bool StackfulTask::IsSuspended() const { return false; }
+// TODO: implement this
+bool StackfulTask::IsBlocking() const { return false; }
 
 int StackfulTask::GetRetVal() const { return last_returned_value; }
 

@@ -17,6 +17,11 @@ using MethodName = std::string;
 std::map<size_t, size_t> get_inv_res_mapping(
     const std::vector<std::variant<Invoke, Response>>& history);
 
+std::map<size_t, size_t> get_inv_res_mapping_full(
+    const std::vector<HistoryEvent>& history);
+
+std::map<size_t, size_t> get_followup_request_mapping(const std::vector<HistoryEvent>& history);
+
 // fix_history deletes invokes that don't have corresponding responses,
 // this is allowed by the definition of the linearizability
 std::vector<std::variant<Invoke, Response>> fix_history(
@@ -27,20 +32,20 @@ template <class LinearSpecificationObject,
           class SpecificationObjectEqual =
               std::equal_to<LinearSpecificationObject>>
 struct LinearizabilityChecker : ModelChecker {
-  using method_t = std::function<int(LinearSpecificationObject*,
+  using Method = std::function<int(LinearSpecificationObject*,
                                      const std::vector<int>& args)>;
-  using method_map_t = std::map<MethodName, method_t>;
+  using MethodMap = std::map<MethodName, Method>;
 
   LinearizabilityChecker() = delete;
 
-  LinearizabilityChecker(method_map_t specification_methods,
+  LinearizabilityChecker(MethodMap specification_methods,
                          LinearSpecificationObject first_state);
 
   bool Check(const std::vector<std::variant<Invoke, Response>>& fixed_history)
       override;
 
  private:
-  method_map_t specification_methods;
+  MethodMap specification_methods;
   LinearSpecificationObject first_state;
 };
 
@@ -75,7 +80,7 @@ template <class LinearSpecificationObject, class SpecificationObjectHash,
 LinearizabilityChecker<LinearSpecificationObject, SpecificationObjectHash,
                        SpecificationObjectEqual>::
     LinearizabilityChecker(
-        LinearizabilityChecker::method_map_t specification_methods,
+        LinearizabilityChecker::MethodMap specification_methods,
         LinearSpecificationObject first_state)
     : specification_methods(specification_methods), first_state(first_state) {
   if (!std::is_copy_assignable_v<LinearSpecificationObject>) {

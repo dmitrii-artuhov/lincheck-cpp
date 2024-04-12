@@ -55,7 +55,8 @@ struct PctStrategy : Strategy {
     // Have to ignore waiting threads, so can't do it faster than O(n)
     for (size_t i = 0; i < threads.size(); ++i) {
       // Ignore waiting threads
-      if (!threads[i].empty() && threads[i].back().IsBusy()) {
+      // TODO: IsSuspended???
+      if (!threads[i].empty() && threads[i].back().IsSuspended()) {
         continue;
       }
 

@@ -2,6 +2,7 @@
 #include <gtest/gtest.h>
 
 #include "include/lincheck.h"
+#include "include/lincheck_dual.h"
 #include "include/lincheck_recursive.h"
 #include "include/scheduler.h"
 #include "stackfulltask_mock.h"
@@ -313,6 +314,28 @@ TEST(LinearizabilityCheckerCounterTest, ExtendedLinearizableHistory) {
   history.emplace_back(Invoke(fifth_task, 4));
 
   EXPECT_EQ(checker.Check(history), true);
+}
+
+TEST(LinearizabilityDualCheckerCounterTest, TODO) {
+  std::function<int(Counter*, const std::vector<int>&)> fetch_and_add =
+      [](Counter* c, [[maybe_unused]] const std::vector<int>& args) {
+        assert(args.empty());
+        c->count += 1;
+        return c->count - 1;
+      };
+  std::function<int(Counter*, const std::vector<int>&)> get =
+      [](Counter* c, [[maybe_unused]] const std::vector<int>& args) {
+        assert(args.empty());
+        return c->count;
+      };
+  Counter c{};
+
+  LinearizabilityDualChecker<Counter> checker(
+      LinearizabilityDualChecker<Counter>::MethodMap{
+          {"faa", fetch_and_add},
+          {"get", get},
+      },
+      c);
 }
 
 std::vector<std::unique_ptr<MockStackfulTask>> create_mocks(

@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.6)
 set(HEADER_FILES
         include/lib.h
         include/lincheck.h
+        include/lincheck_dual.h
         include/lincheck_recursive.h
         include/logger.h
         include/pct_strategy.h

@@ -16,10 +16,25 @@ add_executable(
         lin_check_test.cpp
 )
 
+add_executable(
+        lin_check_dual_test
+        lin_check_dual_test.cpp
+)
+
 target_compile_options(lin_check_test PRIVATE -Wall -Wextra -Werror -pedantic-errors)
 
 target_link_libraries(
         lin_check_test
+        PRIVATE
+        runtime
+        mocks
+        GTest::gmock
+)
+
+target_compile_options(lin_check_dual_test PRIVATE -Wall -Wextra -Werror -pedantic-errors)
+
+target_link_libraries(
+        lin_check_dual_test
         PRIVATE
         runtime
         mocks
