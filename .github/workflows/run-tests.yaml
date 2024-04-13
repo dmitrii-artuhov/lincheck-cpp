@@ -30,9 +30,7 @@ jobs:
       - name: Check out repository code
         uses: actions/checkout@v3
       - name: test
-        run: ls -a /github/
-      - name: test1
-        run: ls -a /home/
+        run: apt install tree && tree /github/
       - name: Prepare for build
         run: mkdir ${{ github.workspace }}/src/build
       - name: Index
