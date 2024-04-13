@@ -28,9 +28,9 @@ jobs:
       - name: Install git
         run: apt update && apt install -y git
       - name: Check out repository code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: test
-        run: apt install tree && tree /github/
+        run: ls -a ${{ github.workspace }}
       - name: Prepare for build
         run: mkdir ${{ github.workspace }}/src/build
       - name: Index
