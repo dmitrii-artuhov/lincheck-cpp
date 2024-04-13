@@ -30,7 +30,7 @@ jobs:
       - name: Check out repository code
         uses: actions/checkout@v4
       - name: test
-        run: ls -a /__w
+        run: ls -a /__w/LTest
       - name: Prepare for build
         run: mkdir ${{ github.workspace }}/src/build
       - name: Index
