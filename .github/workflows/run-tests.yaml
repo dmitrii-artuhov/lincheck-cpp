@@ -3,7 +3,7 @@ on: [push]
 jobs:
   unit-tests:
     runs-on: ubuntu-latest
-    container: silkeh/clang:18
+    container: silkeh/clang:16
     steps:
       - name: Install git
         run: apt update && apt install -y git
@@ -24,7 +24,7 @@ jobs:
   verifying-test:
     runs-on: ubuntu-latest
     container: 
-      image: silkeh/clang:18
+      image: silkeh/clang:16
     steps:
       - name: Install git
         run: apt update && apt install -y git
@@ -39,6 +39,8 @@ jobs:
       - name: Build
         working-directory: /__w/LTest/LTest/src/build
         run: cmake --build codegen -j
+      - name: Install python packages
+        run: apt install -y pip && pip3 install click && pip install click
       - name: Build nonlinear_queue
         working-directory: /__w/LTest/LTest/src/verifying
         run: ./verify.py build -g --src ./targets/nonlinear_queue.cpp
