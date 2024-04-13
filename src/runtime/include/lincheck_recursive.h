@@ -5,7 +5,7 @@
 
 #include "lincheck.h"
 
-// This is the simplest wgl version, it doesn't contain any optimizations, it's
+// This is the simplest wg version, it doesn't contain any optimizations, it's
 // slow but useful for stress tests of other implementations
 template <class LinearSpecificationObject,
           class SpecificationObjectHash = std::hash<LinearSpecificationObject>,

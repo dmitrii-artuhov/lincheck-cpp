@@ -15,7 +15,8 @@ class MockStackfulTask : public StackfulTask {
   MOCK_METHOD(std::vector<int>, GetArgs, (), (const, override));
 };
 
-std::unique_ptr<MockStackfulTask> CreateMockStackfulTask(std::string name, int ret_val, std::vector<int> args) {
+std::unique_ptr<MockStackfulTask> CreateMockStackfulTask(
+    std::string name, int ret_val, std::vector<int> args) {
   std::unique_ptr<MockStackfulTask> mock = std::make_unique<MockStackfulTask>();
   EXPECT_CALL(*mock, GetRetVal())
       .Times(testing::AnyNumber())

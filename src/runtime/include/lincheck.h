@@ -17,10 +17,11 @@ using MethodName = std::string;
 std::map<size_t, size_t> get_inv_res_mapping(
     const std::vector<std::variant<Invoke, Response>>& history);
 
-std::map<size_t, size_t> get_inv_res_mapping_full(
+std::map<size_t, size_t> get_inv_res_full_mapping(
     const std::vector<HistoryEvent>& history);
 
-std::map<size_t, size_t> get_followup_request_mapping(const std::vector<HistoryEvent>& history);
+std::map<size_t, size_t> get_followup_res_request_inv_mapping(
+    const std::vector<HistoryEvent>& history);
 
 // fix_history deletes invokes that don't have corresponding responses,
 // this is allowed by the definition of the linearizability
@@ -33,7 +34,7 @@ template <class LinearSpecificationObject,
               std::equal_to<LinearSpecificationObject>>
 struct LinearizabilityChecker : ModelChecker {
   using Method = std::function<int(LinearSpecificationObject*,
-                                     const std::vector<int>& args)>;
+                                   const std::vector<int>& args)>;
   using MethodMap = std::map<MethodName, Method>;
 
   LinearizabilityChecker() = delete;
