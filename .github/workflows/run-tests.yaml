@@ -13,7 +13,7 @@ jobs:
         run: mkdir $GITHUB_WORKSPACE/src/build
       - name: Index
         working-directory: $GITHUB_WORKSPACE/src/build
-        run: CC=clang CXX=clang++ cmake -DCMAKE_BUILD_TYPE=Debug ..
+        run: cmake -DCMAKE_BUILD_TYPE=Debug ..
       - name: Build
         working-directory: $GITHUB_WORKSPACE/src/build
         run: cmake --build . --target lin_check_test -j
@@ -33,7 +33,7 @@ jobs:
         run: mkdir $GITHUB_WORKSPACE/src/build
       - name: Index
         working-directory: $GITHUB_WORKSPACE/src/build
-        run: CC=clang CXX=clang++ cmake -DCMAKE_BUILD_TYPE=Debug ..
+        run: cmake -DCMAKE_BUILD_TYPE=Debug ..
       - name: Build
         working-directory: $GITHUB_WORKSPACE/src/build
         run: cmake --build codegen -j
