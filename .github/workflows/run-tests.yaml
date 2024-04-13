@@ -6,7 +6,7 @@ jobs:
     container: silkeh/clang:18
     steps:
       - name: Install git
-        run: apt update && apt install git
+        run: apt update && apt install -y git
       - name: Check out repository code
         uses: actions/checkout@v4
       - name: Prepare for build
@@ -25,7 +25,7 @@ jobs:
     container: silkeh/clang:18
     steps:
       - name: Install git
-        run: apt update && apt install git
+        run: apt update && apt install -y git
       - name: Check out repository code
         uses: actions/checkout@v4
       - name: test
