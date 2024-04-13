@@ -33,7 +33,7 @@ jobs:
         run: mkdir $GITHUB_WORKSPACE/src/build
       - name: Index
         working-directory: $GITHUB_WORKSPACE/src/build
-        run: CC=clang-17 CXX=clang++-17 cmake -DCMAKE_BUILD_TYPE=Debug ..
+        run: CC=clang CXX=clang++ cmake -DCMAKE_BUILD_TYPE=Debug ..
       - name: Build
         working-directory: $GITHUB_WORKSPACE/src/build
         run: cmake --build codegen -j
