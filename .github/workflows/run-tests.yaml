@@ -26,10 +26,10 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
-      - name: Prepare for build
-        run: mkdir ${{ github.workspace }}/src/build
       - name: test
         run: ls -a ${{ github.workspace }}
+      - name: Prepare for build
+        run: mkdir ${{ github.workspace }}/src/build
       - name: Index
         working-directory: ${{ github.workspace }}/src/build
         run: CC=clang-17 CXX=clang++-17 cmake -DCMAKE_BUILD_TYPE=Debug ..
