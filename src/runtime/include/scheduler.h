@@ -46,7 +46,8 @@ struct StrategyScheduler : Scheduler {
   // max_switches represents the maximal count of switches. After this count
   // scheduler will end execution of the Run function
   StrategyScheduler(Strategy& sched_class, ModelChecker& checker,
-                    size_t max_tasks, size_t max_rounds, size_t threads_count);
+                    PrettyPrinter& pretty_printer, size_t max_tasks,
+                    size_t max_rounds);
 
   // Run returns full unliniarizable history if such a history is found. Full
   // history is a history with all events, where each element in the vector is a
@@ -60,12 +61,11 @@ struct StrategyScheduler : Scheduler {
 
   ModelChecker& checker;
 
+  PrettyPrinter& pretty_printer;
+
   size_t max_tasks;
 
   size_t max_rounds;
-
-  // For pretty printing.
-  size_t threads_count;
 };
 
 // TLAScheduler generates all executions satisfying some conditions.
@@ -73,13 +73,13 @@ template <typename TargetObj>
 struct TLAScheduler : Scheduler {
   TLAScheduler(size_t max_tasks, size_t max_rounds, size_t threads_count,
                size_t max_switches, std::vector<task_builder_t> constructors,
-               ModelChecker& checker)
+               ModelChecker& checker, PrettyPrinter& pretty_printer)
       : max_tasks{max_tasks},
         max_rounds{max_rounds},
-        threads_count{threads_count},
         max_switches{max_switches},
         constructors{std::move(constructors)},
-        checker{checker} {
+        checker{checker},
+        pretty_printer{pretty_printer} {
     for (int i = 0; i < threads_count; ++i) {
       threads.emplace_back();
     }
@@ -186,7 +186,7 @@ struct TLAScheduler : Scheduler {
       }
     } else {
       log() << "run round: " << finished_rounds << "\n";
-      pretty_print::pretty_print(sequential_history, log(), threads_count);
+      pretty_printer.pretty_print(sequential_history, log());
       log() << "===============================================\n\n";
       // Stop, check if the the generated history is linearizable.
       ++finished_rounds;
@@ -253,7 +253,7 @@ struct TLAScheduler : Scheduler {
     return {false, {}};
   }
 
-  size_t threads_count;
+  PrettyPrinter& pretty_printer;
   size_t max_tasks;
   size_t max_rounds;
   size_t max_switches;
@@ -265,7 +265,8 @@ struct TLAScheduler : Scheduler {
   size_t finished_rounds{};
   TargetObj state{};
   std::vector<std::variant<Invoke, Response>> sequential_history;
-  std::vector<std::pair<int, std::reference_wrapper<StackfulTask>>> full_history;
+  std::vector<std::pair<int, std::reference_wrapper<StackfulTask>>>
+      full_history;
   std::vector<size_t> thread_id_history;
   StableVector<thread_t> threads;
   StableVector<frame_t> frames;

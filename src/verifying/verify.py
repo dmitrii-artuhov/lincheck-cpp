@@ -16,7 +16,7 @@ llvm_plugin_path = os.path.join(
 
 deps = list(map(lambda f: os.path.join(runtime_dir, f), [
     "lib.cpp", "scheduler.cpp", "lin_check.cpp", "logger.cpp",
-    "verifying.cpp", "generators.cpp", "builders.cpp",
+    "verifying.cpp", "generators.cpp", "builders.cpp", "pretty_printer.cpp",
 ]))
 
 clang = "clang++"

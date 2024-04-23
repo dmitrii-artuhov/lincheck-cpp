@@ -4,13 +4,14 @@
 #include "include/pretty_print.h"
 
 StrategyScheduler::StrategyScheduler(Strategy& sched_class,
-                                     ModelChecker& checker, size_t max_tasks,
-                                     size_t max_rounds, size_t threads_count)
+                                     ModelChecker& checker,
+                                     PrettyPrinter& pretty_printer,
+                                     size_t max_tasks, size_t max_rounds)
     : strategy(sched_class),
       checker(checker),
+      pretty_printer(pretty_printer),
       max_tasks(max_tasks),
-      max_rounds(max_rounds),
-      threads_count(threads_count) {}
+      max_rounds(max_rounds) {}
 
 Scheduler::result_t StrategyScheduler::runRound() {
   // History of invoke and response events which is required for the checker
@@ -36,7 +37,7 @@ Scheduler::result_t StrategyScheduler::runRound() {
     }
   }
 
-  pretty_print::pretty_print(sequential_history, log(), threads_count);
+  pretty_printer.pretty_print(sequential_history, log());
 
   if (!checker.Check(sequential_history)) {
     return std::make_pair(full_history, sequential_history);
