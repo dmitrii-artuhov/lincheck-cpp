@@ -80,8 +80,11 @@ struct TLAScheduler : Scheduler {
         constructors{std::move(constructors)},
         checker{checker},
         pretty_printer{pretty_printer} {
-    for (int i = 0; i < threads_count; ++i) {
-      threads.emplace_back();
+    for (size_t i = 0; i < threads_count; ++i) {
+      threads.emplace_back(thread_t{
+          .id = i,
+          .tasks = StableVector<StackfulTask>{},
+      });
     }
   };
 
@@ -91,7 +94,10 @@ struct TLAScheduler : Scheduler {
   }
 
  private:
-  using thread_t = StableVector<StackfulTask>;
+  struct thread_t {
+    size_t id;
+    StableVector<StackfulTask> tasks;
+  };
 
   // TLAScheduler enumerates all possible executions with finished max_tasks.
   // In fact, it enumerates tables (c = continue, f = finished):
@@ -140,16 +146,16 @@ struct TLAScheduler : Scheduler {
   // Resumes choosed task.
   // If task is finished and finished tasks == max_tasks, stops.
   std::tuple<bool, result_t> resume_task(frame_t& frame, size_t step,
-                                         size_t thread_id, size_t switches,
-                                         thread_t& thread,
+                                         size_t switches, thread_t& thread,
                                          std::optional<Task> raw_task) {
+    auto thread_id = thread.id;
     size_t previous_thread_id = thread_id_history.empty()
                                     ? std::numeric_limits<size_t>::max()
                                     : thread_id_history.back();
     bool is_new = raw_task.has_value();
     size_t nxt_switches = switches;
     if (is_new) {
-      thread.emplace_back(StackfulTask{raw_task.value()});
+      thread.tasks.emplace_back(StackfulTask{raw_task.value()});
     } else {
       if (thread_id != previous_thread_id) {
         ++nxt_switches;
@@ -160,7 +166,7 @@ struct TLAScheduler : Scheduler {
         return {false, {}};
       }
     }
-    auto& task = thread.back();
+    auto& task = thread.tasks.back();
     frame.position = &task;
 
     full_history.push_back({thread_id, task});
@@ -209,7 +215,7 @@ struct TLAScheduler : Scheduler {
     if (is_new) {
       // inv.
       sequential_history.pop_back();
-      thread.pop_back();
+      thread.tasks.pop_back();
     }
 
     // As we can't return to the past in coroutine, we need to replay all tasks
@@ -224,13 +230,12 @@ struct TLAScheduler : Scheduler {
     auto& frame = frames.back();
 
     // Pick next task.
-    for (size_t thread_id = 0; thread_id < threads.size(); ++thread_id) {
-      auto& thread = threads[thread_id];
-      if (!thread.empty() && !thread.back().IsReturned()) {
+    for (size_t i = 0; i < threads.size(); ++i) {
+      auto& thread = threads[i];
+      if (!thread.tasks.empty() && !thread.tasks.back().IsReturned()) {
         // Task exists.
         frame.builder = nullptr;
-        auto [is_over, res] =
-            resume_task(frame, step, thread_id, switches, thread, {});
+        auto [is_over, res] = resume_task(frame, step, switches, thread, {});
         if (is_over || res.has_value()) {
           return {is_over, res};
         }
@@ -241,8 +246,7 @@ struct TLAScheduler : Scheduler {
       for (auto cons : constructors) {
         frame.builder = cons;
         auto task = cons(&state);
-        auto [is_over, res] =
-            resume_task(frame, step, thread_id, switches, thread, task);
+        auto [is_over, res] = resume_task(frame, step, switches, thread, task);
         if (is_over || res.has_value()) {
           return {is_over, res};
         }
