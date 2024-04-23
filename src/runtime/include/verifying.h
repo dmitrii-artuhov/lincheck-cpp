@@ -69,11 +69,11 @@ std::unique_ptr<Strategy> MakeStrategy(Opts &opts,
 // TODO: refactor.
 struct StrategySchedulerWrapper : StrategyScheduler {
   StrategySchedulerWrapper(std::unique_ptr<Strategy> strategy,
-                           ModelChecker &checker, size_t max_tasks,
-                           size_t max_rounds, size_t threads_count)
+                           ModelChecker &checker, PrettyPrinter &pretty_printer,
+                           size_t max_tasks, size_t max_rounds)
       : strategy(std::move(strategy)),
-        StrategyScheduler(*strategy.get(), checker, max_tasks, max_rounds,
-                          threads_count){};
+        StrategyScheduler(*strategy.get(), checker, pretty_printer, max_tasks,
+                          max_rounds){};
 
  private:
   std::unique_ptr<Strategy> strategy;
@@ -81,21 +81,23 @@ struct StrategySchedulerWrapper : StrategyScheduler {
 
 template <typename TargetObj>
 std::unique_ptr<Scheduler> MakeScheduler(ModelChecker &checker, Opts &opts,
-                                         std::vector<task_builder_t> l) {
+                                         std::vector<task_builder_t> l,
+                                         PrettyPrinter &pretty_printer) {
   std::cout << "strategy = ";
   switch (opts.typ) {
     case RR:
     case RND: {
       auto strategy = MakeStrategy<TargetObj>(opts, std::move(l));
       auto scheduler = std::make_unique<StrategySchedulerWrapper>(
-          std::move(strategy), checker, opts.tasks, opts.rounds, opts.threads);
+          std::move(strategy), checker, pretty_printer, opts.tasks,
+          opts.rounds);
       return scheduler;
     }
     case TLA: {
       std::cout << "tla\n";
       auto scheduler = std::make_unique<TLAScheduler<TargetObj>>(
           opts.tasks, opts.rounds, opts.threads, opts.switches, std::move(l),
-          checker);
+          checker, pretty_printer);
       return scheduler;
     }
   }
@@ -117,6 +119,8 @@ void Run(int argc, char *argv[]) {
   std::cout << "rounds   = " << opts.rounds << "\n";
   std::cout << "targets  = " << task_builders.size() << "\n";
 
+  PrettyPrinter pretty_printer{opts.threads};
+
   using lchecker_t =
       LinearizabilityCheckerRecursive<typename Spec::linear_spec_t,
                                       typename Spec::linear_spec_hash_t,
@@ -125,14 +129,14 @@ void Run(int argc, char *argv[]) {
                      typename Spec::linear_spec_t{}};
 
   auto scheduler = MakeScheduler<typename Spec::target_obj_t>(
-      checker, opts, std::move(task_builders));
+      checker, opts, std::move(task_builders), pretty_printer);
   std::cout << "\n\n";
   std::cout.flush();
 
   auto result = scheduler->Run();
   if (result.has_value()) {
     std::cout << "non linearized:\n";
-    pretty_print::pretty_print(result.value().second, std::cout, opts.threads);
+    pretty_printer.pretty_print(result.value().second, std::cout);
   } else {
     std::cout << "success!\n";
   }
