@@ -83,6 +83,9 @@ struct Task {
 
   void StartFromTheBeginning(void* state);
 
+  // Destroys coroutine handle.
+  void Destroy();
+
  private:
   std::shared_ptr<Meta> meta{};
   task_cloner_t cloner;
@@ -122,6 +125,7 @@ struct StackfulTask {
   StackfulTask();
 
  public:
+  std::vector<Task> to_destroy{};
   std::vector<Task> stack{};
   // Need option for tests, because I have to initialize Task field(
   Task entrypoint;

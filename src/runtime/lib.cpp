@@ -109,6 +109,8 @@ const std::vector<std::string> &Task::GetStrArgs() const {
   return meta->str_args;
 }
 
+void Task::Destroy() { hdl.destroy(); }
+
 // ------------------------ STACKFUL TASK ------------------------
 
 StackfulTask::StackfulTask(Task task) : entrypoint(task) {
@@ -128,6 +130,8 @@ void StackfulTask::Resume() {
   } else if (stack_head.IsReturned()) {
     // stack_head returned
     last_returned_value = stack_head.GetRetVal();
+
+    to_destroy.push_back(stack.back());
     stack.pop_back();
 
     // if it wasn't the first task clean up children
@@ -158,6 +162,9 @@ const StackfulTask &Invoke::GetTask() const { return this->task.get(); }
 const StackfulTask &Response::GetTask() const { return this->task.get(); }
 
 StackfulTask::~StackfulTask() {
+  for (auto &task : to_destroy) {
+    task.Destroy();
+  }
   for (int i = static_cast<int>(stack.size()) - 1; i > -1; i--) {
     stack[i].ClearChild();
   }
