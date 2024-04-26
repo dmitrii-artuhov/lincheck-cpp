@@ -4,6 +4,11 @@
 
 namespace ltest {
 
+template <>
+std::string to_string<int>(const int &a) {
+  return std::to_string(a);
+}
+
 std::string toLower(std::string str) {
   std::transform(str.begin(), str.end(), str.begin(),
                  [](unsigned char c) { return std::tolower(c); });

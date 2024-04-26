@@ -25,11 +25,6 @@ const int size = 2;
 
 namespace ltest {
 
-template <>
-std::string to_string<int>(const int &a) {
-  return std::to_string(a);
-}
-
 }  // namespace ltest
 
 auto generate_int() {
