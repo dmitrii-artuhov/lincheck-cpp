@@ -17,11 +17,6 @@ struct Fatty {
 namespace ltest {
 
 template <>
-std::string to_string<int>(const int &a) {
-  return std::to_string(a);
-}
-
-template <>
 std::string to_string<Fatty>(const Fatty &f) {
   return "Fatty";
 }

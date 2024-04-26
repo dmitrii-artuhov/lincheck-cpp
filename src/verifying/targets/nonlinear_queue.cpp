@@ -6,6 +6,7 @@
 
 const int N = 100;
 
+// Implementation.
 struct Queue {
   Queue() {}
 
@@ -27,19 +28,12 @@ struct Queue {
   std::atomic<int> head{};
 };
 
-namespace ltest {
-
-template <>
-std::string to_string<int>(const int &a) {
-  return std::to_string(a);
-}
-
-}  // namespace ltest
-
+// Arguments generator.
 auto generate_int() {
   return ltest::generators::make_single_arg(rand() % 10 + 1);
 }
 
+// Targets.
 target_method(generate_int, void, Queue, Push, int v) {
   int pos = head.fetch_add(1);
   a[pos] = v;
@@ -49,13 +43,14 @@ target_method(ltest::generators::empty_gen, int, Queue, Pop) {
   int last = head.load();
   for (int i = 0; i < last; ++i) {
     int e = a[i].load();
-    if (e != 0 && a[i].compare_exchange_weak(e, 0)) {
+    if (e != 0 && a[i].compare_exchange_strong(e, 0)) {
       return e;
     }
   }
   return 0;
 }
 
+// Specify target structure and it's sequential specification.
 using spec_t =
     ltest::Spec<Queue, spec::Queue, spec::QueueHash, spec::QueueEquals>;
 
