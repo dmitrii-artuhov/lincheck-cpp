@@ -44,6 +44,7 @@ std::unique_ptr<Strategy> MakeStrategy(Opts &opts,
                                        std::vector<task_builder_t> l) {
   switch (opts.typ) {
     case RR: {
+      std::cout << "round-robin\n";
       return std::make_unique<RoundRobinStrategy<TargetObj>>(opts.threads,
                                                              std::move(l));
     }

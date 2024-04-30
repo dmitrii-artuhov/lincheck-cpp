@@ -35,7 +35,7 @@ struct PickStrategy : Strategy {
         threads[current_task].back().IsReturned()) {
       // a task has finished or the queue is empty, so we add a new task
       auto constructor = constructors.at(distribution(rng));
-      threads[current_task].emplace(constructor(&state));
+      threads[current_task].emplace_back(StackfulTask(constructor, &state));
       return {threads[current_task].back(), true, current_task};
     }
 
@@ -43,18 +43,34 @@ struct PickStrategy : Strategy {
   }
 
   void StartNextRound() override {
+    TerminateTasks();
     for (auto& thread : threads) {
-      auto constructor = constructors.at(distribution(rng));
       // We don't have to keep references alive
-      thread = std::queue<StackfulTask>();
+      while (thread.size() > 0) {
+        thread.pop_back();
+      }
+      //  thread = StableVector<StackfulTask>();
     }
 
     // Reinitial target as we start from the beginning.
-    state = initial_state;
+    state.Reset();
   }
 
+  ~PickStrategy() { TerminateTasks(); }
+
  protected:
-  TargetObj initial_state{};
+  // Terminates all running tasks.
+  // We do it in a dangerous way: in random order.
+  // Actually, we assume obstruction free here.
+  // TODO: for non obstruction-free we need to take into account dependencies.
+  void TerminateTasks() {
+    for (size_t i = 0; i < threads.size(); ++i) {
+      if (!threads[i].empty()) {
+        threads[i].back().Terminate();
+      }
+    }
+  }
+
   TargetObj state{};
   size_t next_task = 0;
   size_t threads_count;
@@ -63,7 +79,7 @@ struct PickStrategy : Strategy {
   // references can't be invalidated before the end of the round,
   // so we have to contains all tasks in queues(queue doesn't invalidate the
   // references)
-  std::vector<std::queue<StackfulTask>> threads;
+  std::vector<StableVector<StackfulTask>> threads;
   std::uniform_int_distribution<std::mt19937::result_type> distribution;
   std::mt19937 rng;
 };

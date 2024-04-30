@@ -92,10 +92,24 @@ struct Task {
   handle hdl;
 };
 
+// Creates task. Builders are created with macro.
+typedef Task (*task_builder_t)(void* this_ptr);
+
+// Runtime token.
+// Target method could use token generator and StackfulTask will account this.
+struct Token {
+  bool parked{};
+  void Reset();
+};
+
 // StackfulTask is a Task wrapper which contains the stack inside, so resume
 // method resumes the last subtask.
 struct StackfulTask {
-  explicit StackfulTask(Task task);
+  explicit StackfulTask(task_builder_t builder, void* this_state);
+  explicit StackfulTask(Task);
+
+  StackfulTask(const StackfulTask&) = delete;
+  StackfulTask(StackfulTask&&) = default;
 
   const std::string& GetName() const;
   void* GetArgs() const;
@@ -104,11 +118,17 @@ struct StackfulTask {
 
   void StartFromTheBeginning(void* state);
 
+  void SetToken(std::shared_ptr<Token> token);
+
+  bool IsParked();
+
   // Resume method resumes the last subtask.
   virtual void Resume();
 
   // Haven't the first task finished yet?
   virtual bool IsReturned();
+
+  void Terminate();
 
   // Returns the value that was returned from the first task, have to be called
   // only when IsReturned is true
@@ -125,16 +145,17 @@ struct StackfulTask {
   StackfulTask();
 
  public:
+  std::shared_ptr<Token> token{};
   std::vector<Task> to_destroy{};
   std::vector<Task> stack{};
-  // Need option for tests, because I have to initialize Task field(
   Task entrypoint;
   int last_returned_value{};
 };
-}
 
-// Creates task. Builders are created with macro.
-typedef Task (*task_builder_t)(void* this_ptr);
+StackfulTask* GetCurrentTask();
+
+void SetCurrentTask(StackfulTask*);
+}
 
 struct Response {
   Response(const StackfulTask& task, int result, int thread_id);

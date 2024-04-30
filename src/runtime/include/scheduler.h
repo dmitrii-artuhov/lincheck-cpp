@@ -93,6 +93,8 @@ struct TLAScheduler : Scheduler {
     return res;
   }
 
+  ~TLAScheduler() { terminate_tasks(); }
+
  private:
   struct thread_t {
     size_t id;
@@ -112,34 +114,42 @@ struct TLAScheduler : Scheduler {
   //                      .....
   // frame_t struct describes one row of this table.
   struct frame_t {
-    frame_t(const TargetObj& state) : state{state} {}
-    // Current state.
-    TargetObj state;
-    // Pointer to the position in task thread.
-    StackfulTask* position{};
-    // Builder is non nullptr if the task was created at this step.
-    task_builder_t builder{};
+    // Pointer to the in task thread.
+    StackfulTask* task{};
+    // Is true if the task was created at this step.
+    bool is_new{};
   };
 
-  // Replays all actions from step_begin to the step_end.
-  void replay(size_t step_begin, size_t step_end) {
-    // std::cout << "replay" << std::endl;
+  // Terminates all running tasks.
+  // We do it in a dangerous way: in random order.
+  // Actually, we assume obstruction free here.
+  // TODO: for non obstruction-free we need to take into account dependencies.
+  void terminate_tasks() {
+    for (size_t i = 0; i < threads.size(); ++i) {
+      if (!threads[i].tasks.empty()) {
+        threads[i].tasks.back().Terminate();
+      }
+    }
+  }
+
+  // Replays all actions from 0 to the step_end.
+  void replay(size_t step_end) {
+    // Firstly, terminate all running tasks.
+    terminate_tasks();
     // In histories we store references, so there's no need to update it.
-    state = frames[step_begin].state;
-    for (size_t step = step_begin; step < step_end; ++step) {
+    state.Reset();
+    for (size_t step = 0; step < step_end; ++step) {
       auto& frame = frames[step];
-      auto position = frame.position;
-      assert(position);
-      if (frame.builder != nullptr) {
+      auto task = frame.task;
+      assert(task);
+      if (frame.is_new) {
         // It was a new task.
         // So restart it from the beginning with the same args.
-        auto entrypoint = position->GetEntrypoint();
-        entrypoint.StartFromTheBeginning(&state);
-        *position = StackfulTask{entrypoint};
+        task->StartFromTheBeginning(&state);
       } else {
         // It was a not new task, hence, we recreated in early.
       }
-      position->Resume();
+      task->Resume();
     }
   }
 
@@ -147,16 +157,13 @@ struct TLAScheduler : Scheduler {
   // If task is finished and finished tasks == max_tasks, stops.
   std::tuple<bool, result_t> resume_task(frame_t& frame, size_t step,
                                          size_t switches, thread_t& thread,
-                                         std::optional<Task> raw_task) {
+                                         bool is_new) {
     auto thread_id = thread.id;
     size_t previous_thread_id = thread_id_history.empty()
                                     ? std::numeric_limits<size_t>::max()
                                     : thread_id_history.back();
-    bool is_new = raw_task.has_value();
     size_t nxt_switches = switches;
-    if (is_new) {
-      thread.tasks.emplace_back(StackfulTask{raw_task.value()});
-    } else {
+    if (!is_new) {
       if (thread_id != previous_thread_id) {
         ++nxt_switches;
       }
@@ -167,7 +174,7 @@ struct TLAScheduler : Scheduler {
       }
     }
     auto& task = thread.tasks.back();
-    frame.position = &task;
+    frame.task = &task;
 
     full_history.push_back({thread_id, task});
     thread_id_history.push_back(thread_id);
@@ -194,6 +201,7 @@ struct TLAScheduler : Scheduler {
       log() << "run round: " << finished_rounds << "\n";
       pretty_printer.pretty_print(sequential_history, log());
       log() << "===============================================\n\n";
+      log().flush();
       // Stop, check if the the generated history is linearizable.
       ++finished_rounds;
       if (!checker.Check(sequential_history)) {
@@ -215,44 +223,62 @@ struct TLAScheduler : Scheduler {
     if (is_new) {
       // inv.
       sequential_history.pop_back();
-      thread.tasks.pop_back();
     }
 
-    // As we can't return to the past in coroutine, we need to replay all tasks
-    // from the beginning.
-    replay(0, step);
     return {false, {}};
   }
 
   std::tuple<bool, result_t> run(size_t step, size_t switches) {
     // Push frame to the stack.
-    frames.emplace_back(frame_t{state});
+    frames.emplace_back(frame_t{});
     auto& frame = frames.back();
 
+    bool all_parked = true;
     // Pick next task.
     for (size_t i = 0; i < threads.size(); ++i) {
       auto& thread = threads[i];
-      if (!thread.tasks.empty() && !thread.tasks.back().IsReturned()) {
+      auto& tasks = thread.tasks;
+      if (!tasks.empty() && !tasks.back().IsReturned()) {
+        if (tasks.back().IsParked()) {
+          continue;
+        }
+        all_parked = false;
         // Task exists.
-        frame.builder = nullptr;
-        auto [is_over, res] = resume_task(frame, step, switches, thread, {});
+        frame.is_new = false;
+        auto [is_over, res] = resume_task(frame, step, switches, thread, false);
         if (is_over || res.has_value()) {
           return {is_over, res};
         }
+        // As we can't return to the past in coroutine, we need to replay all
+        // tasks from the beginning.
+        replay(step);
         continue;
       }
 
+      all_parked = false;
       // Choose constructor to create task.
-      for (auto cons : constructors) {
-        frame.builder = cons;
-        auto task = cons(&state);
-        auto [is_over, res] = resume_task(frame, step, switches, thread, task);
+      for (size_t cons_num = 0; auto cons : constructors) {
+        frame.is_new = true;
+        auto size_before = tasks.size();
+        tasks.emplace_back(StackfulTask{cons, &state});
+
+        auto [is_over, res] = resume_task(frame, step, switches, thread, true);
         if (is_over || res.has_value()) {
           return {is_over, res};
         }
+
+        tasks.back().Terminate();
+        tasks.pop_back();
+        auto size_after = thread.tasks.size();
+        assert(size_before == size_after);
+        // As we can't return to the past in coroutine, we need to replay all
+        // tasks from the beginning.
+        replay(step);
+        ++cons_num;
       }
     }
 
+    assert(!all_parked && "deadlock");
     frames.pop_back();
     return {false, {}};
   }
