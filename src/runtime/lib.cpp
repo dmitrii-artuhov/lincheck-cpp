@@ -63,6 +63,16 @@ int get_ret_val(CoroPromise *p) {
 void coro_yield() noexcept {}
 }
 
+StackfulTask *current_task;
+StackfulTask *GetCurrentTask() {
+  assert(current_task != nullptr);
+  return current_task;
+}
+
+void SetCurrentTask(StackfulTask *task) { current_task = task; }
+
+void Token::Reset() { parked = false; }
+
 // ------------------------------ TASK ----------------------------------------
 
 Task::Task(handle hdl) : hdl(hdl) {}
@@ -113,11 +123,21 @@ void Task::Destroy() { hdl.destroy(); }
 
 // ------------------------ STACKFUL TASK ------------------------
 
-StackfulTask::StackfulTask(Task task) : entrypoint(task) {
+StackfulTask::StackfulTask(task_builder_t builder, void *this_state)
+    : entrypoint{nullptr} {
+  SetCurrentTask(this);
+  // Builder could call generator that set token.
+  auto task = builder(this_state);
+  SetCurrentTask(nullptr);
+  entrypoint = task;
   stack = std::vector<Task>{task};
 }
 
 StackfulTask::StackfulTask() : entrypoint(nullptr) {}
+
+StackfulTask::StackfulTask(Task raw_task) : entrypoint(raw_task) {
+  stack = std::vector<Task>{raw_task};
+}
 
 void StackfulTask::Resume() {
   assert(!stack.empty());
@@ -162,20 +182,45 @@ const StackfulTask &Invoke::GetTask() const { return this->task.get(); }
 const StackfulTask &Response::GetTask() const { return this->task.get(); }
 
 StackfulTask::~StackfulTask() {
+  // The task must be returned if we want to restart it.
+  // We can't just Terminate() it because it is the runtime responsibility to
+  // decide, in which order the tasks should be terminated.
+  assert(IsReturned());
   for (auto &task : to_destroy) {
     task.Destroy();
-  }
-  for (int i = static_cast<int>(stack.size()) - 1; i > -1; i--) {
-    stack[i].ClearChild();
   }
 }
 
 void StackfulTask::StartFromTheBeginning(void *state) {
-  entrypoint.StartFromTheBeginning(state);
-  for (int i = static_cast<int>(stack.size()) - 1; i > -1; i--) {
-    stack[i].ClearChild();
+  // The task must be returned if we want to restart it.
+  // We can't just Terminate() it because it is the runtime responsibility to
+  // decide, in which order the tasks should be terminated.
+  assert(IsReturned());
+  for (auto &task : to_destroy) {
+    task.Destroy();
   }
+  to_destroy = {};
+  if (token != nullptr) {
+    token->Reset();
+  }
+  entrypoint.StartFromTheBeginning(state);
   stack = {entrypoint};
+}
+
+void StackfulTask::SetToken(std::shared_ptr<Token> token) {
+  this->token = token;
+}
+
+bool StackfulTask::IsParked() { return token != nullptr && token->parked; }
+
+void StackfulTask::Terminate() {
+  int tries = 0;
+  while (!IsReturned()) {
+    ++tries;
+    Resume();
+    assert(tries < 10000000 &&
+           "task is spinning too long, possible wrong task terminating order");
+  }
 }
 
 Invoke::Invoke(const StackfulTask &task, int thread_id)

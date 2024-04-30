@@ -14,7 +14,15 @@ struct RoundRobinStrategy : PickStrategy<TargetObj> {
         PickStrategy<TargetObj>{threads_count, std::move(constructors)} {}
 
   size_t Pick() override {
-    return (next_task++) % PickStrategy<TargetObj>::threads_count;
+    auto &threads = PickStrategy<TargetObj>::threads;
+    for (size_t attempt = 0; attempt < threads.size(); ++attempt) {
+      auto cur = (next_task++) % threads.size();
+      if (!threads[cur].empty() && threads[cur].back().IsParked()) {
+        continue;
+      }
+      return cur;
+    }
+    assert(false && "deadlock");
   }
 
   size_t next_task;

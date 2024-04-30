@@ -2,6 +2,8 @@
 #include <tuple>
 #include <type_traits>
 
+#include "lib.h"
+
 namespace ltest {
 
 namespace generators {
@@ -14,6 +16,8 @@ auto make_single_arg(T&& arg) {
 }
 
 std::tuple<> empty_gen();
+
+std::tuple<std::shared_ptr<Token>> gen_token();
 
 // TODO: concatenate generated tuples.
 // sum_generator<arg1gen, arg2gen> or something else.

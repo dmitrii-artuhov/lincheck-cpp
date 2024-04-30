@@ -54,6 +54,7 @@ Scheduler::result_t StrategyScheduler::Run() {
       return seq_history;
     }
     log() << "===============================================\n\n";
+    log().flush();
     strategy.StartNextRound();
   }
 

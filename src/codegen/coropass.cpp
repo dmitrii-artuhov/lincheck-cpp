@@ -239,6 +239,10 @@ struct CoroGenerator final {
     // errs() << *generated << "\n";
     // errs() << "==========================================\n\n";
 
+    // errs() << "INITIAL METHOD:\n";
+    // errs() << *F << "\n";
+    // errs() << "==========================================\n\n";
+
     return generated;
   }
 
