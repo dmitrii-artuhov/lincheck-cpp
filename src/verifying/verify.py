@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import subprocess
+import sys
 
 import click
 
@@ -60,10 +61,7 @@ def run_command_and_get_output(
         input = bytes(input, 'utf-8')
     out, _ = process.communicate(input)
     out = out.decode('utf-8')
-
-    # This print is here to make running tests with -s flag more verbose
     print(out)
-
     return process.returncode, out
 
 
@@ -99,22 +97,13 @@ def run(threads, tasks, switches, rounds, verbose, strategy, weights):
                   strategy, weights]))
     cmd = ["./run"]
     cmd.extend(args)
-    run_command_and_get_output(cmd, cwd=artifacts_dir_default)
+    subprocess.run(cmd, cwd=artifacts_dir_default, stdout=sys.stdout)
 
 
-@cmd.command()
-@click.option("-s", "--src", required=True, help="source path",
-              type=click.File("r"))
-@click.option("-g", "--debug", help="build with -g", type=bool, is_flag=True)
-@click.option("-a", "--artifacts_dir", help="dir for artifacts", type=str,
-              default=None)
-def build(src, debug, artifacts_dir):
-    artifacts_dir = artifacts_dir or artifacts_dir_default
+# Check src/Makefle to understand debug build logic and unsafe reasonable.
 
-    # Create artifacts dir.
-    if not os.path.exists(artifacts_dir):
-        os.mkdir(artifacts_dir)
 
+def build_unsafe(src, artifacts_dir):
     # Compile target to bytecode.
     cmd = [clang]
     cmd.extend(build_flags)
@@ -125,6 +114,7 @@ def build(src, debug, artifacts_dir):
     assert rc == 0
 
     # Run llvm pass on optimized code.
+    # Can lead to incostintency.
     cmd = [clang]
     cmd.extend(build_flags)
     cmd.append(f"-fpass-plugin={llvm_plugin_path}")
@@ -133,6 +123,71 @@ def build(src, debug, artifacts_dir):
     cmd.extend(["-o", os.path.join(artifacts_dir, "run")])
     rc, _ = run_command_and_get_output(cmd, cwd=file_dir)
     assert rc == 0
+    pass
+
+
+def build_debug(src, artifacts_dir):
+    # Compile to bytecode with pass.
+    cmd = [clang]
+    cmd.extend(build_flags)
+    cmd.extend(["-emit-llvm", "-S"])
+    cmd.append("-fno-discard-value-names")
+    cmd.append(f"-fpass-plugin={llvm_plugin_path}")
+    cmd.append(src.name)
+    cmd.extend(["-o", os.path.join(artifacts_dir, "bytecode.bc")])
+    rc, _ = run_command_and_get_output(cmd, cwd=file_dir)
+    assert rc == 0
+
+    # Compile to binary.
+    cmd = [clang]
+    cmd.extend(build_flags)
+    cmd.append("-g")
+    cmd.append("-fno-discard-value-names")
+    cmd.append(os.path.join(artifacts_dir, "bytecode.bc"))
+    cmd.extend(deps)
+    cmd.extend(["-o", os.path.join(artifacts_dir, "run")])
+
+    rc, _ = run_command_and_get_output(cmd, cwd=file_dir)
+    assert rc == 0
+    pass
+
+
+def build_stable(src, artifacts_dir):
+    cmd = [clang]
+    cmd.extend(build_flags)
+    cmd.append("-fno-discard-value-names")
+    cmd.append(f"-fpass-plugin={llvm_plugin_path}")
+    cmd.append(src.name)
+    cmd.extend(deps)
+    cmd.extend(["-o", os.path.join(artifacts_dir, "run")])
+
+    rc, _ = run_command_and_get_output(cmd, cwd=file_dir)
+    assert rc == 0
+
+
+@cmd.command()
+@click.option("-s", "--src", required=True, help="source path",
+              type=click.File("r"))
+@click.option("-g", "--debug", help="debug build", type=bool, is_flag=True)
+@click.option("-u", "--unsafe", help="unsafe build", type=bool, is_flag=True)
+@click.option("-a", "--artifacts_dir", help="dir for artifacts", type=str,
+              default=None)
+def build(src, debug, unsafe, artifacts_dir):
+    artifacts_dir = artifacts_dir or artifacts_dir_default
+
+    # Create artifacts dir.
+    if not os.path.exists(artifacts_dir):
+        os.mkdir(artifacts_dir)
+
+    if unsafe:
+        print("building unsafe...")
+        build_unsafe(src, artifacts_dir)
+    elif debug:
+        print("building debug...")
+        build_debug(src, artifacts_dir)
+    else:
+        print("building stable...")
+        build_stable(src, artifacts_dir)
 
 
 cli = click.CommandCollection(sources=[cmd])
