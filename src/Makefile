@@ -18,11 +18,13 @@ regression:
 # the code is not optimized (registerPipelineStartEPCallback). TODO.
 # So, this type of build can produce too many suspend points.
 # For example, nonlinearized queue is hacked only after ~80k rounds with tla strategy.
+.PHONY: build_basic
 build_basic:
 	$(CC) $(FLAGS) -fpass-plugin=$(LLVM_PASS) basic.cpp $(DEPS) -o $(BINARY)
 
 # For now, pass not supports debug information in coroutines. TODO.
 # So, to build for debug we have to run pass at the beginning and then build with debug information.
+.PHONY: debug_basic
 debug_basic:
 	$(CC) $(FLAGS) -emit-llvm -S -fno-discard-value-names -fpass-plugin=$(LLVM_PASS) basic.cpp -o basic.bc
 	$(CC) -g -std=c++2a -fno-discard-value-names basic.bc $(DEPS) -o $(BINARY)
@@ -35,5 +37,6 @@ debug_basic:
 # This build produces more or less optimal number of suspend points,
 # nonlinearized queue is hacked after ~2k rounds with tla strategy (4 tasks, 1 switch)
 #                                     ~300 rounds with tla strategy (3 tasks, 1 switch).
+.PHONY: build_basic_unsafe
 build_basic_unsafe: basic.bc
 	$(CC) $(FLAGS) -fpass-plugin=$(LLVM_PASS) basic.bc $(DEPS) -o $(BINARY)

@@ -31,11 +31,11 @@ struct Strategy {
 };
 
 struct Scheduler {
-  using full_history_t = std::vector<std::reference_wrapper<StackfulTask>>;
-  using seq_history_t = std::vector<std::variant<Invoke, Response>>;
-  using result_t = std::optional<std::pair<full_history_t, seq_history_t>>;
+  using FullHistory = std::vector<std::reference_wrapper<StackfulTask>>;
+  using SeqHistory = std::vector<std::variant<Invoke, Response>>;
+  using Result = std::optional<std::pair<FullHistory, SeqHistory>>;
 
-  virtual result_t Run() = 0;
+  virtual Result Run() = 0;
 
   virtual ~Scheduler() = default;
 };
@@ -52,10 +52,10 @@ struct StrategyScheduler : Scheduler {
   // Run returns full unliniarizable history if such a history is found. Full
   // history is a history with all events, where each element in the vector is a
   // Resume operation on the corresponding task
-  result_t Run() override;
+  Result Run() override;
 
  private:
-  result_t runRound();
+  Result runRound();
 
   Strategy& strategy;
 
@@ -72,7 +72,7 @@ struct StrategyScheduler : Scheduler {
 template <typename TargetObj>
 struct TLAScheduler : Scheduler {
   TLAScheduler(size_t max_tasks, size_t max_rounds, size_t threads_count,
-               size_t max_switches, std::vector<task_builder_t> constructors,
+               size_t max_switches, std::vector<TaskBuilder> constructors,
                ModelChecker& checker, PrettyPrinter& pretty_printer)
       : max_tasks{max_tasks},
         max_rounds{max_rounds},
@@ -81,22 +81,22 @@ struct TLAScheduler : Scheduler {
         checker{checker},
         pretty_printer{pretty_printer} {
     for (size_t i = 0; i < threads_count; ++i) {
-      threads.emplace_back(thread_t{
+      threads.emplace_back(Thread{
           .id = i,
           .tasks = StableVector<StackfulTask>{},
       });
     }
   };
 
-  result_t Run() override {
-    auto [_, res] = run(0, 0);
+  Result Run() override {
+    auto [_, res] = RunStep(0, 0);
     return res;
   }
 
-  ~TLAScheduler() { terminate_tasks(); }
+  ~TLAScheduler() { TerminateTasks(); }
 
  private:
-  struct thread_t {
+  struct Thread {
     size_t id;
     StableVector<StackfulTask> tasks;
   };
@@ -112,8 +112,8 @@ struct TLAScheduler : Scheduler {
   // ...     |         |    c    |        |
   //         |    f    |         |        |
   //                      .....
-  // frame_t struct describes one row of this table.
-  struct frame_t {
+  // Frame struct describes one row of this table.
+  struct Frame {
     // Pointer to the in task thread.
     StackfulTask* task{};
     // Is true if the task was created at this step.
@@ -124,7 +124,7 @@ struct TLAScheduler : Scheduler {
   // We do it in a dangerous way: in random order.
   // Actually, we assume obstruction free here.
   // TODO: for non obstruction-free we need to take into account dependencies.
-  void terminate_tasks() {
+  void TerminateTasks() {
     for (size_t i = 0; i < threads.size(); ++i) {
       if (!threads[i].tasks.empty()) {
         threads[i].tasks.back().Terminate();
@@ -133,9 +133,9 @@ struct TLAScheduler : Scheduler {
   }
 
   // Replays all actions from 0 to the step_end.
-  void replay(size_t step_end) {
+  void Replay(size_t step_end) {
     // Firstly, terminate all running tasks.
-    terminate_tasks();
+    TerminateTasks();
     // In histories we store references, so there's no need to update it.
     state.Reset();
     for (size_t step = 0; step < step_end; ++step) {
@@ -155,9 +155,9 @@ struct TLAScheduler : Scheduler {
 
   // Resumes choosed task.
   // If task is finished and finished tasks == max_tasks, stops.
-  std::tuple<bool, result_t> resume_task(frame_t& frame, size_t step,
-                                         size_t switches, thread_t& thread,
-                                         bool is_new) {
+  std::tuple<bool, Result> ResumeTask(Frame& frame, size_t step,
+                                      size_t switches, Thread& thread,
+                                      bool is_new) {
     auto thread_id = thread.id;
     size_t previous_thread_id = thread_id_history.empty()
                                     ? std::numeric_limits<size_t>::max()
@@ -193,19 +193,19 @@ struct TLAScheduler : Scheduler {
     bool stop = finished_tasks == max_tasks;
     if (!stop) {
       // Run recursive step.
-      auto [is_over, res] = run(step + 1, nxt_switches);
+      auto [is_over, res] = RunStep(step + 1, nxt_switches);
       if (is_over || res.has_value()) {
         return {is_over, res};
       }
     } else {
       log() << "run round: " << finished_rounds << "\n";
-      pretty_printer.pretty_print(sequential_history, log());
+      pretty_printer.PrettyPrint(sequential_history, log());
       log() << "===============================================\n\n";
       log().flush();
       // Stop, check if the the generated history is linearizable.
       ++finished_rounds;
       if (!checker.Check(sequential_history)) {
-        return {false, std::make_pair(full_history_t{}, sequential_history)};
+        return {false, std::make_pair(FullHistory{}, sequential_history)};
       }
       if (finished_rounds == max_rounds) {
         // It was the last round.
@@ -228,9 +228,9 @@ struct TLAScheduler : Scheduler {
     return {false, {}};
   }
 
-  std::tuple<bool, result_t> run(size_t step, size_t switches) {
+  std::tuple<bool, Result> RunStep(size_t step, size_t switches) {
     // Push frame to the stack.
-    frames.emplace_back(frame_t{});
+    frames.emplace_back(Frame{});
     auto& frame = frames.back();
 
     bool all_parked = true;
@@ -245,13 +245,13 @@ struct TLAScheduler : Scheduler {
         all_parked = false;
         // Task exists.
         frame.is_new = false;
-        auto [is_over, res] = resume_task(frame, step, switches, thread, false);
+        auto [is_over, res] = ResumeTask(frame, step, switches, thread, false);
         if (is_over || res.has_value()) {
           return {is_over, res};
         }
         // As we can't return to the past in coroutine, we need to replay all
         // tasks from the beginning.
-        replay(step);
+        Replay(step);
         continue;
       }
 
@@ -262,7 +262,7 @@ struct TLAScheduler : Scheduler {
         auto size_before = tasks.size();
         tasks.emplace_back(StackfulTask{cons, &state});
 
-        auto [is_over, res] = resume_task(frame, step, switches, thread, true);
+        auto [is_over, res] = ResumeTask(frame, step, switches, thread, true);
         if (is_over || res.has_value()) {
           return {is_over, res};
         }
@@ -273,7 +273,7 @@ struct TLAScheduler : Scheduler {
         assert(size_before == size_after);
         // As we can't return to the past in coroutine, we need to replay all
         // tasks from the beginning.
-        replay(step);
+        Replay(step);
         ++cons_num;
       }
     }
@@ -287,7 +287,7 @@ struct TLAScheduler : Scheduler {
   size_t max_tasks;
   size_t max_rounds;
   size_t max_switches;
-  std::vector<task_builder_t> constructors;
+  std::vector<TaskBuilder> constructors;
   ModelChecker& checker;
 
   // Running state.
@@ -298,6 +298,6 @@ struct TLAScheduler : Scheduler {
   std::vector<std::pair<int, std::reference_wrapper<StackfulTask>>>
       full_history;
   std::vector<size_t> thread_id_history;
-  StableVector<thread_t> threads;
-  StableVector<frame_t> frames;
+  StableVector<Thread> threads;
+  StableVector<Frame> frames;
 };

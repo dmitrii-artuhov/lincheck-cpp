@@ -9,7 +9,7 @@
 template <typename TargetObj>
 struct RoundRobinStrategy : PickStrategy<TargetObj> {
   explicit RoundRobinStrategy(size_t threads_count,
-                              std::vector<task_builder_t> constructors)
+                              std::vector<TaskBuilder> constructors)
       : next_task{0},
         PickStrategy<TargetObj>{threads_count, std::move(constructors)} {}
 

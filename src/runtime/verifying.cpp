@@ -5,12 +5,12 @@
 namespace ltest {
 
 template <>
-std::string to_string<int>(const int &a) {
+std::string toString<int>(const int &a) {
   return std::to_string(a);
 }
 
 template <>
-std::string to_string<std::shared_ptr<Token>>(
+std::string toString<std::shared_ptr<Token>>(
     const std::shared_ptr<Token> &token) {
   return "token";
 }

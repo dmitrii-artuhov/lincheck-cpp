@@ -7,7 +7,7 @@
 // Mutex operates with ltest token.
 // After unsuccessful Lock() it parks the method.
 // Ltest runtime doesn't launch parked tasks.
-// It's important to call `coro_yield()` implicitly after possible parking.
+// It's important to call `CoroYield()` implicitly after possible parking.
 struct Mutex {
   // First - holds the lock.
   // Others - want the lock.
@@ -23,7 +23,7 @@ struct Mutex {
       return;
     }
     token->parked = true;
-    coro_yield();
+    CoroYield();
   }
 
   // Assume this method is atomic.

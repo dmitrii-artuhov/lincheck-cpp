@@ -3,7 +3,6 @@
 
 #include "../../../runtime/include/generators.h"
 #include "../../../runtime/include/verifying_macro.h"
-#include "../verifying_runner.h"
 
 struct Fatty {
   int a = 42;
@@ -17,17 +16,17 @@ struct Fatty {
 namespace ltest {
 
 template <>
-std::string to_string<Fatty>(const Fatty &f) {
+std::string toString<Fatty>(const Fatty &f) {
   return "Fatty";
 }
 
 template <>
-std::string to_string<std::pair<int, int>>(const std::pair<int, int> &p) {
-  return "{" + to_string(p.first) + ", " + to_string(p.second) + "}";
+std::string toString<std::pair<int, int>>(const std::pair<int, int> &p) {
+  return "{" + toString(p.first) + ", " + toString(p.second) + "}";
 }
 
 template <>
-std::string to_string<std::string>(const std::string &a) {
+std::string toString<std::string>(const std::string &a) {
   return a;
 }
 
@@ -48,11 +47,11 @@ struct Test {
 // Generators.
 auto two_sum_generator() { return std::tuple<int, int>{42, 43}; }
 
-auto fatty_generator() { return ltest::generators::make_single_arg(Fatty{}); }
+auto fatty_generator() { return ltest::generators::makeSingleArg(Fatty{}); }
 
 auto fatty_ptr_generator() {
   auto fatty = new Fatty();
-  return ltest::generators::make_single_arg(fatty);
+  return ltest::generators::makeSingleArg(fatty);
 }
 
 auto three_strings_generator() {
@@ -66,19 +65,15 @@ auto two_pairs_generator() {
 }
 
 // Implementation.
-target_method(ltest::generators::empty_gen, void, Test, non_args) {
-  std::cout << "No args!" << std::endl;
-}
-
-target_method(two_sum_generator, int, Test, two_sum, int a, int b) {
-  return a + b;
-}
-
 target_method(fatty_generator, int, Test, fatty_sum, Fatty f) {
   std::cout << "fatty_sum(" << f.a << ", " << f.b << ", " << f.c << ", "
             << f.str << ", " << f.x << ", " << f.y << ")" << std::endl;
   return f.str.size() + f.a + f.b + f.c + static_cast<int>(f.x) +
          static_cast<int>(f.y);
+}
+
+target_method(ltest::generators::genEmpty, void, Test, non_args) {
+  std::cout << "No args!" << std::endl;
 }
 
 target_method(three_strings_generator, void, Test, print, std::string a,
@@ -91,4 +86,23 @@ target_method(two_pairs_generator, int, Test, sum_of_pairs,
   return a.first + a.second + b.first + b.second;
 }
 
-TEST_ENTRYPOINT(Test);
+target_method(two_sum_generator, int, Test, two_sum, int a, int b) {
+  return a + b;
+}
+
+namespace ltest {
+std::vector<TaskBuilder> task_builders;
+GeneratedArgs gen_args = GeneratedArgs{};
+}  // namespace ltest
+
+int main() {
+  auto conss = std::move(ltest::task_builders);
+  Test tst{};
+  for (auto cons : conss) {
+    auto task = StackfulTask{cons, &tst};
+    while (!task.IsReturned()) {
+      task.Resume();
+    }
+    std::cout << "Returned: " << task.GetRetVal() << std::endl;
+  }
+}

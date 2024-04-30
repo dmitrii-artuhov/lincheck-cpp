@@ -10,6 +10,7 @@ struct StableVector {
   StableVector() = default;
 
   StableVector(StableVector &&rhs) noexcept {
+    total_size = rhs.total_size;
     for (size_t i = 0; i < entities.size(); ++i) {
       std::swap(entities[i], rhs.entities[i]);
     }
@@ -18,9 +19,12 @@ struct StableVector {
   StableVector(const StableVector &rhs) = delete;
 
   StableVector &operator=(StableVector &&rhs) noexcept {
+    total_size = rhs.total_size;
+    rhs.total_size = 0;
     for (size_t i = 0; i < entities.size(); ++i) {
       std::swap(entities[i], rhs.entities[i]);
     }
+    return *this;
   }
 
   StableVector &operator=(const StableVector &rhs) = delete;

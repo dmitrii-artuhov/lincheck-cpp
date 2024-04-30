@@ -18,8 +18,8 @@
 
 using namespace llvm;
 
-using builder_t = IRBuilder<NoFolder>;
-using fun_index_t = std::set<std::pair<StringRef, StringRef>>;
+using Builder = IRBuilder<NoFolder>;
+using FunIndex = std::set<std::pair<StringRef, StringRef>>;
 
 // Attributes.
 const StringRef nonatomic_attr = "ltest_nonatomic";
@@ -41,7 +41,7 @@ void Assert(bool cond, const T &obj) {
 
 void Assert(bool cond) { assert(cond); }
 
-Value *GenerateCall(builder_t *builder, Function *fun) {
+Value *GenerateCall(Builder *builder, Function *fun) {
   if (fun->arg_size() == 0) {
     return builder->CreateCall(fun, {});
   }
@@ -63,8 +63,8 @@ Twine ToCoro(const StringRef name,
   return name + coro_suf;
 }
 
-fun_index_t CreateFunIndex(const Module &M) {
-  fun_index_t index{};
+FunIndex CreateFunIndex(const Module &M) {
+  FunIndex index{};
   for (auto it = M.global_begin(); it != M.global_end(); ++it) {
     if (it->getName() != "llvm.global.annotations") {
       continue;
@@ -83,7 +83,7 @@ fun_index_t CreateFunIndex(const Module &M) {
   return index;
 }
 
-bool HasAttribute(const fun_index_t &index, const StringRef name,
+bool HasAttribute(const FunIndex &index, const StringRef name,
                   const StringRef attr) {
   return index.find({attr, name}) != index.end();
 }
@@ -123,7 +123,7 @@ struct CoroGenerator final {
                          Function::ExternalLinkage, "get_promise", M);
   }
 
-  void Run(const fun_index_t &index) {
+  void Run(const FunIndex &index) {
     std::map<StringRef, StringRef> unmangled_name;
     for (const auto &[attr, symbol] : index) {
       if (attr.starts_with(target_attr_prefix)) {
@@ -160,13 +160,13 @@ struct CoroGenerator final {
   Function *get_promise;
   Function *init_promise;
 
-  bool IsCoroTarget(const StringRef fun_name, const fun_index_t &index) {
+  bool IsCoroTarget(const StringRef fun_name, const FunIndex &index) {
     return HasAttribute(index, fun_name, nonatomic_attr) ||
            HasAttribute(index, fun_name, nonatomic_manual_attr);
   }
 
   bool NeedInterrupt(Instruction *insn, bool only_manual_suspends,
-                     const fun_index_t &index) {
+                     const FunIndex &index) {
     bool is_manual_suspend = false;
     bool is_required_suspend_call = false;
 
@@ -174,7 +174,7 @@ struct CoroGenerator final {
       auto called = call->getCalledFunction();
       if (called && called->hasName()) {
         auto called_name = called->getName();
-        is_manual_suspend |= called_name == "coro_yield";
+        is_manual_suspend |= called_name == "CoroYield";
         is_manual_suspend |=
             HasAttribute(index, called_name, nonatomic_manual_attr);
 
@@ -193,7 +193,7 @@ struct CoroGenerator final {
     return false;
   }
 
-  Function *GenCoroFunc(Function *F, const fun_index_t &index,
+  Function *GenCoroFunc(Function *F, const FunIndex &index,
                         const std::map<StringRef, StringRef> &unmangled_name) {
     auto name = F->getName();
     if (F->empty()) {
@@ -248,7 +248,7 @@ struct CoroGenerator final {
 
   // TODO: rewrite it using one pass.
   Function *RawGenCoroFunc(Function *F, Type *old_ret_t,
-                           const fun_index_t &index,
+                           const FunIndex &index,
                            const std::map<StringRef, StringRef> &umangled_name,
                            bool only_manual_suspends) {
     auto int_gen = utils::SeqGenerator{};
@@ -262,7 +262,7 @@ struct CoroGenerator final {
     assert(ptr_t == F->getReturnType() && "F must have ptr return type");
     F->setPresplitCoroutine();
 
-    builder_t Builder(&*F->begin());
+    Builder Builder(&*F->begin());
 
 #ifdef REPLACE_CORO_INVOKES
     // Generate fictive normal_dest blocks for invoke instructions.
@@ -362,9 +362,9 @@ struct CoroGenerator final {
                                        {id, alloc}, nullptr, "hdl");
     auto suspend_0 = Builder.CreateIntrinsic(i8_t, Intrinsic::coro_suspend,
                                              {token_none, i1_false});
-    auto _switch = Builder.CreateSwitch(suspend_0, suspend, 2);
-    _switch->addCase(ConstantInt::get(i8_t, 0), &first_real_block);
-    _switch->addCase(ConstantInt::get(i8_t, 1), cleanup);
+    auto switch_instr = Builder.CreateSwitch(suspend_0, suspend, 2);
+    switch_instr->addCase(ConstantInt::get(i8_t, 0), &first_real_block);
+    switch_instr->addCase(ConstantInt::get(i8_t, 1), cleanup);
 
     // Cleanup:
     Builder.SetInsertPoint(cleanup);

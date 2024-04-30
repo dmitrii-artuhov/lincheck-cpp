@@ -11,7 +11,7 @@
 template <typename TargetObj>
 struct RandomStrategy : PickStrategy<TargetObj> {
   explicit RandomStrategy(size_t threads_count,
-                          std::vector<task_builder_t> constructors,
+                          std::vector<TaskBuilder> constructors,
                           std::vector<int> weights)
       : PickStrategy<TargetObj>{threads_count, std::move(constructors)},
         weights{std::move(weights)} {}
@@ -28,7 +28,17 @@ struct RandomStrategy : PickStrategy<TargetObj> {
     assert(!pick_weights.empty() && "deadlock");
     auto thread_distribution =
         std::discrete_distribution<>(pick_weights.begin(), pick_weights.end());
-    return thread_distribution(PickStrategy<TargetObj>::rng);
+    auto num = thread_distribution(PickStrategy<TargetObj>::rng);
+    for (size_t i = 0; i < threads.size(); ++i) {
+      if (!threads[i].empty() && threads[i].back().IsParked()) {
+        continue;
+      }
+      if (num == 0) {
+        return i;
+      }
+      num--;
+    }
+    assert(false && "oops");
   }
 
  private:

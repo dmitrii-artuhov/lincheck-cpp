@@ -12,19 +12,19 @@ struct Test {
   void TestParked(std::shared_ptr<Token> token);
 };
 
-target_method(ltest::generators::gen_token, void, Test, TestParked,
+target_method(ltest::generators::genToken, void, Test, TestParked,
               std::shared_ptr<Token> token) {
   set_parked(token, true);
   parked_set = true;
-  coro_yield();
+  CoroYield();
 
   set_parked(token, false);
   parked_set = false;
-  coro_yield();
+  CoroYield();
 }
 
 namespace ltest {
-std::vector<task_builder_t> task_builders;
+std::vector<TaskBuilder> task_builders;
 GeneratedArgs gen_args = GeneratedArgs{};
 }  // namespace ltest
 

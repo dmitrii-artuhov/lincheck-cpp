@@ -28,8 +28,8 @@ struct PrettyPrinter {
            cell_width
   */
   template <typename Out_t>
-  void pretty_print(const std::vector<std::variant<Invoke, Response>>& result,
-                    Out_t& out) {
+  void PrettyPrint(const std::vector<std::variant<Invoke, Response>>& result,
+                   Out_t& out) {
     auto get_thread_num = [](const std::variant<Invoke, Response>& v) {
       // Crutch.
       if (v.index() == 0) {
@@ -38,7 +38,7 @@ struct PrettyPrinter {
       return get<1>(v).thread_id;
     };
 
-    int cell_width = 35;  // Up it if necessary. Enough for now.
+    int cell_width = 20;  // Up it if necessary. Enough for now.
 
     auto print_separator = [&out, this, cell_width]() {
       out << "*";
@@ -117,7 +117,7 @@ struct PrettyPrinter {
 
   // Helps to debug full histories.
   template <typename Out_t>
-  void pretty_print(
+  void PrettyPrint(
       const std::vector<std::pair<int, std::reference_wrapper<StackfulTask>>>&
           result,
       Out_t& out) {

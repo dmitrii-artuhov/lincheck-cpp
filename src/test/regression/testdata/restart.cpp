@@ -11,14 +11,14 @@ struct Test {
   void method();
 };
 
-target_method(ltest::generators::empty_gen, void, Test, method) {
+target_method(ltest::generators::genEmpty, void, Test, method) {
   for (int i = 0; i < 3; ++i) {
     some_method(i);
   }
 }
 
 namespace ltest {
-std::vector<task_builder_t> task_builders;
+std::vector<TaskBuilder> task_builders;
 GeneratedArgs gen_args = GeneratedArgs{};
 }  // namespace ltest
 

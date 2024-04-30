@@ -26,17 +26,17 @@ struct Queue {
 };
 
 // Arguments generator.
-auto generate_int() {
-  return ltest::generators::make_single_arg(rand() % 10 + 1);
+auto generateInt() {
+  return ltest::generators::makeSingleArg(rand() % 10 + 1);
 }
 
 // Targets.
-target_method(generate_int, void, Queue, Push, int v) {
+target_method(generateInt, void, Queue, Push, int v) {
   int pos = head.fetch_add(1);
   a[pos] = v;
 }
 
-target_method(ltest::generators::empty_gen, int, Queue, Pop) {
+target_method(ltest::generators::genEmpty, int, Queue, Pop) {
   int last = head.load();
   for (int i = 0; i < last; ++i) {
     int e = a[i].load();
