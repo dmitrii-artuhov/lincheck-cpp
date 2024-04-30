@@ -1,83 +1,64 @@
+/**
+ * ./verify.py build --src ./targets/mutex_queue.cpp
+ * ./verify.py run --tasks 4 --switches 1 --rounds 100000 --strategy tla
+*/
 #include <atomic>
 #include <cstring>
 
+#include "../lib/mutex.h"
 #include "../specs/queue.h"
 
 const int N = 100;
 
-struct Mutex {
-  std::atomic<bool> flg{};
-
-  void lock() {
-    while (true) {
-      bool busy = flg.load();
-      if (busy) {
-        continue;
-      }
-      if (flg.compare_exchange_weak(busy, true)) {
-        break;
-      }
-    }
-  }
-
-  void unlock() {
-    bool tru = true;
-    flg.compare_exchange_weak(tru, false);
-  }
-};
-
 struct Queue {
-  Queue() {}
+  void Push(std::shared_ptr<Token> token, int v);
+  int Pop(std::shared_ptr<Token> token);
 
-  Queue(const Queue &oth) {
-    // Reinit mutex unconditionally.
-    mutex.flg.store(false);
-    tail = oth.tail;
-    head = oth.head;
-    std::memcpy(a, oth.a, N);
+  void Reset() {
+    mutex = Mutex{};
+    tail = head = 0;
+    std::fill(a, a + N, 0);
   }
-  Queue &operator=(const Queue &oth) {
-    // Reinit mutex unconditionally.
-    mutex.flg.store(false);
-    tail = oth.tail;
-    head = oth.head;
-    std::memcpy(a, oth.a, N);
-    return *this;
-  }
-
-  void Push(int v);
-  int Pop();
 
   Mutex mutex{};
   int tail{}, head{};
   int a[N]{};
 };
 
-namespace ltest {
-
-}  // namespace ltest
+namespace ltest {}  // namespace ltest
 
 auto generate_int() {
   return ltest::generators::make_single_arg(rand() % 10 + 1);
 }
 
-target_method(generate_int, void, Queue, Push, int v) {
-  mutex.lock();
-  a[head++] = v;
-  mutex.unlock();
+auto generate_args() {
+  auto token = ltest::generators::gen_token();
+  auto _int = generate_int();
+  return std::tuple_cat(token, _int);
 }
 
-target_method(ltest::generators::empty_gen, int, Queue, Pop) {
-  mutex.lock();
+target_method(generate_args, void, Queue, Push, std::shared_ptr<Token> token,
+              int v) {
+  mutex.Lock(token);
+  coro_yield();
+  a[head++] = v;
+  mutex.Unlock();
+}
+
+target_method(ltest::generators::gen_token, int, Queue, Pop,
+              std::shared_ptr<Token> token) {
+  mutex.Lock(token);
   int e = 0;
   if (head - tail > 0) {
     e = a[tail++];
   }
-  mutex.unlock();
+  mutex.Unlock();
   return e;
 }
 
-using spec_t =
-    ltest::Spec<Queue, spec::Queue, spec::QueueHash, spec::QueueEquals>;
+using QueueCls = spec::Queue<std::tuple<std::shared_ptr<Token>, int>, 1>;
+
+using spec_t = ltest::Spec<Queue, QueueCls, spec::QueueHash<QueueCls>,
+                           spec::QueueEquals<QueueCls>>;
 
 LTEST_ENTRYPOINT(spec_t);

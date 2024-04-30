@@ -1,3 +1,8 @@
+/**
+ * ./verify.py build --src ./targets/fast_queue.cpp
+ * ./verify.py run --strategy tla --tasks 4 --rounds 50000 --switches 1
+ *
+*/
 #include <atomic>
 #include <iostream>
 #include <vector>
@@ -5,7 +10,7 @@
 #include "../specs/bounded_queue.h"
 
 template <typename T>
-struct alignas(512) Node {
+struct Node {
   std::atomic<size_t> generation;
   T val;
 
@@ -23,10 +28,6 @@ struct alignas(512) Node {
 
 const int size = 2;
 
-namespace ltest {
-
-}  // namespace ltest
-
 auto generate_int() {
   return ltest::generators::make_single_arg(rand() % 10 + 1);
 }
@@ -40,18 +41,12 @@ class MPMCBoundedQueue {
     }
   }
 
-  MPMCBoundedQueue(const MPMCBoundedQueue &oth) : max_size_{oth.max_size_} {
-    vec_ = oth.vec_;
-    head_.store(oth.head_.load());
-    tail_.store(oth.tail_.load());
-  }
-
-  MPMCBoundedQueue &operator=(const MPMCBoundedQueue &oth) {
-    max_size_ = oth.max_size_;
-    vec_ = oth.vec_;
-    head_.store(oth.head_.load());
-    tail_.store(oth.tail_.load());
-    return *this;
+  void Reset() {
+    for (size_t i = 0; i < size; ++i) {
+      vec_[i].generation.store(i);
+    }
+    head_.store(0);
+    tail_.store(0);
   }
 
   int Push(int value);
