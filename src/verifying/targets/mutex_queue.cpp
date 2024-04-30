@@ -1,7 +1,7 @@
 /**
  * ./verify.py build --src ./targets/mutex_queue.cpp
  * ./verify.py run --tasks 4 --switches 1 --rounds 100000 --strategy tla
-*/
+ */
 #include <atomic>
 #include <cstring>
 
@@ -17,9 +17,11 @@ struct Queue {
   void Reset() {
     mutex = Mutex{};
     tail = head = 0;
+    cnt = 0;
     std::fill(a, a + N, 0);
   }
 
+  int cnt{};
   Mutex mutex{};
   int tail{}, head{};
   int a[N]{};
@@ -27,31 +29,34 @@ struct Queue {
 
 namespace ltest {}  // namespace ltest
 
-auto generate_int() {
-  return ltest::generators::make_single_arg(rand() % 10 + 1);
-}
+auto generateInt() { return ltest::generators::makeSingleArg(rand() % 10 + 1); }
 
-auto generate_args() {
-  auto token = ltest::generators::gen_token();
-  auto _int = generate_int();
+auto generateArgs() {
+  auto token = ltest::generators::genToken();
+  auto _int = generateInt();
   return std::tuple_cat(token, _int);
 }
 
-target_method(generate_args, void, Queue, Push, std::shared_ptr<Token> token,
+target_method(generateArgs, void, Queue, Push, std::shared_ptr<Token> token,
               int v) {
   mutex.Lock(token);
-  coro_yield();
   a[head++] = v;
+  ++cnt;
+  assert(cnt == 1);
+  --cnt;
   mutex.Unlock();
 }
 
-target_method(ltest::generators::gen_token, int, Queue, Pop,
+target_method(ltest::generators::genToken, int, Queue, Pop,
               std::shared_ptr<Token> token) {
   mutex.Lock(token);
   int e = 0;
   if (head - tail > 0) {
     e = a[tail++];
   }
+  ++cnt;
+  assert(cnt == 1);
+  --cnt;
   mutex.Unlock();
   return e;
 }

@@ -16,11 +16,11 @@ struct Register {
   std::atomic<int> x{};
 };
 
-target_method(ltest::generators::empty_gen, void, Register, add) {
+target_method(ltest::generators::genEmpty, void, Register, add) {
   x.fetch_add(1);
 }
 
-target_method(ltest::generators::empty_gen, int, Register, get) {
+target_method(ltest::generators::genEmpty, int, Register, get) {
   return x.load();
 }
 

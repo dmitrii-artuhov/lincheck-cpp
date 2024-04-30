@@ -1,6 +1,7 @@
 /**
  * ./verify.py build --src ./targets/deadlock.cpp
  * ./verify.py run -v --tasks 5 --strategy rr
+ * ./verify.py run -v --tasks 5 --strategy random
  *
  * It important to limit switches.
  * ./verify.py run -v --tasks 2 --strategy tla --rounds 100000 --switches 4
@@ -37,18 +38,16 @@ struct Test {
   }
 };
 
-auto generate_int() {
-  return ltest::generators::make_single_arg(rand() % 10 + 1);
-}
+auto generateInt() { return ltest::generators::makeSingleArg(rand() % 10 + 1); }
 
-auto generate_args() {
-  auto token = ltest::generators::gen_token();
-  auto _int = generate_int();
+auto generateArgs() {
+  auto token = ltest::generators::genToken();
+  auto _int = generateInt();
   return std::tuple_cat(token, _int);
 }
 
 // Lock(odd) in parallel with Lock(even) causes deadlock.
-target_method(generate_args, void, Test, Lock, std::shared_ptr<Token> token,
+target_method(generateArgs, void, Test, Lock, std::shared_ptr<Token> token,
               int v) {
   if (v % 2 == 0) {
     mu1.Lock(token);

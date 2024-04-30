@@ -6,17 +6,15 @@
 
 #include "lib.h"
 
-extern "C" void coro_yield() noexcept;
+extern "C" void CoroYield() noexcept;
 
 namespace ltest {
 
-extern std::vector<task_builder_t> task_builders;
+extern std::vector<TaskBuilder> task_builders;
 
 // Need to registrate target function in macro.
-struct task_builder_pusher {
-  task_builder_pusher(task_builder_t builder) {
-    task_builders.push_back(builder);
-  }
+struct TaskBuilderPusher {
+  TaskBuilderPusher(TaskBuilder builder) { task_builders.push_back(builder); }
 };
 
 }  // namespace ltest
@@ -31,58 +29,58 @@ struct task_builder_pusher {
 #define non_atomic attr(ltest_nonatomic)
 
 // Tell that the function need to be converted to the coroutine,
-// but it's the user responsibility to place coro_yield() calls.
+// but it's the user responsibility to place CoroYield() calls.
 #define non_atomic_manual attr(ltest_nonatomic_manual)
 
 namespace ltest {
 
 template <typename T>
-std::string to_string(const T &a);
+std::string toString(const T &a);
 
 template <typename Func, typename... Args>
-non_atomic_manual int call_coroutine(Func &&f, void *this_ptr,
-                                     Args &&...args) noexcept {
-  handle hdl = f(this_ptr, std::forward<Args>(args)...);
-  auto tsk = StackfulTask{hdl};
+non_atomic_manual int callCoroutine(Func &&f, void *this_ptr,
+                                    Args &&...args) noexcept {
+  Handle hdl = f(this_ptr, std::forward<Args>(args)...);
+  auto tsk = StackfulTask{Task{hdl}};
   while (!tsk.IsReturned()) {
     tsk.Resume();
-    coro_yield();
+    CoroYield();
   }
   return tsk.GetRetVal();
 }
 
 template <typename Func, typename Tuple, size_t... Indices>
-non_atomic_manual int call_coroutine_with_tuple_helper(
+non_atomic_manual int callCoroutineWithTupleHelper(
     Func &&func, void *this_ptr, Tuple &&tuple,
     std::index_sequence<Indices...>) noexcept {
-  return call_coroutine(std::forward<Func>(func), this_ptr,
-                        std::get<Indices>(std::forward<Tuple>(tuple))...);
+  return callCoroutine(std::forward<Func>(func), this_ptr,
+                       std::get<Indices>(std::forward<Tuple>(tuple))...);
 }
 
 template <typename Func, typename Tuple>
-non_atomic_manual int call_coroutine_with_tuple(Func &&func, void *this_ptr,
-                                                Tuple &&tuple) noexcept {
+non_atomic_manual int callCoroutineWithTuple(Func &&func, void *this_ptr,
+                                             Tuple &&tuple) noexcept {
   constexpr size_t tuple_size =
       std::tuple_size<std::remove_reference_t<Tuple>>::value;
-  return call_coroutine_with_tuple_helper(
-      std::forward<Func>(func), this_ptr, std::forward<Tuple>(tuple),
-      std::make_index_sequence<tuple_size>{});
+  return callCoroutineWithTupleHelper(std::forward<Func>(func), this_ptr,
+                                      std::forward<Tuple>(tuple),
+                                      std::make_index_sequence<tuple_size>{});
 }
 
 template <typename tuple_t, size_t... index>
-auto to_string_list_helper(const tuple_t &t,
-                           std::index_sequence<index...>) noexcept {
-  return std::vector<std::string>{ltest::to_string(std::get<index>(t))...};
+auto toStringListHelper(const tuple_t &t,
+                        std::index_sequence<index...>) noexcept {
+  return std::vector<std::string>{ltest::toString(std::get<index>(t))...};
 }
 
 template <typename tuple_t>
-auto to_string_list(const tuple_t &t) noexcept {
+auto toStringList(const tuple_t &t) noexcept {
   typedef typename std::remove_reference<decltype(t)>::type tuple_type;
   constexpr auto s = std::tuple_size<tuple_type>::value;
   if constexpr (s == 0) {
     return std::vector<std::string>{};
   }
-  return to_string_list_helper<tuple_type>(t, std::make_index_sequence<s>{});
+  return toStringListHelper<tuple_type>(t, std::make_index_sequence<s>{});
 }
 
 struct GeneratedArgs {
@@ -105,7 +103,7 @@ extern GeneratedArgs gen_args;
 // It is need, because we need to call mangled coroutine function on our cpp
 // level.
 #define declare_coro(symbol, ...) \
-  extern "C" handle symbol##_coro(void *__VA_OPT__(, ) __VA_ARGS__)
+  extern "C" Handle symbol##_coro(void *__VA_OPT__(, ) __VA_ARGS__)
 
 // Declares the struct method for which a coroutine will be generated.
 #define declare_target_method(ret, cls, symbol, ...) \
@@ -119,27 +117,27 @@ extern GeneratedArgs gen_args;
       void *this_ptr) noexcept {                                             \
     auto generated_args = generator();                                       \
     ltest::SetGenArgs(std::shared_ptr<void>(new std::tuple(generated_args)), \
-                      ltest::to_string_list(generated_args));                \
+                      ltest::toStringList(generated_args));                  \
     ltest::SetArgsInited(true);                                              \
-    coro_yield();                                                            \
-    return ltest::call_coroutine_with_tuple(symbol##_coro, this_ptr,         \
-                                            generated_args);                 \
+    CoroYield();                                                             \
+    return ltest::callCoroutineWithTuple(symbol##_coro, this_ptr,            \
+                                         generated_args);                    \
   }                                                                          \
                                                                              \
-  extern "C" handle symbol##_cpp_launcher_coro(void *this_ptr);
+  extern "C" Handle symbol##_cpp_launcher_coro(void *this_ptr);
 
 // Allows to clone the task, starting from the beginning
 // and provide the same arguments.
-#define declare_cloner_launcher(generator, symbol)                   \
-  non_atomic_manual extern "C" int symbol##_clone_launcher(          \
-      void *this_ptr, void *raw_args) noexcept {                     \
-    assert(raw_args && "raw_args pointer is nullptr");               \
-    auto generated_args_ptr =                                        \
-        reinterpret_cast<decltype(generator()) *>(raw_args);         \
-    return ltest::call_coroutine_with_tuple(symbol##_coro, this_ptr, \
-                                            *generated_args_ptr);    \
-  }                                                                  \
-  extern "C" handle symbol##_clone_launcher_coro(void *this_ptr,     \
+#define declare_cloner_launcher(generator, symbol)                \
+  non_atomic_manual extern "C" int symbol##_clone_launcher(       \
+      void *this_ptr, void *raw_args) noexcept {                  \
+    assert(raw_args && "raw_args pointer is nullptr");            \
+    auto generated_args_ptr =                                     \
+        reinterpret_cast<decltype(generator()) *>(raw_args);      \
+    return ltest::callCoroutineWithTuple(symbol##_coro, this_ptr, \
+                                         *generated_args_ptr);    \
+  }                                                               \
+  extern "C" Handle symbol##_clone_launcher_coro(void *this_ptr,  \
                                                  void *raw_args);
 
 // Declares the cpp level builder. Returns a task.
@@ -159,13 +157,13 @@ extern GeneratedArgs gen_args;
   }
 
 // Public entrypoint.
-#define target_method(generator, ret, cls, symbol, ...)                   \
-  declare_task_name(symbol);                                              \
-  declare_coro(symbol, __VA_ARGS__);                                      \
-  declare_cpp_launcher(generator, symbol);                                \
-  declare_cloner_launcher(generator, symbol);                             \
-  declare_cpp_builder(symbol);                                            \
-  namespace ltest {                                                       \
-  ltest::task_builder_pusher symbol##__task__push{&symbol##_cpp_builder}; \
-  }                                                                       \
+#define target_method(generator, ret, cls, symbol, ...)                 \
+  declare_task_name(symbol);                                            \
+  declare_coro(symbol, __VA_ARGS__);                                    \
+  declare_cpp_launcher(generator, symbol);                              \
+  declare_cloner_launcher(generator, symbol);                           \
+  declare_cpp_builder(symbol);                                          \
+  namespace ltest {                                                     \
+  ltest::TaskBuilderPusher symbol##__task__push{&symbol##_cpp_builder}; \
+  }                                                                     \
   declare_target_method(ret, cls, symbol, __VA_ARGS__)

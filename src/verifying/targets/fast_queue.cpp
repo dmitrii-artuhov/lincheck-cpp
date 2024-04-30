@@ -28,8 +28,8 @@ struct Node {
 
 const int size = 2;
 
-auto generate_int() {
-  return ltest::generators::make_single_arg(rand() % 10 + 1);
+auto generateInt() {
+  return ltest::generators::makeSingleArg(rand() % 10 + 1);
 }
 
 class MPMCBoundedQueue {
@@ -69,7 +69,7 @@ class MPMCBoundedQueue {
 // POP
 // 1 == tail + 1? 1 == 1
 
-target_method(generate_int, int, MPMCBoundedQueue, Push, int value) {
+target_method(generateInt, int, MPMCBoundedQueue, Push, int value) {
   while (true) {
     auto h = head_.load(/*std::memory_order_relaxed*/);
     auto hid = h & max_size_;
@@ -88,7 +88,7 @@ target_method(generate_int, int, MPMCBoundedQueue, Push, int value) {
   }
 }
 
-target_method(ltest::generators::empty_gen, int, MPMCBoundedQueue, Pop) {
+target_method(ltest::generators::genEmpty, int, MPMCBoundedQueue, Pop) {
   while (true) {
     auto t = tail_.load(/*std::memory_order_relaxed*/);
     auto tid = t & max_size_;

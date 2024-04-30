@@ -13,7 +13,7 @@ StrategyScheduler::StrategyScheduler(Strategy& sched_class,
       max_tasks(max_tasks),
       max_rounds(max_rounds) {}
 
-Scheduler::result_t StrategyScheduler::runRound() {
+Scheduler::Result StrategyScheduler::runRound() {
   // History of invoke and response events which is required for the checker
   std::vector<std::variant<Invoke, Response>> sequential_history;
   // Full history of the current execution in the Run function
@@ -37,7 +37,7 @@ Scheduler::result_t StrategyScheduler::runRound() {
     }
   }
 
-  pretty_printer.pretty_print(sequential_history, log());
+  pretty_printer.PrettyPrint(sequential_history, log());
 
   if (!checker.Check(sequential_history)) {
     return std::make_pair(full_history, sequential_history);
@@ -46,7 +46,7 @@ Scheduler::result_t StrategyScheduler::runRound() {
   return std::nullopt;
 }
 
-Scheduler::result_t StrategyScheduler::Run() {
+Scheduler::Result StrategyScheduler::Run() {
   for (size_t i = 0; i < max_rounds; ++i) {
     log() << "run round: " << i << "\n";
     auto seq_history = runRound();

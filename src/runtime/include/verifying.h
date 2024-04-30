@@ -40,8 +40,7 @@ std::vector<std::string> parse_opts(std::vector<std::string> args, Opts &opts);
 std::vector<std::string> split(const std::string &s, char delim);
 
 template <typename TargetObj>
-std::unique_ptr<Strategy> MakeStrategy(Opts &opts,
-                                       std::vector<task_builder_t> l) {
+std::unique_ptr<Strategy> MakeStrategy(Opts &opts, std::vector<TaskBuilder> l) {
   switch (opts.typ) {
     case RR: {
       std::cout << "round-robin\n";
@@ -82,7 +81,7 @@ struct StrategySchedulerWrapper : StrategyScheduler {
 
 template <typename TargetObj>
 std::unique_ptr<Scheduler> MakeScheduler(ModelChecker &checker, Opts &opts,
-                                         std::vector<task_builder_t> l,
+                                         std::vector<TaskBuilder> l,
                                          PrettyPrinter &pretty_printer) {
   std::cout << "strategy = ";
   switch (opts.typ) {
@@ -137,7 +136,7 @@ void Run(int argc, char *argv[]) {
   auto result = scheduler->Run();
   if (result.has_value()) {
     std::cout << "non linearized:\n";
-    pretty_printer.pretty_print(result.value().second, std::cout);
+    pretty_printer.PrettyPrint(result.value().second, std::cout);
   } else {
     std::cout << "success!\n";
   }
@@ -145,12 +144,12 @@ void Run(int argc, char *argv[]) {
 
 }  // namespace ltest
 
-#define LTEST_ENTRYPOINT(spec_obj_t)         \
-  namespace ltest {                          \
-  std::vector<task_builder_t> task_builders; \
-  GeneratedArgs gen_args = GeneratedArgs{};  \
-  }                                          \
-  int main(int argc, char *argv[]) {         \
-    ltest::Run<spec_obj_t>(argc, argv);      \
-    return 0;                                \
+#define LTEST_ENTRYPOINT(spec_obj_t)        \
+  namespace ltest {                         \
+  std::vector<TaskBuilder> task_builders;   \
+  GeneratedArgs gen_args = GeneratedArgs{}; \
+  }                                         \
+  int main(int argc, char *argv[]) {        \
+    ltest::Run<spec_obj_t>(argc, argv);     \
+    return 0;                               \
   }\

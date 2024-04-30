@@ -10,12 +10,12 @@
 
 declare void @tick();
 
-declare void @coro_yield();
+declare void @CoroYield();
 
 define i32 @bar(i32 %x) {
     %cond = icmp sge i32 %x, 5
     call void @tick()
-    call void @coro_yield()
+    call void @CoroYield()
     br i1 %cond, label %iftrue, label %iffalse
 iffalse:
     %y = add i32 %x, 1
@@ -28,7 +28,7 @@ iftrue:
 define i32 @foo(i32 %a, i32 %b) {
     %c = add i32 %a, %b
     call void @tick()
-    call void @coro_yield()
+    call void @CoroYield()
     %res = call i32 @bar(i32 %c)
     ret i32 %res
 }

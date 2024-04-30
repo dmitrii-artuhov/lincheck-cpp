@@ -12,21 +12,21 @@ struct Queue {
 
   non_atomic void Push(int v) {
     Log("Push: " + std::to_string(v));\
-    coro_yield();
+    CoroYield();
     int pos = head.fetch_add(1);
-    coro_yield();
+    CoroYield();
     queue_array[pos].store(v);
-    coro_yield();
+    CoroYield();
   }
 
   non_atomic int Pop() {
     int last = head.load();
-    coro_yield();
+    CoroYield();
     for (int i = 0; i < last; ++i) {
       int elem = queue_array[i].load();
-      coro_yield();
+      CoroYield();
       if (elem != 0 && queue_array[i].compare_exchange_weak(elem, 0)) {
-        coro_yield();
+        CoroYield();
         return elem;
       }
     }
@@ -37,14 +37,14 @@ struct Queue {
 non_atomic attr(ltesttarget_test) void test() {
   Queue q{};
   for (int i = 0; i < 5; ++i) {
-    coro_yield();
+    CoroYield();
     q.Push(i + 1);
-    coro_yield();
+    CoroYield();
   }
   for (int i = 0; i < 5; ++i) {
     int p = q.Pop();
-    coro_yield();
+    CoroYield();
     std::cout << "Got: " << p << std::endl;
-    coro_yield();
+    CoroYield();
   }
 }

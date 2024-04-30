@@ -9,7 +9,7 @@ struct PickStrategy : Strategy {
   virtual size_t Pick() = 0;
 
   explicit PickStrategy(size_t threads_count,
-                        std::vector<task_builder_t> constructors)
+                        std::vector<TaskBuilder> constructors)
       : next_task(0),
         threads_count(threads_count),
         constructors(std::move(constructors)),
@@ -74,7 +74,7 @@ struct PickStrategy : Strategy {
   TargetObj state{};
   size_t next_task = 0;
   size_t threads_count;
-  std::vector<task_builder_t> constructors;
+  std::vector<TaskBuilder> constructors;
   // RoundRobinStrategy struct is the owner of all tasks, and all
   // references can't be invalidated before the end of the round,
   // so we have to contains all tasks in queues(queue doesn't invalidate the
