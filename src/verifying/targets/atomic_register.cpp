@@ -1,3 +1,7 @@
+/**
+ * ./verify.py build --src ./targets/atomic_register.cpp
+ * ./verify.py run --tasks 3 --strategy tla --rounds 100000
+ */
 #include <atomic>
 
 #include "../../runtime/include/verifying.h"
@@ -7,12 +11,7 @@ struct Register {
   void add();
   int get();
 
-  Register(const Register &oth) { x.store(oth.x.load()); }
-  Register &operator=(const Register &oth) {
-    x.store(oth.x.load());
-    return *this;
-  }
-  Register(){};
+  void Reset() { x.store(0); }
 
   std::atomic<int> x{};
 };

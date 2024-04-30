@@ -1,3 +1,7 @@
+/**
+ * ./verify.py build --src ./targets/race_register.cpp
+ * ./verify.py run
+*/
 #include "../../runtime/include/verifying.h"
 #include "../specs/register.h"
 
@@ -5,12 +9,7 @@ struct Register {
   void add();
   int get();
 
-  Register(const Register& oth) { x = oth.x; }
-  Register& operator=(const Register& oth) {
-    x = oth.x;
-    return *this;
-  }
-  Register(){};
+  void Reset() { x = 0; }
 
   int x{};
 };

@@ -1,3 +1,7 @@
+/**
+ * ./verify.py build --src ./targets/nonlinear_queue.cpp
+ * ./verify.py run -v  --tasks 4 --rounds 100000 --strategy tla --switches 1
+ */
 #include <atomic>
 #include <cstring>
 #include <iostream>
@@ -10,19 +14,12 @@ const int N = 100;
 struct Queue {
   Queue() {}
 
-  Queue &operator=(const Queue &oth) {
-    head.store(oth.head.load());
-    std::memcpy(a, oth.a, N);
-    return *this;
-  }
-
-  Queue(const Queue &oth) {
-    head.store(oth.head.load());
-    std::memcpy(a, oth.a, N);
-  }
-
   void Push(int v);
-  int Pop(void);
+  int Pop();
+  void Reset() {
+    head.store(0);
+    for (int i = 0; i < N; ++i) a[i].store(0);
+  }
 
   std::atomic<int> a[N];
   std::atomic<int> head{};
@@ -52,6 +49,6 @@ target_method(ltest::generators::empty_gen, int, Queue, Pop) {
 
 // Specify target structure and it's sequential specification.
 using spec_t =
-    ltest::Spec<Queue, spec::Queue, spec::QueueHash, spec::QueueEquals>;
+    ltest::Spec<Queue, spec::Queue<>, spec::QueueHash<>, spec::QueueEquals<>>;
 
 LTEST_ENTRYPOINT(spec_t);
