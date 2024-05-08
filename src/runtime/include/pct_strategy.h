@@ -132,7 +132,7 @@ struct PctStrategy : Strategy {
   // references can't be invalidated before the end of the round,
   // so we have to contains all tasks in queues(queue doesn't invalidate the
   // references)
-  std::vector<std::queue<StackfulTask>> threads;
+  std::vector<StableVector<StackfulTask>> threads;
   std::uniform_int_distribution<std::mt19937::result_type>
       constructors_distribution;
   std::mt19937 rng;
