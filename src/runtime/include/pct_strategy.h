@@ -12,13 +12,11 @@
 // equivalent to the halt problem), k should be good approximation
 template <typename TargetObj>
 struct PctStrategy : Strategy {
-  explicit PctStrategy(size_t threads_count, std::vector<TaskBuilder> constructors,
-                       Logger &logger)
+  explicit PctStrategy(size_t threads_count, std::vector<TaskBuilder> constructors)
       : threads_count(threads_count),
         current_depth(1),
         current_schedule_length(0),
         constructors(constructors),
-        logger(logger),
         threads() {
     std::random_device dev;
     rng = std::mt19937(dev());
@@ -33,7 +31,7 @@ struct PctStrategy : Strategy {
     size_t avg_k = 0;
     for (auto &constructor : constructors) {
       auto task = Task{&state, constructor};
-      logger << "task: " << task.GetName()
+      log() << "task: " << task.GetName()
              << " k: " << task.GetSuspensionPoints() << "\n";
       avg_k += task.GetSuspensionPoints();
     }
@@ -85,7 +83,7 @@ struct PctStrategy : Strategy {
   }
 
   void StartNextRound() override {
-    logger << "depth: " << current_depth << "\n";
+    log() << "depth: " << current_depth << "\n";
     // Reconstruct target as we start from the beginning.
     state.Reconstruct();
     // Update statistics
@@ -96,7 +94,7 @@ struct PctStrategy : Strategy {
     // current_depth have been increased
     size_t new_k = std::reduce(k_statistics.begin(), k_statistics.end()) /
                    k_statistics.size();
-    logger << "k: " << new_k << "\n";
+    log() << "k: " << new_k << "\n";
     PrepareForDepth(current_depth, new_k);
 
     for (auto &thread : threads) {
@@ -130,7 +128,6 @@ struct PctStrategy : Strategy {
   size_t current_schedule_length;
   std::vector<size_t> priorities;
   std::vector<size_t> priority_change_points;
-  Logger logger;
   // RoundRobinStrategy struct is the owner of all tasks, and all
   // references can't be invalidated before the end of the round,
   // so we have to contains all tasks in queues(queue doesn't invalidate the
