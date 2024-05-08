@@ -6,7 +6,7 @@ jobs:
     container: silkeh/clang:16
     steps:
       - name: Install git
-        run: apt update && apt install -y git && apt install -y libgoogle-glog-dev && apt install -y libsnappy-dev && apt install -y protobuf-devel protobuf-compiler
+        run: apt update && apt install -y git && apt install -y libgoogle-glog-dev && apt install -y libsnappy-dev && apt install -y protobuf-compiler
       - name: Check out repository code
         uses: actions/checkout@v4
       - name: Prepare for build
@@ -27,7 +27,7 @@ jobs:
       image: silkeh/clang:16
     steps:
       - name: Install git
-        run: apt update && apt install -y git && apt install -y libgoogle-glog-dev && apt install -y libsnappy-dev && apt install -y protobuf-devel protobuf-compiler
+        run: apt update && apt install -y git && apt install -y libgoogle-glog-dev && apt install -y libsnappy-dev && apt install -y protobuf-compiler
       - name: Check out repository code
         uses: actions/checkout@v4
       - name: Prepare for build
