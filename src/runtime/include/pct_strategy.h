@@ -75,7 +75,7 @@ struct PctStrategy : Strategy {
     if (threads[index_of_max].empty() ||
         threads[index_of_max].back().IsReturned()) {
       auto constructor = constructors.at(constructors_distribution(rng));
-      threads[index_of_max].emplace(Task{&state, constructor});
+      threads[index_of_max].emplace_back(Task{&state, constructor});
       return {threads[index_of_max].back(), true, index_of_max};
     }
 
@@ -98,7 +98,7 @@ struct PctStrategy : Strategy {
     PrepareForDepth(current_depth, new_k);
 
     for (auto &thread : threads) {
-      thread = std::queue<StackfulTask>();
+      thread = StableVector<StackfulTask>();
     }
   }
 
