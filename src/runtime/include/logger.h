@@ -11,6 +11,8 @@ struct Logger {
     }
     return *this;
   }
+
+  void flush();
 };
 
 void logger_init(bool verbose);

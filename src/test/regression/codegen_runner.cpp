@@ -5,20 +5,18 @@
 
 #include "../../runtime/include/lib.h"
 
-Task find_task(TaskBuilderList);
-
 int var{};
 
 extern "C" void tick() { ++var; }
 
+extern "C" Handle test_coro();
+
 int main() {
-  std::vector<TaskBuilder> task_builders;
-  fill_ctx(&task_builders);
-  auto task = find_task(&task_builders);
   // Keep stack that contains launched tasks.
-  std::vector<Task> stack = {task};
+  StableVector<Task> stack;
+  stack.emplace_back(Task{test_coro()});
   while (stack.size()) {
-    auto current = stack.back();
+    auto &current = stack.back();
     if (current.IsReturned()) {
 #ifndef no_trace
       std::cout << "returned " << current.GetRetVal() << std::endl;
@@ -33,7 +31,7 @@ int main() {
       std::cout << var << std::endl;
 #endif
       if (current.HasChild()) {
-        stack.push_back(current.GetChild());
+        stack.emplace_back(current.GetChild());
       }
     }
   }

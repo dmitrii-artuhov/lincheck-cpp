@@ -12,8 +12,7 @@ template <class LinearSpecificationObject,
           class SpecificationObjectEqual =
               std::equal_to<LinearSpecificationObject>>
 struct LinearizabilityCheckerRecursive : ModelChecker {
-  using method_t = std::function<int(LinearSpecificationObject*,
-                                     const std::vector<int>& args)>;
+  using method_t = std::function<int(LinearSpecificationObject*, void*)>;
   using method_map_t = std::map<MethodName, method_t>;
 
   LinearizabilityCheckerRecursive() = delete;

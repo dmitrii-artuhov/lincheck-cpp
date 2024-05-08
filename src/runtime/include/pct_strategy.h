@@ -12,8 +12,8 @@
 // equivalent to the halt problem), k should be good approximation
 template <typename TargetObj>
 struct PctStrategy : Strategy {
-  explicit PctStrategy(size_t threads_count, TaskBuilderList constructors,
-                       Logger logger)
+  explicit PctStrategy(size_t threads_count, std::vector<TaskBuilder> constructors,
+                       Logger &logger)
       : threads_count(threads_count),
         current_depth(1),
         current_schedule_length(0),
@@ -24,20 +24,20 @@ struct PctStrategy : Strategy {
     rng = std::mt19937(dev());
     constructors_distribution =
         std::uniform_int_distribution<std::mt19937::result_type>(
-            0, constructors->size() - 1);
+            0, constructors.size() - 1);
 
     // We have information about potential number of resumes
     // but because of the implementation, it's only available in the task.
     // In fact, it doesn't depend on the task, it only depends on the
     // constructor
     size_t avg_k = 0;
-    for (auto &constructor : *constructors) {
+    for (auto &constructor : constructors) {
       auto task = Task{&state, constructor};
       logger << "task: " << task.GetName()
              << " k: " << task.GetSuspensionPoints() << "\n";
       avg_k += task.GetSuspensionPoints();
     }
-    avg_k = avg_k / constructors->size();
+    avg_k = avg_k / constructors.size();
 
     PrepareForDepth(current_depth, avg_k);
 
@@ -76,7 +76,7 @@ struct PctStrategy : Strategy {
 
     if (threads[index_of_max].empty() ||
         threads[index_of_max].back().IsReturned()) {
-      auto constructor = constructors->at(constructors_distribution(rng));
+      auto constructor = constructors.at(constructors_distribution(rng));
       threads[index_of_max].emplace(Task{&state, constructor});
       return {threads[index_of_max].back(), true, index_of_max};
     }
@@ -123,7 +123,7 @@ struct PctStrategy : Strategy {
   }
 
   TargetObj state{};
-  TaskBuilderList constructors;
+  std::vector<TaskBuilder> constructors;
   std::vector<size_t> k_statistics;
   size_t threads_count;
   size_t current_depth;

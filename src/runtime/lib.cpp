@@ -6,15 +6,6 @@
 
 extern "C" {
 
-// This structure must be equal to the clone in LLVM pass.
-struct CoroPromise {
-  using handle = std::coroutine_handle<CoroPromise>;
-
-  int has_ret_val{};
-  int ret_val{};
-  handle child_hdl{};
-};
-
 CoroPromise *get_promise(std::coroutine_handle<CoroPromise> hdl) {
   return &hdl.promise();
 }
@@ -30,7 +21,7 @@ void init_promise(CoroPromise *p) {
   p->has_ret_val = 0;
 }
 
-handle get_child_hdl(CoroPromise *p) {
+Handle get_child_hdl(CoroPromise *p) {
   assert(p != nullptr);
   assert(p->child_hdl && "p has not child");
 
@@ -47,6 +38,14 @@ void set_child_hdl(CoroPromise *p, int8_t *hdl) {
   assert(p != nullptr);
 
   p->child_hdl = std::coroutine_handle<CoroPromise>::from_address(hdl);
+}
+
+void set_suspension_points(CoroPromise *p, int32_t *suspension_points) {
+  assert(p != nullptr);
+  assert(suspension_points != nullptr);
+  // TODO: delete after debug
+  std::cout << "set suspension_points " << *suspension_points << std::endl;
+  p->suspension_points = *suspension_points;
 }
 
 void set_ret_val(CoroPromise *p, int ret_val) {
@@ -69,25 +68,40 @@ int get_ret_val(CoroPromise *p) {
   return p->ret_val;
 }
 
-void destroy_task_builder_list(TaskBuilderList l) { delete l; }
-
-void push_task_builder_list(TaskBuilderList l, TaskBuilder builder) {
-  l->push_back(builder);
+void CoroYield() noexcept {}
 }
 
-void push_arg(ArgList list, int arg) { list->push_back(arg); }
+StackfulTask *current_task;
+StackfulTask *GetCurrentTask() {
+  assert(current_task != nullptr);
+  return current_task;
 }
 
-Task::Task(handle hdl) : hdl(hdl) {}
+void SetCurrentTask(StackfulTask *task) { current_task = task; }
 
-Task::Task(void *this_arg, TaskBuilder builder) {
-  arg_list = std::make_shared<std::vector<int>>();
-  int32_t suspension_points_int;
-  builder(this_arg, arg_list.get(), &name, &hdl, &suspension_points_int);
-  assert(name != nullptr);
-  assert(suspension_points_int >= 0);
-  suspension_points = suspension_points_int;
+void Token::Reset() { parked = false; }
+
+// ------------------------------ TASK ----------------------------------------
+
+Task::Task(Handle hdl) : hdl(hdl), suspension_points(hdl.promise().suspension_points) {}
+
+Task::Task(Handle hdl, TaskCloner cloner) : hdl{hdl}, suspension_points(hdl.promise().suspension_points), cloner{cloner} {}
+
+Task::Task(Task &&oth) {
+  hdl = oth.hdl;
+  oth.hdl = nullptr;
+  meta = oth.meta;
+  cloner = oth.cloner;
 }
+
+Task &Task::operator=(Task &&oth) {
+  std::swap(hdl, oth.hdl);
+  std::swap(meta, oth.meta);
+  std::swap(cloner, oth.cloner);
+  return *this;
+}
+
+void Task::SetMeta(std::shared_ptr<Meta> meta) { this->meta = meta; }
 
 void Task::Resume() {
   assert(!IsReturned() && "returned task can not be resumed");
@@ -108,23 +122,61 @@ bool Task::IsReturned() { return has_ret_val(&hdl.promise()); }
 
 int Task::GetRetVal() { return get_ret_val(&hdl.promise()); }
 
-std::string Task::GetName() const {
-  assert(name != nullptr);
-  return std::string{name};
+Task Task::StartFromTheBeginning(void *state) {
+  assert(meta);
+  auto hdl = cloner(state, meta->args.get());
+  auto new_task = Task{hdl, cloner};
+  new_task.SetMeta(meta);
+  return new_task;
 }
 
-std::vector<int> Task::GetArgs() const {
-  assert(arg_list != nullptr);
-  return *arg_list;
+const std::string &Task::GetName() const {
+  assert(meta);
+  return meta->name;
 }
 
 size_t Task::GetSuspensionPoints() const { return suspension_points; }
 
-StackfulTask::StackfulTask(Task task) : entrypoint(task) {
-  stack = std::vector<Task>{task};
+void *Task::GetArgs() const {
+  assert(meta);
+  return meta->args.get();
 }
 
-StackfulTask::StackfulTask() : entrypoint(nullptr) {}
+const std::vector<std::string> &Task::GetStrArgs() const {
+  assert(meta);
+  return meta->str_args;
+}
+
+Task::~Task() {
+  if (hdl != nullptr) {
+    hdl.destroy();
+    hdl = nullptr;
+  }
+}
+
+// ------------------------ STACKFUL TASK ------------------------
+
+StackfulTask::StackfulTask(TaskBuilder builder, void *this_state) {
+  SetCurrentTask(this);
+  // Builder could call generator that set token.
+  spawned_tasks.emplace_back(builder(this_state));
+  SetCurrentTask(nullptr);
+  stack = {spawned_tasks[0]};
+}
+
+StackfulTask::StackfulTask() {}
+
+StackfulTask::StackfulTask(Task raw_task) {
+  spawned_tasks.emplace_back(std::move(raw_task));
+  stack = {spawned_tasks[0]};
+}
+
+StackfulTask::StackfulTask(StackfulTask &&oth) {
+  spawned_tasks = std::move(oth.spawned_tasks);
+  stack = std::move(oth.stack);
+  token = std::move(oth.token);
+  last_returned_value = oth.last_returned_value;
+}
 
 void StackfulTask::Resume() {
   assert(!stack.empty());
@@ -133,7 +185,8 @@ void StackfulTask::Resume() {
 
   if (stack_head.HasChild()) {
     // new child was forked
-    stack.push_back(stack_head.GetChild());
+    spawned_tasks.emplace_back(stack_head.GetChild());
+    stack.push_back(spawned_tasks.back());
   } else if (stack_head.IsReturned()) {
     // stack_head returned
     last_returned_value = stack_head.GetRetVal();
@@ -141,13 +194,20 @@ void StackfulTask::Resume() {
 
     // if it wasn't the first task clean up children
     if (!stack.empty()) {
-      auto previous = stack.back();
-      previous.ClearChild();
+      stack.back().get().ClearChild();
     }
   }
 }
 
-std::vector<int> StackfulTask::GetArgs() const { return entrypoint.GetArgs(); }
+const std::string &StackfulTask::GetName() const {
+  return spawned_tasks[0].GetName();
+}
+
+void *StackfulTask::GetArgs() const { return spawned_tasks[0].GetArgs(); }
+
+const std::vector<std::string> &StackfulTask::GetStrArgs() const {
+  return spawned_tasks[0].GetStrArgs();
+}
 
 bool StackfulTask::IsReturned() { return stack.empty(); }
 
@@ -158,10 +218,9 @@ bool StackfulTask::IsBlocking() const { return false; }
 
 int StackfulTask::GetRetVal() const { return last_returned_value; }
 
-std::string StackfulTask::GetName() const { return entrypoint.GetName(); }
-
 size_t StackfulTask::GetSuspensionPoints() const {
-  return entrypoint.GetSuspensionPoints();
+  assert(!stack.empty());
+  return stack[0].get().GetSuspensionPoints();
 }
 
 const StackfulTask &Invoke::GetTask() const { return this->task.get(); }
@@ -169,8 +228,41 @@ const StackfulTask &Invoke::GetTask() const { return this->task.get(); }
 const StackfulTask &Response::GetTask() const { return this->task.get(); }
 
 StackfulTask::~StackfulTask() {
-  for (int i = static_cast<int>(stack.size()) - 1; i > -1; i--) {
-    stack[i].ClearChild();
+  // The task must be returned if we want to restart it.
+  // We can't just Terminate() it because it is the runtime responsibility to
+  // decide, in which order the tasks should be terminated.
+  assert(IsReturned());
+}
+
+void StackfulTask::StartFromTheBeginning(void *state) {
+  // The task must be returned if we want to restart it.
+  // We can't just Terminate() it because it is the runtime responsibility to
+  // decide, in which order the tasks should be terminated.
+  assert(IsReturned());
+  // Remove all tasks except entrypoint.
+  while (spawned_tasks.size() > 1) {
+    spawned_tasks.pop_back();
+  }
+  if (token != nullptr) {
+    token->Reset();
+  }
+  spawned_tasks[0] = spawned_tasks[0].StartFromTheBeginning(state);
+  stack = {spawned_tasks[0]};
+}
+
+void StackfulTask::SetToken(std::shared_ptr<Token> token) {
+  this->token = token;
+}
+
+bool StackfulTask::IsParked() { return token != nullptr && token->parked; }
+
+void StackfulTask::Terminate() {
+  int tries = 0;
+  while (!IsReturned()) {
+    ++tries;
+    Resume();
+    assert(tries < 10000000 &&
+           "task is spinning too long, possible wrong task terminating order");
   }
 }
 

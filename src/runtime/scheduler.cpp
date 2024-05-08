@@ -3,14 +3,17 @@
 #include "include/logger.h"
 #include "include/pretty_print.h"
 
-Scheduler::Scheduler(Strategy& sched_class, ModelChecker& checker,
-                     size_t max_tasks, size_t max_rounds)
+StrategyScheduler::StrategyScheduler(Strategy& sched_class,
+                                     ModelChecker& checker,
+                                     PrettyPrinter& pretty_printer,
+                                     size_t max_tasks, size_t max_rounds)
     : strategy(sched_class),
       checker(checker),
+      pretty_printer(pretty_printer),
       max_tasks(max_tasks),
       max_rounds(max_rounds) {}
 
-Scheduler::round_result_t Scheduler::runRound() {
+Scheduler::Result StrategyScheduler::runRound() {
   // History of invoke and response events which is required for the checker
   std::vector<std::variant<Invoke, Response>> sequential_history;
   // Full history of the current execution in the Run function
@@ -35,7 +38,7 @@ Scheduler::round_result_t Scheduler::runRound() {
     }
   }
 
-  pretty_print::pretty_print(sequential_history, log());
+  pretty_printer.PrettyPrint(sequential_history, log());
 
   if (!checker.Check(sequential_history)) {
     return std::make_pair(full_history, sequential_history);
@@ -44,7 +47,7 @@ Scheduler::round_result_t Scheduler::runRound() {
   return std::nullopt;
 }
 
-Scheduler::round_result_t Scheduler::Run() {
+Scheduler::Result StrategyScheduler::Run() {
   for (size_t i = 0; i < max_rounds; ++i) {
     log() << "run round: " << i << "\n";
     auto seq_history = runRound();
@@ -52,6 +55,7 @@ Scheduler::round_result_t Scheduler::Run() {
       return seq_history;
     }
     log() << "===============================================\n\n";
+    log().flush();
     strategy.StartNextRound();
   }
 

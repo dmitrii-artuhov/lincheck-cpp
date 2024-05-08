@@ -1,65 +1,69 @@
+/**
+ * ./verify.py build --src ./targets/mutex_queue.cpp
+ * ./verify.py run --tasks 4 --switches 1 --rounds 100000 --strategy tla
+ */
 #include <atomic>
+#include <cstring>
 
+#include "../lib/mutex.h"
 #include "../specs/queue.h"
 
-const int N = 10'000;
-
-struct Mutex {
-  std::atomic<bool> flg{};
-
-  void lock() {
-    while (true) {
-      bool busy = flg.load();
-      if (busy) {
-        continue;
-      }
-      if (flg.compare_exchange_weak(busy, true)) {
-        break;
-      }
-    }
-  }
-
-  void unlock() {
-    bool tru = true;
-    flg.compare_exchange_weak(tru, false);
-  }
-};
+const int N = 100;
 
 struct Queue {
-  Queue() {}
-  void Reconstruct() {
-    mutex.flg.store(false);
-    tail = 0;
-    head = 0;
+  void Push(std::shared_ptr<Token> token, int v);
+  int Pop(std::shared_ptr<Token> token);
+
+  void Reset() {
+    mutex = Mutex{};
+    tail = head = 0;
+    cnt = 0;
     std::fill(a, a + N, 0);
   }
 
-  void Push(int v);
-  int Pop();
-
+  int cnt{};
   Mutex mutex{};
   int tail{}, head{};
   int a[N]{};
 };
 
-generator int next_int() { return rand() % 5 + 1; }
+namespace ltest {}  // namespace ltest
 
-TARGET_METHOD(void, Queue, Push, (int v)) {
-  mutex.lock();
-  a[head++] = v;
-  mutex.unlock();
+auto generateInt() { return ltest::generators::makeSingleArg(rand() % 10 + 1); }
+
+auto generateArgs() {
+  auto token = ltest::generators::genToken();
+  auto _int = generateInt();
+  return std::tuple_cat(token, _int);
 }
 
-TARGET_METHOD(int, Queue, Pop, ()) {
-  mutex.lock();
+target_method(generateArgs, void, Queue, Push, std::shared_ptr<Token> token,
+              int v) {
+  mutex.Lock(token);
+  a[head++] = v;
+  ++cnt;
+  assert(cnt == 1);
+  --cnt;
+  mutex.Unlock();
+}
+
+target_method(ltest::generators::genToken, int, Queue, Pop,
+              std::shared_ptr<Token> token) {
+  mutex.Lock(token);
   int e = 0;
   if (head - tail > 0) {
     e = a[tail++];
   }
-  mutex.unlock();
+  ++cnt;
+  assert(cnt == 1);
+  --cnt;
+  mutex.Unlock();
   return e;
 }
 
-using spec_t = Spec<Queue, spec::Queue, spec::QueueHash, spec::QueueEquals>;
+using QueueCls = spec::Queue<std::tuple<std::shared_ptr<Token>, int>, 1>;
+
+using spec_t = ltest::Spec<Queue, QueueCls, spec::QueueHash<QueueCls>,
+                           spec::QueueEquals<QueueCls>>;
 
 LTEST_ENTRYPOINT(spec_t);
