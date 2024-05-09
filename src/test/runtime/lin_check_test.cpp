@@ -34,7 +34,7 @@ std::function<int(Counter*, void*)> fetch_and_add =
       c->count += 1;
       return c->count - 1;
     };
-std::function<int(Counter*, const std::vector<int>&)> get =
+std::function<int(Counter*, void*)> get =
     [](Counter* c, [[maybe_unused]] void* args) { return c->count; };
 
 TEST(LinearizabilityCheckerCounterTest, SmallLinearizableHistory) {
@@ -47,16 +47,16 @@ TEST(LinearizabilityCheckerCounterTest, SmallLinearizableHistory) {
       },
       c);
 
-  auto first_task =
-      CreateMockStackfulTask("faa", 3, std::make_unique<void>(std::tuple<>{}));
-  auto second_task =
-      CreateMockStackfulTask("get", 3, std::make_unique<void>(std::tuple<>{}));
-  auto third_task =
-      CreateMockStackfulTask("faa", 2, std::make_unique<void>(std::tuple<>{}));
-  auto fourth_task =
-      CreateMockStackfulTask("faa", 1, std::make_unique<void>(std::tuple<>{}));
-  auto fifth_task =
-      CreateMockStackfulTask("faa", 0, std::make_unique<void>(std::tuple<>{}));
+  // Have to construct unique ptr here, otherwise the destructor will be called
+  // after evaluation of the argument
+  auto empty_args_unique = std::make_unique<void>(std::tuple<>{});
+  void* empty_args = empty_args_unique.get();
+
+  auto first_task = CreateMockStackfulTask("faa", 3, empty_args);
+  auto second_task = CreateMockStackfulTask("get", 3, empty_args);
+  auto third_task = CreateMockStackfulTask("faa", 2, empty_args);
+  auto fourth_task = CreateMockStackfulTask("faa", 1, empty_args);
+  auto fifth_task = CreateMockStackfulTask("faa", 0, empty_args);
 
   std::vector<std::variant<Invoke, Response>> history{};
   history.emplace_back(Invoke(first_task, 0));
@@ -83,16 +83,16 @@ TEST(LinearizabilityCheckerCounterTest, SmallUnlinearizableHistory) {
       },
       c);
 
-  auto first_task =
-      CreateMockStackfulTask("faa", 2, std::make_unique<void>(std::tuple<>{}));
-  auto second_task =
-      CreateMockStackfulTask("get", 3, std::make_unique<void>(std::tuple<>{}));
-  auto third_task = CreateMockStackfulTask(
-      "faa", 100, std::make_unique<void>(std::tuple<>{}));
-  auto fourth_task =
-      CreateMockStackfulTask("faa", 1, std::make_unique<void>(std::tuple<>{}));
-  auto fifth_task =
-      CreateMockStackfulTask("faa", 0, std::make_unique<void>(std::tuple<>{}));
+  // Have to construct unique ptr here, otherwise the destructor will be called
+  // after evaluation of the argument
+  auto empty_args_unique = std::make_unique<void>(std::tuple<>{});
+  void* empty_args = empty_args_unique.get();
+
+  auto first_task = CreateMockStackfulTask("faa", 2, empty_args);
+  auto second_task = CreateMockStackfulTask("get", 3, empty_args);
+  auto third_task = CreateMockStackfulTask("faa", 100, empty_args);
+  auto fourth_task = CreateMockStackfulTask("faa", 1, empty_args);
+  auto fifth_task = CreateMockStackfulTask("faa", 0, empty_args);
 
   std::vector<std::variant<Invoke, Response>> history{};
   history.emplace_back(Invoke(first_task, 0));
@@ -119,16 +119,16 @@ TEST(LinearizabilityCheckerCounterTest, ExtendedLinearizableHistory) {
       },
       c);
 
-  auto first_task =
-      CreateMockStackfulTask("faa", 2, std::make_unique<void>(std::tuple<>{}));
-  auto second_task =
-      CreateMockStackfulTask("get", 3, std::make_unique<void>(std::tuple<>{}));
-  auto third_task = CreateMockStackfulTask(
-      "faa", 100, std::make_unique<void>(std::tuple<>{}));
-  auto fourth_task =
-      CreateMockStackfulTask("faa", 1, std::make_unique<void>(std::tuple<>{}));
-  auto fifth_task =
-      CreateMockStackfulTask("faa", 0, std::make_unique<void>(std::tuple<>{}));
+  // Have to construct unique ptr here, otherwise the destructor will be called
+  // after evaluation of the argument
+  auto empty_args_unique = std::make_unique<void>(std::tuple<>{});
+  void* empty_args = empty_args_unique.get();
+
+  auto first_task = CreateMockStackfulTask("faa", 2, empty_args);
+  auto second_task = CreateMockStackfulTask("get", 3, empty_args);
+  auto third_task = CreateMockStackfulTask("faa", 100, empty_args);
+  auto fourth_task = CreateMockStackfulTask("faa", 1, empty_args);
+  auto fifth_task = CreateMockStackfulTask("faa", 0, empty_args);
 
   std::vector<std::variant<Invoke, Response>> history{};
   history.emplace_back(Invoke(first_task, 0));
@@ -145,6 +145,10 @@ std::vector<std::unique_ptr<MockStackfulTask>> create_mocks(
   std::vector<std::unique_ptr<MockStackfulTask>> mocks;
   mocks.reserve(b_history.size());
   size_t adds = 0;
+  // TODO: lifetime of the arguments is less than lifetime of the mocks, but the
+  // arguments aren't used is it ub?
+  auto empty_args_unique = std::make_unique<void>(std::tuple<>{});
+  void* empty_args = empty_args_unique.get();
 
   for (auto v : b_history) {
     if (v) {
@@ -159,7 +163,7 @@ std::vector<std::unique_ptr<MockStackfulTask>> create_mocks(
           .WillRepeatedly(Return(std::string("faa")));
       EXPECT_CALL(*add_task, GetArgs())
           .Times(AnyNumber())
-          .WillRepeatedly(Return(std::vector<int>{}));
+          .WillRepeatedly(Return(empty_args));
 
       adds++;
     } else {
@@ -174,7 +178,7 @@ std::vector<std::unique_ptr<MockStackfulTask>> create_mocks(
           .WillRepeatedly(Return(std::string("get")));
       EXPECT_CALL(*get_task, GetArgs())
           .Times(AnyNumber())
-          .WillRepeatedly(Return(std::vector<int>{}));
+          .WillRepeatedly(Return(empty_args));
     }
   }
 
