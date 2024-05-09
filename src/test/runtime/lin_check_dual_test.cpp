@@ -115,7 +115,7 @@ TEST(LinearizabilityDualCheckerQueueTest, SmallLinearizableHistory) {
 
   auto first_task_args = std::make_unique<std::tuple<int>>(std::tuple<int>{3});
   auto first_task = CreateMockStackfulTask(
-      "send", 0, reinterpret_cast<void*>(first_task_arg.get()));
+      "send", 0, reinterpret_cast<void*>(first_task_args.get()));
 
   auto second_task_args = std::make_unique<std::tuple<>>(std::tuple<>{});
   auto second_task = CreateMockStackfulTask(
