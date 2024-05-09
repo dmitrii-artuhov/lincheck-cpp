@@ -59,16 +59,16 @@ TEST(LinearizabilityCheckerCounterTest, SmallLinearizableHistory) {
   auto fifth_task = CreateMockStackfulTask("faa", 0, empty_args);
 
   std::vector<std::variant<Invoke, Response>> history{};
-  history.emplace_back(Invoke(first_task, 0));
-  history.emplace_back(Invoke(second_task, 1));
-  history.emplace_back(Invoke(third_task, 2));
-  history.emplace_back(Invoke(fourth_task, 3));
-  history.emplace_back(Invoke(fifth_task, 4));
-  history.emplace_back(Response(fifth_task, 0, 4));
-  history.emplace_back(Response(fourth_task, 1, 3));
-  history.emplace_back(Response(third_task, 2, 2));
-  history.emplace_back(Response(second_task, 3, 1));
-  history.emplace_back(Response(first_task, 3, 0));
+  history.emplace_back(Invoke(*first_task, 0));
+  history.emplace_back(Invoke(*second_task, 1));
+  history.emplace_back(Invoke(*third_task, 2));
+  history.emplace_back(Invoke(*fourth_task, 3));
+  history.emplace_back(Invoke(*fifth_task, 4));
+  history.emplace_back(Response(*fifth_task, 0, 4));
+  history.emplace_back(Response(*fourth_task, 1, 3));
+  history.emplace_back(Response(*third_task, 2, 2));
+  history.emplace_back(Response(*second_task, 3, 1));
+  history.emplace_back(Response(*first_task, 3, 0));
 
   EXPECT_EQ(checker.Check(history), true);
 }
@@ -95,16 +95,16 @@ TEST(LinearizabilityCheckerCounterTest, SmallUnlinearizableHistory) {
   auto fifth_task = CreateMockStackfulTask("faa", 0, empty_args);
 
   std::vector<std::variant<Invoke, Response>> history{};
-  history.emplace_back(Invoke(first_task, 0));
-  history.emplace_back(Invoke(second_task, 1));
-  history.emplace_back(Invoke(third_task, 2));
-  history.emplace_back(Invoke(fourth_task, 3));
-  history.emplace_back(Invoke(fifth_task, 4));
-  history.emplace_back(Response(fifth_task, 0, 4));
-  history.emplace_back(Response(fourth_task, 1, 3));
-  history.emplace_back(Response(third_task, 100, 2));
-  history.emplace_back(Response(second_task, 3, 1));
-  history.emplace_back(Response(first_task, 3, 0));
+  history.emplace_back(Invoke(*first_task, 0));
+  history.emplace_back(Invoke(*second_task, 1));
+  history.emplace_back(Invoke(*third_task, 2));
+  history.emplace_back(Invoke(*fourth_task, 3));
+  history.emplace_back(Invoke(*fifth_task, 4));
+  history.emplace_back(Response(*fifth_task, 0, 4));
+  history.emplace_back(Response(*fourth_task, 1, 3));
+  history.emplace_back(Response(*third_task, 100, 2));
+  history.emplace_back(Response(*second_task, 3, 1));
+  history.emplace_back(Response(*first_task, 3, 0));
 
   EXPECT_EQ(checker.Check(history), false);
 }
@@ -131,11 +131,11 @@ TEST(LinearizabilityCheckerCounterTest, ExtendedLinearizableHistory) {
   auto fifth_task = CreateMockStackfulTask("faa", 0, empty_args);
 
   std::vector<std::variant<Invoke, Response>> history{};
-  history.emplace_back(Invoke(first_task, 0));
-  history.emplace_back(Invoke(second_task, 1));
-  history.emplace_back(Invoke(third_task, 2));
-  history.emplace_back(Invoke(fourth_task, 3));
-  history.emplace_back(Invoke(fifth_task, 4));
+  history.emplace_back(Invoke(*first_task, 0));
+  history.emplace_back(Invoke(*second_task, 1));
+  history.emplace_back(Invoke(*third_task, 2));
+  history.emplace_back(Invoke(*fourth_task, 3));
+  history.emplace_back(Invoke(*fifth_task, 4));
 
   EXPECT_EQ(checker.Check(history), true);
 }
