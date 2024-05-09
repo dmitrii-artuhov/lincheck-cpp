@@ -28,6 +28,7 @@ struct std::equal_to<Counter> {
 namespace LinearizabilityCheckerTest {
 using ::testing::AnyNumber;
 using ::testing::Return;
+using ::testing::ReturnRefOfCopy;
 
 std::function<int(Counter*, void*)> fetch_and_add =
     [](Counter* c, [[maybe_unused]] void* args) {
@@ -160,7 +161,7 @@ std::vector<std::unique_ptr<MockStackfulTask>> create_mocks(
           .WillRepeatedly(Return(adds));
       EXPECT_CALL(*add_task, GetName())
           .Times(AnyNumber())
-          .WillRepeatedly(Return(std::string("faa")));
+          .WillRepeatedly(ReturnRefOfCopy(std::move(std::string("faa"))));
       EXPECT_CALL(*add_task, GetArgs())
           .Times(AnyNumber())
           .WillRepeatedly(Return(empty_args));
@@ -175,7 +176,7 @@ std::vector<std::unique_ptr<MockStackfulTask>> create_mocks(
           .WillRepeatedly(Return(adds));
       EXPECT_CALL(*get_task, GetName())
           .Times(AnyNumber())
-          .WillRepeatedly(Return(std::string("get")));
+          .WillRepeatedly(ReturnRefOfCopy(std::move(sgd::string("get"))));
       EXPECT_CALL(*get_task, GetArgs())
           .Times(AnyNumber())
           .WillRepeatedly(Return(empty_args));
@@ -262,7 +263,7 @@ void CheckersAreTheSame(const std::vector<bool>& b_history) {
       c);
 
   LinearizabilityCheckerRecursive<Counter> slow(
-      LinearizabilityCheckerRecursive<Counter> >
+      LinearizabilityCheckerRecursive<Counter>
           ::MethodMap{
               {"faa", fetch_and_add},
               {"get", get},
