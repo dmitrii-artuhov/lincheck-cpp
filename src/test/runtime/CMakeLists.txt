@@ -43,3 +43,4 @@ target_link_libraries(
 
 link_fuzztest(lin_check_test)
 gtest_discover_tests(lin_check_test)
+gtest_discover_tests(lin_check_dual_test)

@@ -50,8 +50,8 @@ TEST(LinearizabilityCheckerCounterTest, SmallLinearizableHistory) {
 
   // Have to construct unique ptr here, otherwise the destructor will be called
   // after evaluation of the argument
-  auto empty_args_unique = std::make_unique<void>(std::tuple<>{});
-  void* empty_args = empty_args_unique.get();
+  auto empty_args_unique = std::make_unique(std::tuple<>{});
+  void* empty_args = std::reinterpret_cast<void*>(empty_args_unique.get());
 
   auto first_task = CreateMockStackfulTask("faa", 3, empty_args);
   auto second_task = CreateMockStackfulTask("get", 3, empty_args);
@@ -86,8 +86,8 @@ TEST(LinearizabilityCheckerCounterTest, SmallUnlinearizableHistory) {
 
   // Have to construct unique ptr here, otherwise the destructor will be called
   // after evaluation of the argument
-  auto empty_args_unique = std::make_unique<void>(std::tuple<>{});
-  void* empty_args = empty_args_unique.get();
+  auto empty_args_unique = std::make_unique(std::tuple<>{});
+  void* empty_args = std::reinterpret_cast<void*>(empty_args_unique.get());
 
   auto first_task = CreateMockStackfulTask("faa", 2, empty_args);
   auto second_task = CreateMockStackfulTask("get", 3, empty_args);
@@ -122,8 +122,8 @@ TEST(LinearizabilityCheckerCounterTest, ExtendedLinearizableHistory) {
 
   // Have to construct unique ptr here, otherwise the destructor will be called
   // after evaluation of the argument
-  auto empty_args_unique = std::make_unique<void>(std::tuple<>{});
-  void* empty_args = empty_args_unique.get();
+  auto empty_args_unique = std::make_unique(std::tuple<>{});
+  void* empty_args = std::reinterpret_cast<void*>(empty_args_unique.get());
 
   auto first_task = CreateMockStackfulTask("faa", 2, empty_args);
   auto second_task = CreateMockStackfulTask("get", 3, empty_args);
@@ -148,8 +148,8 @@ std::vector<std::unique_ptr<MockStackfulTask>> create_mocks(
   size_t adds = 0;
   // TODO: lifetime of the arguments is less than lifetime of the mocks, but the
   // arguments aren't used is it ub?
-  auto empty_args_unique = std::make_unique<void>(std::tuple<>{});
-  void* empty_args = empty_args_unique.get();
+  auto empty_args_unique = std::make_unique(std::tuple<>{});
+  void* empty_args = std::reinterpret_cast<void*>(empty_args_unique.get());
 
   for (auto v : b_history) {
     if (v) {
