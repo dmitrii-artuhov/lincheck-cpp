@@ -17,10 +17,13 @@ jobs:
         run: cmake -DCMAKE_BUILD_TYPE=Debug ..
       - name: Build
         working-directory: /__w/LTest/LTest/src/build
-        run: cmake --build . --target lin_check_test -j
-      - name: Run
+        run: cmake --build . --target lin_check_test lin_check_dual_test -j
+      - name: Run 
         working-directory: /__w/LTest/LTest/src/build
         run: ./test/runtime/lin_check_test
+      - name: Run dual
+        working-directory: /__w/LTest/LTest/src/build
+        run: ./test/runtime/lin_check_dual_test
   verifying-test:
     runs-on: ubuntu-latest
     container: 
