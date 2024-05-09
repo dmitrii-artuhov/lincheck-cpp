@@ -12,7 +12,8 @@
 // equivalent to the halt problem), k should be good approximation
 template <typename TargetObj>
 struct PctStrategy : Strategy {
-  explicit PctStrategy(size_t threads_count, std::vector<TaskBuilder> constructors)
+  explicit PctStrategy(size_t threads_count,
+                       std::vector<TaskBuilder> constructors)
       : threads_count(threads_count),
         current_depth(1),
         current_schedule_length(0),
@@ -32,7 +33,7 @@ struct PctStrategy : Strategy {
     for (auto &constructor : constructors) {
       auto task = Task{&state, constructor};
       log() << "task: " << task.GetName()
-             << " k: " << task.GetSuspensionPoints() << "\n";
+            << " k: " << task.GetSuspensionPoints() << "\n";
       avg_k += task.GetSuspensionPoints();
     }
     avg_k = avg_k / constructors.size();

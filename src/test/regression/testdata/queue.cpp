@@ -1,8 +1,8 @@
 #include <atomic>
 #include <iostream>
 
-#include "../../../runtime/include/verifying.h"
 #include "../../../runtime/include/lib.h"
+#include "../../../runtime/include/verifying.h"
 
 struct Queue {
   std::atomic<int> queue_array[1000]{};
@@ -11,7 +11,7 @@ struct Queue {
   void Log(const std::string &msg) { std::cout << msg << std::endl; }
 
   non_atomic void Push(int v) {
-    Log("Push: " + std::to_string(v));\
+    Log("Push: " + std::to_string(v));
     CoroYield();
     int pos = head.fetch_add(1);
     CoroYield();

@@ -210,7 +210,8 @@ struct CoroGenerator final {
     auto func = M.getFunction(coro_name.str());
     if (func != nullptr && !func->empty()) {
       // Was generated later or defined in user code.
-      errs() << coro_name << " is generated already" << "\n";
+      errs() << coro_name << " is generated already"
+             << "\n";
       return func;
     }
     if (func == nullptr) {
@@ -252,8 +253,7 @@ struct CoroGenerator final {
   }
 
   // TODO: rewrite it using one pass.
-  Function *RawGenCoroFunc(Function *F, Type *old_ret_t,
-                           const FunIndex &index,
+  Function *RawGenCoroFunc(Function *F, Type *old_ret_t, const FunIndex &index,
                            const std::map<StringRef, StringRef> &umangled_name,
                            bool only_manual_suspends) {
     auto int_gen = utils::SeqGenerator{};
@@ -269,7 +269,7 @@ struct CoroGenerator final {
 
     Builder Builder(&*F->begin());
 
-  size_t suspension_points = 0;
+    size_t suspension_points = 0;
 
 #ifdef REPLACE_CORO_INVOKES
     // Generate fictive normal_dest blocks for invoke instructions.
@@ -418,7 +418,7 @@ struct CoroGenerator final {
           _switch->addCase(ConstantInt::get(i8_t, 1), cleanup);
           instr->eraseFromParent();
         }
-    
+
 #ifdef REPLACE_CORO_INVOKES
         // Check if terminate instruction is `invoke`.
         // We must replace raw invokes with coroutine invokes.

@@ -62,9 +62,8 @@ std::unique_ptr<Strategy> MakeStrategy(Opts &opts, std::vector<TaskBuilder> l) {
           opts.threads, std::move(l), std::move(weights));
     }
     case PCT:
-        log() << "pct";
-        return std::make_unique<PctStrategy<TargetObj>>(
-            opts.threads, l);
+      log() << "pct";
+      return std::make_unique<PctStrategy<TargetObj>>(opts.threads, l);
     default:
       assert(false && "unexpected typ");
   }

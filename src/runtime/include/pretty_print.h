@@ -60,7 +60,7 @@ struct PrettyPrinter {
     print_separator();
     // Header.
     out << "|";
-    for (int i = 0; i < threads_num; ++i) {
+    for (size_t i = 0; i < threads_num; ++i) {
       int rest = cell_width - 1 /*T*/ - to_string(i).size();
       print_spaces(rest / 2);
       out << "T" << i;
@@ -91,7 +91,7 @@ struct PrettyPrinter {
         auto& task = inv.GetTask();
         fp.Out(task.GetName() + "(");
         const auto& args = task.GetStrArgs();
-        for (int i = 0; i < args.size(); ++i) {
+        for (size_t i = 0; i < args.size(); ++i) {
           if (i > 0) {
             fp.Out(", ");
           }
@@ -106,7 +106,7 @@ struct PrettyPrinter {
       print_spaces(fp.rest);
       out << "|";
 
-      for (int j = 0; j < threads_num - num - 1; ++j) {
+      for (size_t j = 0; j < threads_num - num - 1; ++j) {
         print_empty_cell();
       }
       out << "\n";
@@ -142,7 +142,7 @@ struct PrettyPrinter {
     print_separator();
     // Header.
     out << "|";
-    for (int i = 0; i < threads_num; ++i) {
+    for (size_t i = 0; i < threads_num; ++i) {
       int rest = cell_width - 1 /*T*/ - to_string(i).size();
       print_spaces(rest / 2);
       out << "T" << i;
@@ -173,7 +173,7 @@ struct PrettyPrinter {
       print_spaces(fp.rest);
       out << "|";
 
-      for (int j = 0; j < threads_num - num - 1; ++j) {
+      for (size_t j = 0; j < threads_num - num - 1; ++j) {
         print_empty_cell();
       }
       out << "\n";

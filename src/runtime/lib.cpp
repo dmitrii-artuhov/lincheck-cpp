@@ -83,9 +83,13 @@ void Token::Reset() { parked = false; }
 
 // ------------------------------ TASK ----------------------------------------
 
-Task::Task(Handle hdl) : hdl(hdl), suspension_points(hdl.promise().suspension_points) {}
+Task::Task(Handle hdl)
+    : hdl(hdl), suspension_points(hdl.promise().suspension_points) {}
 
-Task::Task(Handle hdl, TaskCloner cloner) : hdl{hdl}, suspension_points(hdl.promise().suspension_points), cloner{cloner} {}
+Task::Task(Handle hdl, TaskCloner cloner)
+    : hdl{hdl},
+      suspension_points(hdl.promise().suspension_points),
+      cloner{cloner} {}
 
 Task::Task(Task &&oth) {
   hdl = oth.hdl;

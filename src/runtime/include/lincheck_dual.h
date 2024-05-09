@@ -84,10 +84,10 @@ struct BlockingMethodWrapper : BlockingMethod {
 template <class LinearSpecificationObject>
 struct LinearizabilityDualChecker {
   using BlockingMethodFactory = std::function<std::shared_ptr<BlockingMethod>(
-      LinearSpecificationObject*, const std::vector<int>& args)>;
+      LinearSpecificationObject*, void* args)>;
 
-  using NonBlockingMethod = std::function<int(LinearSpecificationObject*,
-                                              const std::vector<int>& args)>;
+  using NonBlockingMethod =
+      std::function<int(LinearSpecificationObject*, void* args)>;
 
   using Method = std::variant<NonBlockingMethod, BlockingMethodFactory>;
   using MethodMap = std::map<MethodName, Method>;

@@ -257,7 +257,7 @@ struct TLAScheduler : Scheduler {
 
       all_parked = false;
       // Choose constructor to create task.
-      for (size_t cons_num = 0; auto cons : constructors) {
+      for (auto cons : constructors) {
         frame.is_new = true;
         auto size_before = tasks.size();
         tasks.emplace_back(StackfulTask{cons, &state});
@@ -274,7 +274,6 @@ struct TLAScheduler : Scheduler {
         // As we can't return to the past in coroutine, we need to replay all
         // tasks from the beginning.
         Replay(step);
-        ++cons_num;
       }
     }
 

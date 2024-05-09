@@ -1,8 +1,8 @@
 #include <iostream>
 #include <string>
 
-#include "../../../runtime/include/verifying.h"
 #include "../../../runtime/include/lib.h"
+#include "../../../runtime/include/verifying.h"
 
 void log(const std::string &msg) { std::cout << msg << std::endl; }
 
