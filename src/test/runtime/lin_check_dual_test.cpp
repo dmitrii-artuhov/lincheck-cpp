@@ -113,12 +113,13 @@ TEST(LinearizabilityDualCheckerQueueTest, SmallLinearizableHistory) {
       },
       q);
 
-  auto first_task_args = std::make_unique(std::tuple<int>{3});
-  auto first_task = CreateMockStackfulTask("send", 0, std::reinterpret_cast<void*>(first_task_arg.get()));
+  auto first_task_args = std::make_unique<std::tuple<int>>(std::tuple<int>{3});
+  auto first_task = CreateMockStackfulTask(
+      "send", 0, reinterpret_cast<void*>(first_task_arg.get()));
 
-  auto second_task_args = std::make_unique(std::tuple<>{});
-  auto second_task =
-      CreateMockStackfulTask("receive", 3, std::reinterpret_cast<void*>(second_task_args.get()));
+  auto second_task_args = std::make_unique<std::tuple<>>(std::tuple<>{});
+  auto second_task = CreateMockStackfulTask(
+      "receive", 3, reinterpret_cast<void*>(second_task_args.get()));
 
   std::vector<HistoryEvent> history{};
   history.emplace_back(RequestInvoke(*first_task, 0));
@@ -142,12 +143,13 @@ TEST(LinearizabilityDualCheckerQueueTest, SmallUnlinearizableHistory) {
       },
       q);
 
-  auto first_task_args = std::make_unique(std::tuple<int>{3});
-  auto first_task = CreateMockStackfulTask("send", 0, std::reinterpret_cast<void*>(first_task_args.get()));
+  auto first_task_args = std::make_unique<std::tuple<int>>(std::tuple<int>{3});
+  auto first_task = CreateMockStackfulTask(
+      "send", 0, reinterpret_cast<void*>(first_task_args.get()));
 
-  auto second_task_args = std::make_unique(std::tuple<>{});
-  auto second_task =
-      CreateMockStackfulTask("receive", 2, std::reinterpret_cast<void*>(second_task_args.get()));
+  auto second_task_args = std::make_unique<std::tuple<>>(std::tuple<>{});
+  auto second_task = CreateMockStackfulTask(
+      "receive", 2, reinterpret_cast<void*>(second_task_args.get()));
 
   std::vector<HistoryEvent> history{};
   history.emplace_back(RequestInvoke(*first_task, 0));
@@ -171,15 +173,17 @@ TEST(LinearizabilityDualCheckerQueueTest, SmallUnlinearizableHistoryBadSend) {
       },
       q);
 
-  auto first_task_args = std::make_unique(std::tuple<int>{3});
-  auto first_task = CreateMockStackfulTask("send", 0, std::reinterpret_cast<void*>(first_task_args.get()));
+  auto first_task_args = std::make_unique<std::tuple<int>>(std::tuple<int>{3});
+  auto first_task = CreateMockStackfulTask(
+      "send", 0, reinterpret_cast<void*>(first_task_args.get()));
 
-  auto second_task_args = std::make_unique(std::tuple<>{});
-  auto second_task =
-      CreateMockStackfulTask("receive", 3, std::reinterpret_cast<void*>(second_task_args.get()));
+  auto second_task_args = std::make_unique<std::tuple<>>(std::tuple<>{});
+  auto second_task = CreateMockStackfulTask(
+      "receive", 3, reinterpret_cast<void*>(second_task_args.get()));
 
-  auto third_task_args = std::make_unique<>(std::tuple<>{});
-  auto third_task = CreateMockStackfulTask("receive", 3, std::reinterpret_cast<void*>(third_task_args.get()));
+  auto third_task_args = std::make_unique<std::tuple<>>(std::tuple<>{});
+  auto third_task = CreateMockStackfulTask(
+      "receive", 3, reinterpret_cast<void*>(third_task_args.get()));
 
   std::vector<HistoryEvent> history{};
   history.emplace_back(RequestInvoke(*first_task, 0));
@@ -206,14 +210,17 @@ TEST(LinearizabilityDualCheckerQueueTest,
           {"send", send}, {"receive", receive}, {"size", size}},
       q);
 
-  auto first_task_args = std::make_unique(std::tuple<>{});
-  auto first_task = CreateMockStackfulTask("receive", 3, std::reinterpret_cast<void*>(first_task_args.get()));
+  auto first_task_args = std::make_unique<std::tuple<>>(std::tuple<>{});
+  auto first_task = CreateMockStackfulTask(
+      "receive", 3, reinterpret_cast<void*>(first_task_args.get()));
 
-  auto second_task_args = std::make_unique(std::tuple<int>{3});
-  auto second_task = CreateMockStackfulTask("send", 0, std::reinterpret_cast<void*>(second_task_args.get()));
+  auto second_task_args = std::make_unique<std::tuple<int>>(std::tuple<int>{3});
+  auto second_task = CreateMockStackfulTask(
+      "send", 0, reinterpret_cast<void*>(second_task_args.get()));
 
-  auto third_task_args = std::make_unique(std::tuple<>{});
-  auto third_task = CreateMockStackfulTask("size", 1, std::reinterpret_cast<void*>(third_task_args.get()));
+  auto third_task_args = std::make_unique<std::tuple<>>(std::tuple<>{});
+  auto third_task = CreateMockStackfulTask(
+      "size", 1, reinterpret_cast<void*>(third_task_args.get()));
 
   std::vector<HistoryEvent> history{};
   history.emplace_back(Invoke(*third_task, 4));
