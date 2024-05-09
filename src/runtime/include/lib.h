@@ -87,7 +87,7 @@ struct Task {
   // Returns the task name.
   const std::string& GetName() const;
 
-  // Returns the task args.
+  // Returns a pointer to the arguments, points to the std::tuple.
   void* GetArgs() const;
 
   // Returns the args as strings.
@@ -134,10 +134,10 @@ struct StackfulTask {
   StackfulTask(StackfulTask&&);
 
   // Returns the root task name.
-  const std::string& GetName() const;
+  virtual const std::string& GetName() const;
 
-  // Returns the root task args.
-  void* GetArgs() const;
+  // Returns a pointer to the arguments, points to the std::tuple.
+  virtual void* GetArgs() const;
 
   // Return the root task args as strings.
   const std::vector<std::string>& GetStrArgs() const;

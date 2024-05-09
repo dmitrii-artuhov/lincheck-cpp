@@ -82,28 +82,29 @@ namespace LinearizabilityDualCheckerTest {
 using ::testing::AnyNumber;
 using ::testing::Return;
 
-TEST(LinearizabilityDualCheckerQueueTest, SmallLinearizableHistory) {
-  std::function<std::shared_ptr<BlockingMethod>(CoroutineQueue<int>*,
-                                                const std::vector<int>& args)>
-      send = [](CoroutineQueue<int>* c,
-                [[maybe_unused]] const std::vector<int>& args)
-      -> std::shared_ptr<BlockingMethod> {
-    assert(args.size() == 1);
-    return std::shared_ptr<BlockingMethod>(
-        new BlockingMethodWrapper<CoroutineQueue<int>::SendPromise>(
-            c->Send(args[0])));
-  };
-  std::function<std::shared_ptr<BlockingMethod>(CoroutineQueue<int>*,
-                                                const std::vector<int>& args)>
-      receive = [](CoroutineQueue<int>* c,
-                   [[maybe_unused]] const std::vector<int>& args)
-      -> std::shared_ptr<BlockingMethod> {
-    assert(args.empty());
-    return std::shared_ptr<BlockingMethod>(
-        new BlockingMethodWrapper<CoroutineQueue<int>::ReceivePromise>(
-            c->Receive()));
-  };
+std::function<std::shared_ptr<BlockingMethod>(CoroutineQueue<int>*, void* args)>
+    send = [](CoroutineQueue<int>* c,
+              [[maybe_unused]] void* args) -> std::shared_ptr<BlockingMethod> {
+  auto real_args = reinterpret_cast<std::tuple<int>*>(args);
+  return std::shared_ptr<BlockingMethod>(
+      new BlockingMethodWrapper<CoroutineQueue<int>::SendPromise>(
+          c->Send(std::get<0>(*real_args))));
+};
+std::function<std::shared_ptr<BlockingMethod>(CoroutineQueue<int>*, void* args)>
+    receive =
+        [](CoroutineQueue<int>* c,
+           [[maybe_unused]] void* args) -> std::shared_ptr<BlockingMethod> {
+  return std::shared_ptr<BlockingMethod>(
+      new BlockingMethodWrapper<CoroutineQueue<int>::ReceivePromise>(
+          c->Receive()));
+};
 
+std::function<int(CoroutineQueue<int>*, void* args)> size =
+    [](CoroutineQueue<int>* c, [[maybe_unused]] void* args) -> int {
+  return c->ReceiversCount();
+};
+
+TEST(LinearizabilityDualCheckerQueueTest, SmallLinearizableHistory) {
   CoroutineQueue<int> q;
   LinearizabilityDualChecker<CoroutineQueue<int>> checker(
       LinearizabilityDualChecker<CoroutineQueue<int>>::MethodMap{
@@ -112,8 +113,10 @@ TEST(LinearizabilityDualCheckerQueueTest, SmallLinearizableHistory) {
       },
       q);
 
-  auto first_task = CreateMockStackfulTask("send", 0, std::vector<int>{3});
-  auto second_task = CreateMockStackfulTask("receive", 3, std::vector<int>{});
+  auto first_task = CreateMockStackfulTask(
+      "send", 0, std::make_unique<void>(std::tuple<int>{3}));
+  auto second_task = CreateMockStackfulTask(
+      "receive", 3, std::make_unique<void>(std::tuple<>{}));
 
   std::vector<HistoryEvent> history{};
   history.emplace_back(RequestInvoke(*first_task, 0));
@@ -129,27 +132,6 @@ TEST(LinearizabilityDualCheckerQueueTest, SmallLinearizableHistory) {
 }
 
 TEST(LinearizabilityDualCheckerQueueTest, SmallUnlinearizableHistory) {
-  std::function<std::shared_ptr<BlockingMethod>(CoroutineQueue<int>*,
-                                                const std::vector<int>& args)>
-      send = [](CoroutineQueue<int>* c,
-                [[maybe_unused]] const std::vector<int>& args)
-      -> std::shared_ptr<BlockingMethod> {
-    assert(args.size() == 1);
-    return std::shared_ptr<BlockingMethod>(
-        new BlockingMethodWrapper<CoroutineQueue<int>::SendPromise>(
-            c->Send(args[0])));
-  };
-  std::function<std::shared_ptr<BlockingMethod>(CoroutineQueue<int>*,
-                                                const std::vector<int>& args)>
-      receive = [](CoroutineQueue<int>* c,
-                   [[maybe_unused]] const std::vector<int>& args)
-      -> std::shared_ptr<BlockingMethod> {
-    assert(args.empty());
-    return std::shared_ptr<BlockingMethod>(
-        new BlockingMethodWrapper<CoroutineQueue<int>::ReceivePromise>(
-            c->Receive()));
-  };
-
   CoroutineQueue<int> q;
   LinearizabilityDualChecker<CoroutineQueue<int>> checker(
       LinearizabilityDualChecker<CoroutineQueue<int>>::MethodMap{
@@ -158,8 +140,10 @@ TEST(LinearizabilityDualCheckerQueueTest, SmallUnlinearizableHistory) {
       },
       q);
 
-  auto first_task = CreateMockStackfulTask("send", 0, std::vector<int>{3});
-  auto second_task = CreateMockStackfulTask("receive", 2, std::vector<int>{});
+  auto first_task = CreateMockStackfulTask(
+      "send", 0, std::make_unique<void>(std::tuple<int>{3}));
+  auto second_task = CreateMockStackfulTask(
+      "receive", 2, std::make_unique<void>(std::tuple<>{}));
 
   std::vector<HistoryEvent> history{};
   history.emplace_back(RequestInvoke(*first_task, 0));
@@ -175,27 +159,6 @@ TEST(LinearizabilityDualCheckerQueueTest, SmallUnlinearizableHistory) {
 }
 
 TEST(LinearizabilityDualCheckerQueueTest, SmallUnlinearizableHistoryBadSend) {
-  std::function<std::shared_ptr<BlockingMethod>(CoroutineQueue<int>*,
-                                                const std::vector<int>& args)>
-      send = [](CoroutineQueue<int>* c,
-                [[maybe_unused]] const std::vector<int>& args)
-      -> std::shared_ptr<BlockingMethod> {
-    assert(args.size() == 1);
-    return std::shared_ptr<BlockingMethod>(
-        new BlockingMethodWrapper<CoroutineQueue<int>::SendPromise>(
-            c->Send(args[0])));
-  };
-  std::function<std::shared_ptr<BlockingMethod>(CoroutineQueue<int>*,
-                                                const std::vector<int>& args)>
-      receive = [](CoroutineQueue<int>* c,
-                   [[maybe_unused]] const std::vector<int>& args)
-      -> std::shared_ptr<BlockingMethod> {
-    assert(args.empty());
-    return std::shared_ptr<BlockingMethod>(
-        new BlockingMethodWrapper<CoroutineQueue<int>::ReceivePromise>(
-            c->Receive()));
-  };
-
   CoroutineQueue<int> q;
   LinearizabilityDualChecker<CoroutineQueue<int>> checker(
       LinearizabilityDualChecker<CoroutineQueue<int>>::MethodMap{
@@ -204,9 +167,12 @@ TEST(LinearizabilityDualCheckerQueueTest, SmallUnlinearizableHistoryBadSend) {
       },
       q);
 
-  auto first_task = CreateMockStackfulTask("send", 0, std::vector<int>{3});
-  auto second_task = CreateMockStackfulTask("receive", 3, std::vector<int>{});
-  auto third_task = CreateMockStackfulTask("receive", 3, std::vector<int>{});
+  auto first_task = CreateMockStackfulTask(
+      "send", 0, std::make_unique<void>(std::tuple<int>{3}));
+  auto second_task = CreateMockStackfulTask(
+      "receive", 3, std::make_unique<void>(std::tuple<>{}));
+  auto third_task = CreateMockStackfulTask(
+      "receive", 3, std::make_unique<void>(std::tuple<>{}));
 
   std::vector<HistoryEvent> history{};
   history.emplace_back(RequestInvoke(*first_task, 0));
@@ -227,43 +193,18 @@ TEST(LinearizabilityDualCheckerQueueTest, SmallUnlinearizableHistoryBadSend) {
 
 TEST(LinearizabilityDualCheckerQueueTest,
      SmallLinearizableHistoryWithNonBlocking) {
-  std::function<std::shared_ptr<BlockingMethod>(CoroutineQueue<int>*,
-                                                const std::vector<int>& args)>
-      send = [](CoroutineQueue<int>* c,
-                [[maybe_unused]] const std::vector<int>& args)
-      -> std::shared_ptr<BlockingMethod> {
-    assert(args.size() == 1);
-    return std::shared_ptr<BlockingMethod>(
-        new BlockingMethodWrapper<CoroutineQueue<int>::SendPromise>(
-            c->Send(args[0])));
-  };
-  std::function<std::shared_ptr<BlockingMethod>(CoroutineQueue<int>*,
-                                                const std::vector<int>& args)>
-      receive = [](CoroutineQueue<int>* c,
-                   [[maybe_unused]] const std::vector<int>& args)
-      -> std::shared_ptr<BlockingMethod> {
-    assert(args.empty());
-    return std::shared_ptr<BlockingMethod>(
-        new BlockingMethodWrapper<CoroutineQueue<int>::ReceivePromise>(
-            c->Receive()));
-  };
-
-  std::function<int(CoroutineQueue<int>*, const std::vector<int>& args)> size =
-      [](CoroutineQueue<int>* c,
-         [[maybe_unused]] const std::vector<int>& args) -> int {
-    assert(args.empty());
-    return c->ReceiversCount();
-  };
-
   CoroutineQueue<int> q;
   LinearizabilityDualChecker<CoroutineQueue<int>> checker(
       LinearizabilityDualChecker<CoroutineQueue<int>>::MethodMap{
           {"send", send}, {"receive", receive}, {"size", size}},
       q);
 
-  auto first_task = CreateMockStackfulTask("receive", 3, std::vector<int>{});
-  auto second_task = CreateMockStackfulTask("send", 0, std::vector<int>{3});
-  auto third_task = CreateMockStackfulTask("size", 1, std::vector<int>{});
+  auto first_task = CreateMockStackfulTask(
+      "receive", 3, std::make_unique<void>(std::tuple<>{}));
+  auto second_task = CreateMockStackfulTask(
+      "send", 0, std::make_unique<void>(std::tuple<int>{3}));
+  auto third_task =
+      CreateMockStackfulTask("size", 1, std::make_unique<void>(std::tuple<>{}));
 
   std::vector<HistoryEvent> history{};
   history.emplace_back(Invoke(*third_task, 4));

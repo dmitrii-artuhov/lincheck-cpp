@@ -15,18 +15,19 @@ class MockStackfulTask : public StackfulTask {
   MOCK_METHOD(void*, GetArgs, (), (const, override));
 };
 
-std::unique_ptr<MockStackfulTask> CreateMockStackfulTask(
-    std::string name, int ret_val, std::vector<int> args) {
+std::unique_ptr<MockStackfulTask> CreateMockStackfulTask(std::string name,
+                                                         int ret_val,
+                                                         void* args) {
   std::unique_ptr<MockStackfulTask> mock = std::make_unique<MockStackfulTask>();
   EXPECT_CALL(*mock, GetRetVal())
       .Times(testing::AnyNumber())
       .WillRepeatedly(testing::Return(ret_val));
   EXPECT_CALL(*mock, GetName())
       .Times(testing::AnyNumber())
-      .WillRepeatedly(testing::Return(std::move(name)));
+      .WillRepeatedly(testing::ReturnRefOfCopy(std::move(name)));
   EXPECT_CALL(*mock, GetArgs())
       .Times(testing::AnyNumber())
-      .WillRepeatedly(testing::Return(std::move(args)));
+      .WillRepeatedly(testing::Return(args));
 
   return mock;
 }
