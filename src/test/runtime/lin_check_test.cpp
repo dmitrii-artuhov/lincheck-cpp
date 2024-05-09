@@ -176,7 +176,7 @@ std::vector<std::unique_ptr<MockStackfulTask>> create_mocks(
           .WillRepeatedly(Return(adds));
       EXPECT_CALL(*get_task, GetName())
           .Times(AnyNumber())
-          .WillRepeatedly(ReturnRefOfCopy(std::move(sgd::string("get"))));
+          .WillRepeatedly(ReturnRefOfCopy(std::move(std::string("get"))));
       EXPECT_CALL(*get_task, GetArgs())
           .Times(AnyNumber())
           .WillRepeatedly(Return(empty_args));

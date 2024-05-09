@@ -12,19 +12,19 @@ template <class LinearSpecificationObject,
           class SpecificationObjectEqual =
               std::equal_to<LinearSpecificationObject>>
 struct LinearizabilityCheckerRecursive : ModelChecker {
-  using method_t = std::function<int(LinearSpecificationObject*, void*)>;
-  using method_map_t = std::map<MethodName, method_t>;
+  using Method = std::function<int(LinearSpecificationObject*, void*)>;
+  using MethodMap = std::map<MethodName, Method>;
 
   LinearizabilityCheckerRecursive() = delete;
 
-  LinearizabilityCheckerRecursive(method_map_t specification_methods,
+  LinearizabilityCheckerRecursive(MethodMap specification_methods,
                                   LinearSpecificationObject first_state);
 
   bool Check(const std::vector<std::variant<Invoke, Response>>& fixed_history)
       override;
 
  private:
-  std::map<MethodName, method_t> specification_methods;
+  std::map<MethodName, Method> specification_methods;
   LinearSpecificationObject first_state;
 };
 
@@ -34,7 +34,7 @@ LinearizabilityCheckerRecursive<LinearSpecificationObject,
                                 SpecificationObjectHash,
                                 SpecificationObjectEqual>::
     LinearizabilityCheckerRecursive(
-        LinearizabilityCheckerRecursive::method_map_t specification_methods,
+        LinearizabilityCheckerRecursive::MethodMap specification_methods,
         LinearSpecificationObject first_state)
     : specification_methods(specification_methods), first_state(first_state) {
   if (!std::is_copy_assignable_v<LinearSpecificationObject>) {
