@@ -39,7 +39,7 @@ std::string toString(const T &a);
 
 template <typename Func, typename... Args>
 non_atomic_manual int callCoroutine(Func &&f, void *this_ptr,
-                                    Args &&... args) noexcept {
+                                    Args &&...args) noexcept {
   Handle hdl = f(this_ptr, std::forward<Args>(args)...);
   auto tsk = StackfulTask{Task{hdl}};
   while (!tsk.IsReturned()) {
