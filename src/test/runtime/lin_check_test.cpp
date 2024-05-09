@@ -122,7 +122,7 @@ TEST(LinearizabilityCheckerCounterTest, ExtendedLinearizableHistory) {
 
   // Have to construct unique ptr here, otherwise the destructor will be called
   // after evaluation of the argument
-  auto empty_args_unique = std::make_unique(std::tuple<>{});
+  auto empty_args_unique = std::make_unique<std::tuple<>>(std::tuple<>{});
   void* empty_args = reinterpret_cast<void*>(empty_args_unique.get());
 
   auto first_task = CreateMockStackfulTask("faa", 2, empty_args);
