@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.6)
 project(lintest)
 
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 20)
 find_package(LLVM REQUIRED CONFIG)
 
 # need this crunch for github ci https://github.com/actions/runner-images/issues/8659
