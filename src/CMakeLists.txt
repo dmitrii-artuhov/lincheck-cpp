@@ -11,10 +11,10 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 # message("llvm location: ${LLVM_DIR}")
 
 #set(CMAKE_CXX_FLAGS "-DCMAKE_BUILD_TYPE=RelWithDebug -DFUZZTEST_FUZZING_MODE=on ${CMAKE_CXX_FLAGS}")
-add_compile_options(-fsanitize=address -DADDRESS_SANITIZER)
+#add_compile_options(-fsanitize=address -DADDRESS_SANITIZER)
 add_compile_options(-g)
 #add_compile_options(-I/opt/homebrew/opt/protobuf@26/include)
-add_link_options(-fsanitize=address -DADDRESS_SANITIZER)
+#add_link_options(-fsanitize=address -DADDRESS_SANITIZER)
 add_link_options(-g)
 
 add_subdirectory(third_party)

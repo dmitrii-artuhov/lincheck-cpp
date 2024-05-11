@@ -44,7 +44,7 @@ void set_suspension_points(CoroPromise *p, int32_t suspension_points) {
   assert(p != nullptr);
   // TODO: delete after debug
   //  std::cout << "set suspension_points " << *suspension_points << std::endl;
-  p->suspension_points = suspension_points;
+//  p->suspension_points = suspension_points;
 }
 
 void set_ret_val(CoroPromise *p, int ret_val) {
@@ -83,11 +83,11 @@ void Token::Reset() { parked = false; }
 // ------------------------------ TASK ----------------------------------------
 
 Task::Task(Handle hdl)
-    : hdl(hdl), suspension_points(hdl.promise().suspension_points) {}
+    : hdl(hdl), suspension_points(/* hdl.promise().suspension_points*/ 0) {}
 
 Task::Task(Handle hdl, TaskCloner cloner)
     : hdl{hdl},
-      suspension_points(hdl.promise().suspension_points),
+      suspension_points(/* hdl.promise().suspension_points*/ 0),
       cloner{cloner} {}
 
 Task::Task(Task &&oth) {
