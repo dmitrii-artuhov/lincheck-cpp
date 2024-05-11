@@ -1,7 +1,7 @@
 /**
  * ./verify.py build --src ./targets/race_register.cpp
  * ./verify.py run
-*/
+ */
 #include "../../runtime/include/verifying.h"
 #include "../specs/register.h"
 

@@ -2,8 +2,8 @@
 #include <memory>
 #include <optional>
 #include <queue>
-#include "../../runtime/include/verifying.h"
 
+#include "../../runtime/include/verifying.h"
 
 struct CoroutineQueue {
   struct SendPromise;
@@ -16,13 +16,14 @@ struct CoroutineQueue {
   SendPromise Send(int elem) { return SendPromise(elem, *this); }
   ReceivePromise Receive();
 
-//  ReceivePromise Receive() { return ReceivePromise(*this); }
+  //  ReceivePromise Receive() { return ReceivePromise(*this); }
 
   size_t ReceiversCount() { return receivers.size(); }
 
   struct ReceivePromise {
     explicit ReceivePromise(CoroutineQueue& queue) : queue(queue) {
-      elem = std::make_shared<std::optional<int>>(std::optional<int>(std::nullopt));
+      elem = std::make_shared<std::optional<int>>(
+          std::optional<int>(std::nullopt));
     }
     bool await_ready() { return false; }
 
@@ -61,12 +62,13 @@ struct CoroutineQueue {
     CoroutineQueue& queue;
   };
 
-private:
+ private:
   std::queue<ReceivePromise> receivers;
   std::queue<SendPromise> senders;
 };
 
-awaitable_method(void, CoroutineQueue, ReceivePromise, std::coroutine_handle<> h) {
+awaitable_method(void, CoroutineQueue, ReceivePromise,
+                 std::coroutine_handle<> h) {
   if (!queue.senders.empty()) {
     SendPromise send_req = queue.senders.back();
     queue.senders.pop();
@@ -79,7 +81,7 @@ awaitable_method(void, CoroutineQueue, ReceivePromise, std::coroutine_handle<> h
   }
 }
 
-target_method_dual(ltest::generators::genEmpty, CoroutineQueue::ReceivePromise, ReceivePromise, CoroutineQueue, Receive) {
+target_method_dual(ltest::generators::genEmpty, CoroutineQueue::ReceivePromise,
+                   ReceivePromise, CoroutineQueue, Receive) {
   return ReceivePromise(*this);
 }
-

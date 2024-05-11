@@ -2,7 +2,7 @@
  * ./verify.py build --src ./targets/fast_queue.cpp
  * ./verify.py run --strategy tla --tasks 4 --rounds 50000 --switches 1
  *
-*/
+ */
 #include <atomic>
 #include <iostream>
 #include <vector>
@@ -28,9 +28,7 @@ struct Node {
 
 const int size = 2;
 
-auto generateInt() {
-  return ltest::generators::makeSingleArg(rand() % 10 + 1);
-}
+auto generateInt() { return ltest::generators::makeSingleArg(rand() % 10 + 1); }
 
 class MPMCBoundedQueue {
  public:
