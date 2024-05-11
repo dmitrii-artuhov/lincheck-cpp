@@ -41,7 +41,7 @@ jobs:
         run: cmake -DCMAKE_BUILD_TYPE=Debug ..
       - name: Build
         working-directory: /__w/LTest/LTest/src/build
-        run: cmake --build --target codegen -j
+        run: cmake --build . --target codegen -j
       - name: Install python packages
         run: apt install -y pip && pip3 install --break-system-packages click
       - name: Build nonlinear_queue
@@ -67,7 +67,7 @@ jobs:
         run: cmake -DCMAKE_BUILD_TYPE=Debug ..
       - name: Build
         working-directory: /__w/LTest/LTest/src/build
-        run: cmake --build --target codegen -j
+        run: cmake --build . --target codegen -j
       - name: Install python packages
         run: apt install -y pip && pip3 install --break-system-packages click
       - name: Build nonlinear_queue
