@@ -19,7 +19,7 @@ struct CoroPromise {
 
   int has_ret_val{};
   int ret_val{};
-  int suspension_points;
+//  int suspension_points;
   Handle child_hdl{};
 };
 

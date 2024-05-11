@@ -100,7 +100,8 @@ struct CoroGenerator final {
     token_t = Type::getTokenTy(ctx);
     // This signature must be as in runtime declaration.
     // TODO: validate this by some way.
-    promise_t = StructType::create("CoroPromise", i32_t, i32_t, i32_t, ptr_t);
+//    promise_t = StructType::create("CoroPromise", i32_t, i32_t, i32_t, ptr_t);
+    promise_t = StructType::create("CoroPromise", i32_t, i32_t, ptr_t);
     promise_ptr_t = PointerType::get(promise_t, 0);
 
     // Names clashes?
@@ -112,9 +113,9 @@ struct CoroGenerator final {
         FunctionType::get(void_t, {promise_ptr_t, i32_t}, false),
         Function::ExternalLinkage, "set_ret_val", M);
 
-    set_suspension_points = Function::Create(
-        FunctionType::get(void_t, {promise_ptr_t, i32_t}, false),
-        Function::ExternalLinkage, "set_suspension_points", M);
+//    set_suspension_points = Function::Create(
+//        FunctionType::get(void_t, {promise_ptr_t, i32_t}, false),
+//        Function::ExternalLinkage, "set_suspension_points", M);
 
     get_ret_val =
         Function::Create(FunctionType::get(i32_t, {promise_ptr_t}, false),
