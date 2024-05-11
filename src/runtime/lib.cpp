@@ -40,12 +40,11 @@ void set_child_hdl(CoroPromise *p, int8_t *hdl) {
   p->child_hdl = std::coroutine_handle<CoroPromise>::from_address(hdl);
 }
 
-void set_suspension_points(CoroPromise *p, int32_t *suspension_points) {
+void set_suspension_points(CoroPromise *p, int32_t suspension_points) {
   assert(p != nullptr);
-  assert(suspension_points != nullptr);
   // TODO: delete after debug
-  std::cout << "set suspension_points " << *suspension_points << std::endl;
-  p->suspension_points = *suspension_points;
+  //  std::cout << "set suspension_points " << *suspension_points << std::endl;
+  p->suspension_points = suspension_points;
 }
 
 void set_ret_val(CoroPromise *p, int ret_val) {
@@ -235,6 +234,9 @@ StackfulTask::~StackfulTask() {
   // The task must be returned if we want to restart it.
   // We can't just Terminate() it because it is the runtime responsibility to
   // decide, in which order the tasks should be terminated.
+  if (!IsReturned()) {
+    std::cout << "not returned" << std::endl;
+  }
   assert(IsReturned());
 }
 

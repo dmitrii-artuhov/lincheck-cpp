@@ -63,7 +63,8 @@ std::unique_ptr<Strategy> MakeStrategy(Opts &opts, std::vector<TaskBuilder> l) {
     }
     case PCT:
       log() << "pct";
-      return std::make_unique<PctStrategy<TargetObj>>(opts.threads, l);
+      return std::make_unique<PctStrategy<TargetObj>>(opts.threads,
+                                                      std::move(l));
     default:
       assert(false && "unexpected typ");
   }
@@ -145,6 +146,7 @@ void Run(int argc, char *argv[]) {
   } else {
     std::cout << "success!\n";
   }
+  std::cout.flush();
 }
 
 }  // namespace ltest

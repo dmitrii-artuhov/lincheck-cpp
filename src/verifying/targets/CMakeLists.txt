@@ -1,0 +1,10 @@
+add_executable(atomic_register atomic_register.cpp)
+add_dependencies(atomic_register CoroGenPass)
+target_compile_options(atomic_register PRIVATE "-fpass-plugin=${CMAKE_BINARY_DIR}/codegen/CoroGenPass.so")
+
+add_executable(deadlock deadlock.cpp)
+add_executable(fast_queue fast_queue.cpp)
+add_executable(mutex_queue mutex_queue.cpp)
+add_executable(nonlinear_queue nonlinear_queue.cpp)
+add_executable(race_register race_register.cpp)
+add_executable(coroutine_queue coroutine_queue.cpp)

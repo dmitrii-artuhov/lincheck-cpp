@@ -114,7 +114,7 @@ struct CoroGenerator final {
 
     set_suspension_points = Function::Create(
         FunctionType::get(void_t, {promise_ptr_t, i32_t}, false),
-        Function::ExternalLinkage, "suspension_points", M);
+        Function::ExternalLinkage, "set_suspension_points", M);
 
     get_ret_val =
         Function::Create(FunctionType::get(i32_t, {promise_ptr_t}, false),
@@ -368,6 +368,10 @@ struct CoroGenerator final {
         Builder.CreateCall(utils::GenMallocCallee(M), {size}, "hdl_alloc");
     auto hdl = Builder.CreateIntrinsic(ptr_t, Intrinsic::coro_begin,
                                        {id, alloc}, nullptr, "hdl");
+
+    //    auto points_const = ConstantInt::get(i32_t, suspension_points);
+    //    Builder.CreateCall(set_suspension_points, {hdl, points_const});
+
     auto suspend_0 = Builder.CreateIntrinsic(i8_t, Intrinsic::coro_suspend,
                                              {token_none, i1_false});
     auto switch_instr = Builder.CreateSwitch(suspend_0, suspend, 2);
@@ -556,9 +560,6 @@ struct CoroGenerator final {
         }
       }
     }
-
-    auto points_const = ConstantInt::get(i32_t, suspension_points);
-    Builder.CreateCall(set_suspension_points, {hdl, points_const});
 
     return F;
   }

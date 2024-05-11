@@ -30,12 +30,14 @@ struct PctStrategy : Strategy {
     // In fact, it doesn't depend on the task, it only depends on the
     // constructor
     size_t avg_k = 0;
-    for (auto &constructor : constructors) {
-      auto task = Task{&state, constructor};
-      log() << "task: " << task.GetName()
-            << " k: " << task.GetSuspensionPoints() << "\n";
-      avg_k += task.GetSuspensionPoints();
-    }
+    // TODO: это не работает
+    //    for (auto &constructor : constructors) {
+    //      auto task = StackfulTask{constructor, &state};
+    //      log() << "task: " << task.GetName()
+    //            << " k: " << task.GetSuspensionPoints() << "\n";
+    //      avg_k += task.GetSuspensionPoints();
+    //      task.Terminate();
+    //    }
     avg_k = avg_k / constructors.size();
 
     PrepareForDepth(current_depth, avg_k);
@@ -76,7 +78,7 @@ struct PctStrategy : Strategy {
     if (threads[index_of_max].empty() ||
         threads[index_of_max].back().IsReturned()) {
       auto constructor = constructors.at(constructors_distribution(rng));
-      threads[index_of_max].emplace_back(Task{&state, constructor});
+      threads[index_of_max].emplace_back(StackfulTask{constructor, &state});
       return {threads[index_of_max].back(), true, index_of_max};
     }
 
@@ -86,7 +88,9 @@ struct PctStrategy : Strategy {
   void StartNextRound() override {
     log() << "depth: " << current_depth << "\n";
     // Reconstruct target as we start from the beginning.
-    state.Reconstruct();
+    TerminateTasks();
+
+    state.Reset();
     // Update statistics
     current_depth++;
     k_statistics.push_back(current_schedule_length);
@@ -103,6 +107,8 @@ struct PctStrategy : Strategy {
     }
   }
 
+  ~PctStrategy() { TerminateTasks(); }
+
  private:
   void PrepareForDepth(size_t depth, size_t k) {
     // Generates priorities
@@ -118,6 +124,14 @@ struct PctStrategy : Strategy {
     priority_change_points = std::vector<size_t>(depth - 1);
     for (size_t i = 0; i < depth - 1; ++i) {
       priority_change_points[i] = k_distribution(rng);
+    }
+  }
+
+  void TerminateTasks() {
+    for (size_t i = 0; i < threads.size(); ++i) {
+      if (!threads[i].empty()) {
+        threads[i].back().Terminate();
+      }
     }
   }
 
