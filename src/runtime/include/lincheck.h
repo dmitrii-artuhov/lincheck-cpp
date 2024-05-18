@@ -5,9 +5,41 @@
 #include <map>
 #include <stdexcept>
 #include <unordered_set>
+#include <variant>
 
 #include "lib.h"
-#include "scheduler.h"
+
+using Task = std::shared_ptr<CoroBase>;
+
+struct Response {
+  Response(const Task& task, int result, int thread_id);
+
+  [[nodiscard]] const Task& GetTask() const;
+
+  int result;
+  int thread_id;
+
+ private:
+  std::reference_wrapper<const Task> task;
+};
+
+struct Invoke {
+  explicit Invoke(const Task& task, int thread_id);
+
+  [[nodiscard]] const Task& GetTask() const;
+
+  int thread_id;
+
+ private:
+  std::reference_wrapper<const Task> task;
+};
+
+// ModelChecker is the general checker interface which is implemented by
+// different checkers, each of which checks its own consistency model
+struct ModelChecker {
+  virtual bool Check(
+      const std::vector<std::variant<Invoke, Response>>& history) = 0;
+};
 
 using MethodName = std::string;
 
@@ -122,20 +154,21 @@ bool LinearizabilityChecker<LinearSpecificationObject, SpecificationObjectHash,
     if (history[current_section_start].index() == 0) {
       // invoke
       const Invoke& inv = std::get<0>(history[current_section_start]);
-      assert(specification_methods.find(inv.GetTask().GetName()) !=
+      assert(specification_methods.find(inv.GetTask()->GetName()) !=
              specification_methods.end());
-      auto method = specification_methods.find(inv.GetTask().GetName())->second;
+      auto method =
+          specification_methods.find(inv.GetTask()->GetName())->second;
       // apply method
       bool was_checked = false;
       LinearSpecificationObject data_structure_state_copy =
           data_structure_state;
-      int res = method(&data_structure_state_copy, inv.GetTask().GetArgs());
+      int res = method(&data_structure_state_copy, inv.GetTask()->GetArgs());
 
       // If invoke doesn't have a response we can't check the response
       bool doesnt_have_response =
           (inv_res.find(current_section_start) == inv_res.end());
 
-      if (doesnt_have_response || res == inv.GetTask().GetRetVal()) {
+      if (doesnt_have_response || res == inv.GetTask()->GetRetVal()) {
         // We can append this event to a linearization
         linearized[current_section_start] = true;
         if (!doesnt_have_response) {
@@ -158,7 +191,7 @@ bool LinearizabilityChecker<LinearSpecificationObject, SpecificationObjectHash,
 
       // haven't seen this state previously, so continue procedure with this new
       // state
-      if ((doesnt_have_response || res == inv.GetTask().GetRetVal()) &&
+      if ((doesnt_have_response || res == inv.GetTask()->GetRetVal()) &&
           !was_checked) {
         // open section
         open_sections_stack.push_back(current_section_start);

@@ -86,15 +86,16 @@ bool LinearizabilityCheckerRecursive<LinearSpecificationObject,
       }
 
       Invoke minimal_op = std::get<Invoke>(history[i]);
-      auto method =
-          specification_methods.find(minimal_op.GetTask().GetName())->second;
+      auto method = specification_methods
+                        .find(std::string{minimal_op.GetTask()->GetName()})
+                        ->second;
 
       LinearSpecificationObject data_structure_state_copy =
           data_structure_state;
       // state is already have been copied, because it's the argument of the
       // lambda
       int res =
-          method(&data_structure_state_copy, minimal_op.GetTask().GetArgs());
+          method(&data_structure_state_copy, minimal_op.GetTask()->GetArgs());
       // If invoke doesn't have a response we can't check the response
       if (inv_res.find(i) == inv_res.end()) {
         linearized[i] = true;
@@ -105,7 +106,7 @@ bool LinearizabilityCheckerRecursive<LinearSpecificationObject,
         continue;
       }
 
-      if (res == minimal_op.GetTask().GetRetVal()) {
+      if (res == minimal_op.GetTask()->GetRetVal()) {
         linearized[i] = true;
         assert(inv_res.find(i) != inv_res.end());
         linearized[inv_res[i]] = true;

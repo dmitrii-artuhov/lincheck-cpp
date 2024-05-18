@@ -554,6 +554,7 @@ namespace {
 
 struct CoroGenPass : public PassInfoMixin<CoroGenPass> {
   PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) {
+    errs() << M << "\n";
     auto fun_index = CreateFunIndex(M);
 
     CoroGenerator gen{M};

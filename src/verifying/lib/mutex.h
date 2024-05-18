@@ -17,13 +17,12 @@ struct Mutex {
 
   // `noexcept` here is needeed to tell clang to generate just `call` instead of
   // `invoke`. The full support for the `invoke` will be added later.
-  non_atomic_manual void Lock(std::shared_ptr<Token> token) noexcept {
+  void Lock(std::shared_ptr<Token> token) noexcept {
     waiters.push_back(token);
     if (waiters.size() == 1) {
       return;
     }
-    token->parked = true;
-    CoroYield();
+    token->Park();
   }
 
   // Assume this method is atomic.
@@ -31,7 +30,7 @@ struct Mutex {
     assert(!waiters.empty());
     waiters.pop_front();
     if (!waiters.empty()) {
-      waiters.front()->parked = false;
+      waiters.front()->Unpark();
     }
   }
 };

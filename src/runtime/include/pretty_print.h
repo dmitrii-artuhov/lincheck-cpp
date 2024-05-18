@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "lib.h"
+#include "lincheck.h"
 
 using std::string;
 using std::to_string;
@@ -89,8 +90,9 @@ struct PrettyPrinter {
       if (i.index() == 0) {
         auto inv = get<0>(i);
         auto& task = inv.GetTask();
-        fp.Out(task.GetName() + "(");
-        const auto& args = task.GetStrArgs();
+        fp.Out(std::string{task->GetName()});
+        fp.Out("(");
+        const auto& args = task->GetStrArgs();
         for (int i = 0; i < args.size(); ++i) {
           if (i > 0) {
             fp.Out(", ");
@@ -100,7 +102,7 @@ struct PrettyPrinter {
         fp.Out(")");
       } else {
         auto resp = get<1>(i);
-        fp.Out("<-- " + to_string(resp.GetTask().GetRetVal()));
+        fp.Out("<-- " + to_string(resp.GetTask()->GetRetVal()));
       }
       assert(fp.rest > 0 && "increase cell_width in pretty printer");
       print_spaces(fp.rest);
@@ -118,8 +120,7 @@ struct PrettyPrinter {
   // Helps to debug full histories.
   template <typename Out_t>
   void PrettyPrint(
-      const std::vector<std::pair<int, std::reference_wrapper<StackfulTask>>>&
-          result,
+      const std::vector<std::pair<int, std::reference_wrapper<Task>>>& result,
       Out_t& out) {
     int cell_width = 20;  // Up it if necessary. Enough for now.
 
@@ -168,7 +169,7 @@ struct PrettyPrinter {
 
       FitPrinter fp{out, cell_width};
       fp.Out(" ");
-      fp.Out(i.second.get().GetName());
+      fp.Out(std::string{i.second.get()->GetName()});
       assert(fp.rest > 0 && "increase cell_width in pretty printer");
       print_spaces(fp.rest);
       out << "|";

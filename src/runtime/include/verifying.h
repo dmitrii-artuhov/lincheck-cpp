@@ -146,8 +146,7 @@ void Run(int argc, char *argv[]) {
 
 #define LTEST_ENTRYPOINT(spec_obj_t)        \
   namespace ltest {                         \
-  std::vector<TaskBuilder> task_builders;   \
-  GeneratedArgs gen_args = GeneratedArgs{}; \
+  std::vector<TaskBuilder> task_builders{}; \
   }                                         \
   int main(int argc, char *argv[]) {        \
     ltest::Run<spec_obj_t>(argc, argv);     \

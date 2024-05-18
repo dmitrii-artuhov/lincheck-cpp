@@ -3,9 +3,9 @@
 #include "include/logger.h"
 #include "include/pretty_print.h"
 
-StrategyScheduler::StrategyScheduler(Strategy& sched_class,
-                                     ModelChecker& checker,
-                                     PrettyPrinter& pretty_printer,
+StrategyScheduler::StrategyScheduler(Strategy &sched_class,
+                                     ModelChecker &checker,
+                                     PrettyPrinter &pretty_printer,
                                      size_t max_tasks, size_t max_rounds)
     : strategy(sched_class),
       checker(checker),
@@ -17,7 +17,7 @@ Scheduler::Result StrategyScheduler::runRound() {
   // History of invoke and response events which is required for the checker
   std::vector<std::variant<Invoke, Response>> sequential_history;
   // Full history of the current execution in the Run function
-  std::vector<std::reference_wrapper<StackfulTask>> full_history;
+  std::vector<std::reference_wrapper<Task>> full_history;
 
   for (size_t finished_tasks = 0; finished_tasks < max_tasks;) {
     auto [next_task, is_new, thread_id] = strategy.Next();
@@ -28,11 +28,11 @@ Scheduler::Result StrategyScheduler::runRound() {
     }
     full_history.emplace_back(next_task);
 
-    next_task.Resume();
-    if (next_task.IsReturned()) {
+    next_task->Resume();
+    if (next_task->IsReturned()) {
       finished_tasks++;
 
-      auto result = next_task.GetRetVal();
+      auto result = next_task->GetRetVal();
       sequential_history.emplace_back(Response(next_task, result, thread_id));
     }
   }

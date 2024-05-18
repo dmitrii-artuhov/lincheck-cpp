@@ -15,7 +15,22 @@
 struct Test {
   Test() {}
 
-  void Lock(std::shared_ptr<Token>, int);
+  // Lock(odd) in parallel with Lock(even) causes deadlock.
+  non_atomic void Lock(std::shared_ptr<Token> token, int v) {
+    if (v % 2 == 0) {
+      mu1.Lock(token);
+      CoroYield();
+      mu2.Lock(token);
+      CoroYield();
+    } else {
+      mu2.Lock(token);
+      CoroYield();
+      mu1.Lock(token);
+      CoroYield();
+    }
+    mu1.Unlock();
+    mu2.Unlock();
+  }
 
   void Reset() {
     mu1 = Mutex{};
@@ -46,19 +61,7 @@ auto generateArgs() {
   return std::tuple_cat(token, _int);
 }
 
-// Lock(odd) in parallel with Lock(even) causes deadlock.
-target_method(generateArgs, void, Test, Lock, std::shared_ptr<Token> token,
-              int v) {
-  if (v % 2 == 0) {
-    mu1.Lock(token);
-    mu2.Lock(token);
-  } else {
-    mu2.Lock(token);
-    mu1.Lock(token);
-  }
-  mu1.Unlock();
-  mu2.Unlock();
-}
+target_method(generateArgs, void, Test, Lock, std::shared_ptr<Token>, int);
 
 using spec_t = ltest::Spec<Test, Test>;
 

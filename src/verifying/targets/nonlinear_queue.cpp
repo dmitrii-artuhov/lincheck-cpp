@@ -14,8 +14,22 @@ const int N = 100;
 struct Queue {
   Queue() {}
 
-  void Push(int v);
-  int Pop();
+  non_atomic void Push(int v) {
+    int pos = head.fetch_add(1);
+    a[pos] = v;
+  }
+
+  non_atomic int Pop() {
+    int last = head.load();
+    for (int i = 0; i < last; ++i) {
+      int e = a[i].load();
+      if (e != 0 && a[i].compare_exchange_strong(e, 0)) {
+        return e;
+      }
+    }
+    return 0;
+  }
+
   void Reset() {
     head.store(0);
     for (int i = 0; i < N; ++i) a[i].store(0);
@@ -26,26 +40,12 @@ struct Queue {
 };
 
 // Arguments generator.
-auto generateInt() {
-  return ltest::generators::makeSingleArg(rand() % 10 + 1);
-}
+auto generateInt() { return ltest::generators::makeSingleArg(rand() % 10 + 1); }
 
 // Targets.
-target_method(generateInt, void, Queue, Push, int v) {
-  int pos = head.fetch_add(1);
-  a[pos] = v;
-}
+target_method(generateInt, void, Queue, Push, int);
 
-target_method(ltest::generators::genEmpty, int, Queue, Pop) {
-  int last = head.load();
-  for (int i = 0; i < last; ++i) {
-    int e = a[i].load();
-    if (e != 0 && a[i].compare_exchange_strong(e, 0)) {
-      return e;
-    }
-  }
-  return 0;
-}
+target_method(ltest::generators::genEmpty, int, Queue, Pop);
 
 // Specify target structure and it's sequential specification.
 using spec_t =

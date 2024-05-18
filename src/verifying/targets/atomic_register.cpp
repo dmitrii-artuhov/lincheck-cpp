@@ -8,21 +8,17 @@
 #include "../specs/register.h"
 
 struct Register {
-  void add();
-  int get();
+  non_atomic void add() { x.fetch_add(1); }
+  non_atomic int get() { return x.load(); }
 
   void Reset() { x.store(0); }
 
   std::atomic<int> x{};
 };
 
-target_method(ltest::generators::genEmpty, void, Register, add) {
-  x.fetch_add(1);
-}
+target_method(ltest::generators::genEmpty, void, Register, add);
 
-target_method(ltest::generators::genEmpty, int, Register, get) {
-  return x.load();
-}
+target_method(ltest::generators::genEmpty, int, Register, get);
 
 using spec_t =
     ltest::Spec<Register, spec::LinearRegister, spec::LinearRegisterHash,
