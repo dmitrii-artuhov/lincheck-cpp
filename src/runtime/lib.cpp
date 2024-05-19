@@ -75,7 +75,6 @@ void Token::Reset() { parked = false; }
 
 void Token::Park() {
   parked = true;
-  std::cout << "parked, yield..." << std::endl;
   CoroYield();
 }
 

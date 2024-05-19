@@ -125,7 +125,7 @@ def run_build_on_optimized(src, artifacts_dir, debug=False):
     cmd.extend(build_flags)
     if debug:
         cmd.append("-g")
-    cmd.extend(["-emit-llvm", "-S", "-fno-discard-value-names"])
+    cmd.extend(["-emit-llvm", "-S"])
     cmd.append(src.name)
     cmd.extend(["-o", os.path.join(artifacts_dir, "bytecode.bc")])
     rc, _ = run_command_and_get_output(cmd, cwd=file_dir)
@@ -157,10 +157,11 @@ def build(src, debug, no_optimized, artifacts_dir):
     if not os.path.exists(artifacts_dir):
         os.mkdir(artifacts_dir)
 
-    print("building...")
     if no_optimized:
+        print("building non optimized")
         run_build(src, artifacts_dir, debug)
     else:
+        print("building...")
         run_build_on_optimized(src, artifacts_dir, debug)
     print("OK")
 

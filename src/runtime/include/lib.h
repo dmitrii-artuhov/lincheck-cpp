@@ -99,6 +99,9 @@ struct CoroBase : public std::enable_shared_from_this<CoroBase> {
   friend void CoroBody(int);
   friend void ::CoroYield();
 
+  template <typename Target, typename... Args>
+  friend class Coro;
+
   // Return value.
   int ret{};
   // Is coroutine returned.
@@ -111,6 +114,7 @@ struct CoroBase : public std::enable_shared_from_this<CoroBase> {
   unsigned val_stack_id;
   // Name.
   std::string_view name;
+  // Token.
   std::shared_ptr<Token> token{};
 };
 
@@ -131,7 +135,11 @@ struct Coro final : public CoroBase {
      *
      */
     assert(IsReturned());
-    return New(func, this_ptr, args, args_to_strings, name);
+    auto coro = New(func, this_ptr, args, args_to_strings, name);
+    if (token != nullptr) {
+      coro->token = std::move(token);
+    }
+    return coro;
   }
 
   // unsafe: caller must ensure that this_ptr points to Target.
@@ -219,6 +227,7 @@ struct Coro final : public CoroBase {
   }
 
   std::vector<std::string> GetStrArgs() const override {
+    assert(args_to_strings != nullptr);
     return args_to_strings(args);
   }
 
@@ -238,5 +247,5 @@ struct Coro final : public CoroBase {
   void* this_ptr;
 };
 
-// Creates coroutines from pointer to this.
-using TaskBuilder = std::function<std::shared_ptr<CoroBase>(void*)>;
+// (this_ptr, thread_num) -> Task
+using TaskBuilder = std::function<std::shared_ptr<CoroBase>(void*, size_t)>;

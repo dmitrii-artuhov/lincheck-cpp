@@ -17,9 +17,9 @@ auto makeSingleArg(T&& arg) {
   return std::tuple<arg_type>{std::forward<arg_type>(arg)};
 }
 
-std::tuple<> genEmpty();
+std::tuple<> genEmpty(size_t thread_num);
 
-std::tuple<std::shared_ptr<Token>> genToken();
+std::tuple<std::shared_ptr<Token>> genToken(size_t thread_num);
 
 }  // namespace generators
 

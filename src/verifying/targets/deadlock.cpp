@@ -53,11 +53,13 @@ struct Test {
   }
 };
 
-auto generateInt() { return ltest::generators::makeSingleArg(rand() % 10 + 1); }
+auto generateInt(size_t thread_num) {
+  return ltest::generators::makeSingleArg(static_cast<int>(thread_num));
+}
 
-auto generateArgs() {
-  auto token = ltest::generators::genToken();
-  auto _int = generateInt();
+auto generateArgs(size_t thread_num) {
+  auto token = ltest::generators::genToken(thread_num);
+  auto _int = generateInt(thread_num);
   return std::tuple_cat(token, _int);
 }
 

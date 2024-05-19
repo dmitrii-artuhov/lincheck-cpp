@@ -52,11 +52,11 @@ template <typename Target, typename... Args>
 struct TargetMethod<int, Target, Args...> {
   using Method = std::function<int(Target *, Args...)>;
   TargetMethod(std::string_view method_name,
-               std::function<std::tuple<Args...>()> gen, Method method) {
-    auto builder = [gen = std::move(gen), method_name,
-                    method = std::move(method)](
-                       void *this_ptr) -> std::shared_ptr<CoroBase> {
-      auto args = std::shared_ptr<void>(new std::tuple(gen()));
+               std::function<std::tuple<Args...>(size_t)> gen, Method method) {
+    auto builder =
+        [gen = std::move(gen), method_name, method = std::move(method)](
+            void *this_ptr, size_t thread_num) -> std::shared_ptr<CoroBase> {
+      auto args = std::shared_ptr<void>(new std::tuple(gen(thread_num)));
       auto coro = Coro<Target, Args...>::New(
           method, this_ptr, args, &ltest::toStringArgs<Args...>, method_name);
       if (ltest::generators::generated_token) {
@@ -85,12 +85,12 @@ struct TargetMethod<void, Target, Args...> {
   using Method = std::function<void(Target *, Args...)>;
 
   TargetMethod(std::string_view method_name,
-               std::function<std::tuple<Args...>()> gen, Method method) {
-    auto builder = [gen = std::move(gen), method_name,
-                    method = std::move(method)](
-                       void *this_ptr) -> std::shared_ptr<CoroBase> {
+               std::function<std::tuple<Args...>(size_t)> gen, Method method) {
+    auto builder =
+        [gen = std::move(gen), method_name, method = std::move(method)](
+            void *this_ptr, size_t thread_num) -> std::shared_ptr<CoroBase> {
       auto wrapper = Wrapper<Target, decltype(method), Args...>{method};
-      auto args = std::shared_ptr<void>(new std::tuple(gen()));
+      auto args = std::shared_ptr<void>(new std::tuple(gen(thread_num)));
       auto coro = Coro<Target, Args...>::New(
           wrapper, this_ptr, args, &ltest::toStringArgs<Args...>, method_name);
       if (ltest::generators::generated_token) {

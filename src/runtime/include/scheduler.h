@@ -175,6 +175,7 @@ struct TLAScheduler : Scheduler {
       sequential_history.emplace_back(Invoke(task, thread_id));
     }
 
+    assert(!task->IsParked());
     task->Resume();
     bool is_finished = task->IsReturned();
     if (is_finished) {
@@ -192,7 +193,7 @@ struct TLAScheduler : Scheduler {
       }
     } else {
       log() << "run round: " << finished_rounds << "\n";
-      pretty_printer.PrettyPrint(sequential_history, log());
+      pretty_printer.PrettyPrint(full_history, log());
       log() << "===============================================\n\n";
       log().flush();
       // Stop, check if the the generated history is linearizable.
@@ -253,7 +254,7 @@ struct TLAScheduler : Scheduler {
       for (size_t cons_num = 0; auto cons : constructors) {
         frame.is_new = true;
         auto size_before = tasks.size();
-        tasks.emplace_back(cons(&state));
+        tasks.emplace_back(cons(&state, i));
 
         auto [is_over, res] = ResumeTask(frame, step, switches, thread, true);
         if (is_over || res.has_value()) {
