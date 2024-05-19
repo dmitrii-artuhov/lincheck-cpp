@@ -52,7 +52,7 @@ CoroBase::~CoroBase() {
   assert(IsReturned());
 }
 
-std::string_view CoroBase::GetName() const { return name; }
+std::string CoroBase::GetName() const { return std::string(name); }
 
 bool CoroBase::IsReturned() const { return is_returned; }
 
@@ -72,6 +72,8 @@ void CoroBase::Terminate() {
            "coroutine is spinning too long, possible wrong terminating order");
   }
 }
+bool CoroBase::IsBlocking() const { return false; }
+bool CoroBase::IsSuspended() const { return false; }
 
 void Token::Reset() { parked = false; }
 

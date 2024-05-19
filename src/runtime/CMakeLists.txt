@@ -17,5 +17,5 @@ set(HEADER_FILES
         include/verifying.h
 )
 
-add_library(runtime lib.cpp lin_check.cpp logger.cpp scheduler.cpp verifying.cpp ${HEADER_FILES})
+add_library(runtime generators.cpp lib.cpp lin_check.cpp logger.cpp pretty_printer.cpp scheduler.cpp verifying.cpp ${HEADER_FILES})
 target_include_directories(runtime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

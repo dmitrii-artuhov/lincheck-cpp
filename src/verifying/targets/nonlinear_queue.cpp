@@ -40,7 +40,7 @@ struct Queue {
 };
 
 // Arguments generator.
-auto generateInt() { return ltest::generators::makeSingleArg(rand() % 10 + 1); }
+auto generateInt(size_t unused_param) { return ltest::generators::makeSingleArg(rand() % 10 + 1); }
 
 // Targets.
 target_method(generateInt, void, Queue, Push, int);

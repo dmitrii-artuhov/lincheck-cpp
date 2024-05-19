@@ -29,15 +29,14 @@ std::map<size_t, size_t> get_inv_res_mapping(
   return inv_res;
 }
 
-<<<<<<< HEAD
 // get_inv_res_mapping returns map (invoke_index -> corresponding
 // response_index)
 std::map<size_t, size_t> get_inv_res_full_mapping(
     const std::vector<HistoryEvent>& history) {
   std::map<size_t, size_t> inv_res;            // inv -> corresponding response
-  std::map<const StackfulTask*, size_t> uids;  // uid -> res
-  std::map<const StackfulTask*, size_t> follow_up_uids;
-  std::map<const StackfulTask*, size_t> requests_uids;
+  std::map<const Task*, size_t> uids;  // uid -> res
+  std::map<const Task*, size_t> follow_up_uids;
+  std::map<const Task*, size_t> requests_uids;
 
   for (size_t i = 0; i < history.size(); ++i) {
     auto el = history[i];
@@ -75,7 +74,7 @@ std::map<size_t, size_t> get_inv_res_full_mapping(
 
 std::map<size_t, size_t> get_followup_res_request_inv_mapping(
     const std::vector<HistoryEvent>& history) {
-  std::map<const StackfulTask*, size_t> uids;
+  std::map<const Task*, size_t> uids;
   std::map<size_t, size_t> inv_res;
 
   for (size_t i = 0; i < history.size(); ++i) {
@@ -91,7 +90,7 @@ std::map<size_t, size_t> get_followup_res_request_inv_mapping(
 
   return inv_res;
 }
-=======
+
 Invoke::Invoke(const Task &task, int thread_id)
     : task(task), thread_id(thread_id) {}
 
@@ -101,4 +100,3 @@ Response::Response(const Task &task, int result, int thread_id)
 const Task &Invoke::GetTask() const { return this->task; }
 
 const Task &Response::GetTask() const { return this->task; }
->>>>>>> rewrite-coroutines

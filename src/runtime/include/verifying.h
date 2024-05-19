@@ -11,6 +11,7 @@
 #include "round_robin_strategy.h"
 #include "scheduler.h"
 #include "verifying_macro.h"
+#include "lincheck_dual.h"
 
 namespace ltest {
 
@@ -24,6 +25,12 @@ struct Spec {
   using linear_spec_t = LinearSpec;
   using linear_spec_hash_t = LinearSpecHash;
   using linear_spec_equals_t = LinearSpecEquals;
+};
+
+template <class TargetObj, class LinearSpec>
+struct SpecDual {
+  using target_obj_t = TargetObj;
+  using linear_spec_t = LinearSpec;
 };
 
 struct Opts {
@@ -149,6 +156,44 @@ void Run(int argc, char *argv[]) {
   std::cout.flush();
 }
 
+template <class SpecDual>
+void RunDual(int argc, char *argv[]) {
+  std::vector<std::string> args;
+  for (size_t i = 1; i < argc; ++i) {
+    args.push_back(std::string{argv[i]});
+  }
+  Opts opts;
+  args = parse_opts(std::move(args), opts);
+
+  logger_init(opts.verbose);
+  std::cout << "threads  = " << opts.threads << "\n";
+  std::cout << "tasks    = " << opts.tasks << "\n";
+  std::cout << "switches = " << opts.switches << "\n";
+  std::cout << "rounds   = " << opts.rounds << "\n";
+  std::cout << "targets  = " << task_builders.size() << "\n";
+
+  PrettyPrinter pretty_printer{opts.threads};
+
+  using lchecker_t =
+      LinearizabilityDualChecker<typename SpecDual::linear_spec_t>;
+  lchecker_t checker{SpecDual::linear_spec_t::GetMethods(),
+                     typename SpecDual::linear_spec_t{}};
+
+  auto scheduler = MakeScheduler<typename SpecDual::target_obj_t>(
+      checker, opts, std::move(task_builders), pretty_printer);
+  std::cout << "\n\n";
+  std::cout.flush();
+
+  auto result = scheduler->Run();
+  if (result.has_value()) {
+    std::cout << "non linearized:\n";
+    pretty_printer.PrettyPrint(result.value().second, std::cout);
+  } else {
+    std::cout << "success!\n";
+  }
+  std::cout.flush();
+}
+
 }  // namespace ltest
 
 #define LTEST_ENTRYPOINT(spec_obj_t)        \
@@ -157,5 +202,14 @@ void Run(int argc, char *argv[]) {
   }                                         \
   int main(int argc, char *argv[]) {        \
     ltest::Run<spec_obj_t>(argc, argv);     \
+    return 0;                               \
+  }                                         \
+
+#define LTEST_ENTRYPOINT_DUAL(spec_obj_t)        \
+  namespace ltest {                         \
+  std::vector<TaskBuilder> task_builders{}; \
+  }                                         \
+  int main(int argc, char *argv[]) {        \
+    ltest::RunDual<spec_obj_t>(argc, argv);     \
     return 0;                               \
   }\

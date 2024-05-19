@@ -50,14 +50,14 @@ struct PctStrategy : Strategy {
 
   // If there aren't any non returned tasks and the amount of finished tasks
   // is equal to the max_tasks the finished task will be returned
-  std::tuple<StackfulTask &, bool, int> Next() override {
+  std::tuple<Task, bool, int> Next() override {
     size_t max = std::numeric_limits<size_t>::min();
     size_t index_of_max = 0;
     // Have to ignore waiting threads, so can't do it faster than O(n)
     for (size_t i = 0; i < threads.size(); ++i) {
       // Ignore waiting threads
       // TODO: IsSuspended???
-      if (!threads[i].empty() && threads[i].back().IsSuspended()) {
+      if (!threads[i].empty() && threads[i].back()->IsSuspended()) {
         continue;
       }
 
@@ -76,9 +76,9 @@ struct PctStrategy : Strategy {
     }
 
     if (threads[index_of_max].empty() ||
-        threads[index_of_max].back().IsReturned()) {
+        threads[index_of_max].back()->IsReturned()) {
       auto constructor = constructors.at(constructors_distribution(rng));
-      threads[index_of_max].emplace_back(StackfulTask{constructor, &state});
+      threads[index_of_max].emplace_back(constructor(&state, index_of_max));
       return {threads[index_of_max].back(), true, index_of_max};
     }
 
@@ -103,7 +103,7 @@ struct PctStrategy : Strategy {
     PrepareForDepth(current_depth, new_k);
 
     for (auto &thread : threads) {
-      thread = StableVector<StackfulTask>();
+      thread = StableVector<Task>();
     }
   }
 
@@ -130,7 +130,7 @@ struct PctStrategy : Strategy {
   void TerminateTasks() {
     for (size_t i = 0; i < threads.size(); ++i) {
       if (!threads[i].empty()) {
-        threads[i].back().Terminate();
+        threads[i].back()->Terminate();
       }
     }
   }
@@ -147,7 +147,7 @@ struct PctStrategy : Strategy {
   // references can't be invalidated before the end of the round,
   // so we have to contains all tasks in queues(queue doesn't invalidate the
   // references)
-  std::vector<StableVector<StackfulTask>> threads;
+  std::vector<StableVector<Task>> threads;
   std::uniform_int_distribution<std::mt19937::result_type>
       constructors_distribution;
   std::mt19937 rng;

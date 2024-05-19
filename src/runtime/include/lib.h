@@ -69,7 +69,7 @@ struct CoroBase : public std::enable_shared_from_this<CoroBase> {
   int GetRetVal() const;
 
   // Returns the name of the coroutine.
-  std::string_view GetName() const;
+  std::string GetName() const;
 
   // Returns the args as strings.
   virtual std::vector<std::string> GetStrArgs() const = 0;
@@ -98,6 +98,8 @@ struct CoroBase : public std::enable_shared_from_this<CoroBase> {
   bool IsParked() const;
 
   virtual ~CoroBase();
+
+  bool FollowUpReady;
 
  protected:
   CoroBase() = default;
@@ -242,7 +244,7 @@ struct Coro final : public CoroBase {
   void* GetArgs() const override { return args.get(); }
 
   ~Coro() { VALGRIND_STACK_DEREGISTER(val_stack_id); }
-
+  bool FollowUpReady;
  private:
   // Function to execute.
   CoroF func;

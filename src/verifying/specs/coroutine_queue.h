@@ -1,11 +1,9 @@
-#include <coroutine>
-#include <memory>
-#include <optional>
-#include <queue>
-#include "../specs/coroutine_queue.h"
+#include "../../runtime/include/lincheck_dual.h"
+#include <functional>
+#include <map>
+namespace spec {
 
-#include "../../runtime/include/verifying.h"
-
+template <typename PushArgTuple = std::tuple<int>, std::size_t ValueIndex = 0>
 struct CoroutineQueue {
   struct SendPromise;
   struct ReceivePromise;
@@ -15,22 +13,18 @@ struct CoroutineQueue {
         senders(std::queue<SendPromise>()) {}
 
   SendPromise Send(int elem) { return SendPromise(elem, *this); }
-  ReceivePromise Receive() {
-    return ReceivePromise(*this);
-  }
 
-  //  ReceivePromise Receive() { return ReceivePromise(*this); }
+  ReceivePromise Receive() { return ReceivePromise(*this); }
 
   size_t ReceiversCount() { return receivers.size(); }
 
   struct ReceivePromise {
     explicit ReceivePromise(CoroutineQueue& queue) : queue(queue) {
-      elem = std::make_shared<std::optional<int>>(
-          std::optional<int>(std::nullopt));
+      elem = std::make_shared<std::optional<int>>(std::optional<int>(std::nullopt));
     }
     bool await_ready() { return false; }
 
-    non_atomic void await_suspend(std::coroutine_handle<> h) {
+    void await_suspend(std::coroutine_handle<> h) {
       if (!queue.senders.empty()) {
         SendPromise send_req = queue.senders.back();
         queue.senders.pop();
@@ -75,17 +69,22 @@ struct CoroutineQueue {
     CoroutineQueue& queue;
   };
 
- private:
+  static auto GetMethods() {
+    LinearizabilityDualChecker<CoroutineQueue<>>::BlockingMethodFactory receive = [](CoroutineQueue<>* c,
+       [[maybe_unused]] void* args) -> std::shared_ptr<BlockingMethod> {
+      return std::shared_ptr<BlockingMethod>(
+          new BlockingMethodWrapper<CoroutineQueue<>::ReceivePromise>(
+              c->Receive()));
+    };
+
+    return LinearizabilityDualChecker<CoroutineQueue<>>::MethodMap{
+        {"Receive", receive},
+    };
+  }
+
+private:
   std::queue<ReceivePromise> receivers;
   std::queue<SendPromise> senders;
 };
 
-
-target_method_dual(ltest::generators::genEmpty, CoroutineQueue::ReceivePromise,
-                   CoroutineQueue, Receive);
-
-// Specify target structure and it's sequential specification.
-using spec_t =
-    ltest::SpecDual<CoroutineQueue, spec::CoroutineQueue<>>;
-
-LTEST_ENTRYPOINT_DUAL(spec_t);
+};

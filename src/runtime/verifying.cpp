@@ -33,6 +33,12 @@ std::vector<std::string> split(const std::string &s, char delim) {
   return res;
 }
 
+CoroutineResponse StartCallback(std::shared_ptr<CoroBase> coro) {
+  std::cout << "in callback";
+  co_await std::suspend_always{};
+  coro->FollowUpReady = true;
+}
+
 const std::string kRR = "rr";
 const std::string kRandom = "random";
 const std::string kTLA = "tla";

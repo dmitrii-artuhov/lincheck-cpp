@@ -80,6 +80,7 @@ struct BlockingMethodWrapper : BlockingMethod {
 // This is the modified wg algorithm version, see docs for more details
 template <class LinearSpecificationObject>
 struct LinearizabilityDualChecker {
+  // TODO: оборачивать уже в чекере
   using BlockingMethodFactory = std::function<std::shared_ptr<BlockingMethod>(
       LinearSpecificationObject*, void* args)>;
 
