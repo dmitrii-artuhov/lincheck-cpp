@@ -192,14 +192,14 @@ bool LinearizabilityDualChecker<LinearSpecificationObject>::Check(
         // checker
         Invoke minimal_op = std::get<Invoke>(history[i]);
         NonBlockingMethod method = std::get<NonBlockingMethod>(
-            specification_methods.find(minimal_op.GetTask().GetName())->second);
+            specification_methods.find(minimal_op.GetTask()->GetName())->second);
 
         LinearSpecificationObject data_structure_state_copy =
             data_structure_state;
         // state is already have been copied, because it's the argument of the
         // lambda
         int res =
-            method(&data_structure_state_copy, minimal_op.GetTask().GetArgs());
+            method(&data_structure_state_copy, minimal_op.GetTask()->GetArgs());
 
         // If invoke doesn't have a response we can't check the response
         if (inv_res.find(i) == inv_res.end()) {
@@ -213,7 +213,7 @@ bool LinearizabilityDualChecker<LinearSpecificationObject>::Check(
         }
 
         // Have a response, try to linearize
-        if (res == minimal_op.GetTask().GetRetVal()) {
+        if (res == minimal_op.GetTask()->GetRetVal()) {
           linearized[i] = true;
           seq_history.emplace_back(history[i], i);
           assert(inv_res.find(i) != inv_res.end());
@@ -233,14 +233,14 @@ bool LinearizabilityDualChecker<LinearSpecificationObject>::Check(
         // will be considering the corresponding follow up part
         RequestInvoke minimal_op = std::get<RequestInvoke>(history[i]);
         BlockingMethodFactory mf = std::get<BlockingMethodFactory>(
-            specification_methods.find(minimal_op.GetTask().GetName())->second);
+            specification_methods.find(minimal_op.GetTask()->GetName())->second);
 
         LinearSpecificationObject data_structure_state_copy =
             data_structure_state;
 
         // Get out blocking method and save it to the map(stack)
         std::shared_ptr<BlockingMethod> method =
-            mf(&data_structure_state_copy, minimal_op.GetTask().GetArgs());
+            mf(&data_structure_state_copy, minimal_op.GetTask()->GetArgs());
         method->StartRequest();
         dual_requests[i] = method;
 
@@ -276,7 +276,7 @@ bool LinearizabilityDualChecker<LinearSpecificationObject>::Check(
 
         // If the method doesn't ready just keep execution
         if (method->IsFinished() &&
-            method->GetResult() == minimal_op.GetTask().GetRetVal()) {
+            method->GetResult() == minimal_op.GetTask()->GetRetVal()) {
           linearized[i] = true;
           // TODO: might not have an answer, should be able to check unfinished
           // histories
@@ -313,16 +313,16 @@ LinearizabilityDualChecker<LinearSpecificationObject>::ReproduceSeqHistory(
       Invoke op = std::get<Invoke>(event_pair.first);
 
       NonBlockingMethod method = std::get<NonBlockingMethod>(
-          specification_methods.find(op.GetTask().GetName())->second);
+          specification_methods.find(op.GetTask()->GetName())->second);
 
-      method(&state, op.GetTask().GetArgs());
+      method(&state, op.GetTask()->GetArgs());
     } else if (std::holds_alternative<RequestInvoke>(event_pair.first)) {
       RequestInvoke op = std::get<RequestInvoke>(event_pair.first);
 
       BlockingMethodFactory mf = std::get<BlockingMethodFactory>(
-          specification_methods.find(op.GetTask().GetName())->second);
+          specification_methods.find(op.GetTask()->GetName())->second);
       std::shared_ptr<BlockingMethod> method =
-          mf(&state, op.GetTask().GetArgs());
+          mf(&state, op.GetTask()->GetArgs());
       method->StartRequest();
       new_stack[event_pair.second] = method;
     }

@@ -77,7 +77,7 @@ struct StrategySchedulerWrapper : StrategyScheduler {
                            ModelChecker &checker, PrettyPrinter &pretty_printer,
                            size_t max_tasks, size_t max_rounds)
       : strategy(std::move(strategy)),
-        StrategyScheduler(*strategy.get(), checker, pretty_printer, max_tasks,
+        StrategyScheduler(*strategy, checker, pretty_printer, max_tasks,
                           max_rounds){};
 
  private:
@@ -153,8 +153,7 @@ void Run(int argc, char *argv[]) {
 
 #define LTEST_ENTRYPOINT(spec_obj_t)        \
   namespace ltest {                         \
-  std::vector<TaskBuilder> task_builders;   \
-  GeneratedArgs gen_args = GeneratedArgs{}; \
+  std::vector<TaskBuilder> task_builders{}; \
   }                                         \
   int main(int argc, char *argv[]) {        \
     ltest::Run<spec_obj_t>(argc, argv);     \

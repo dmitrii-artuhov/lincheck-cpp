@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "lib.h"
+#include "lincheck.h"
 
 using std::string;
 using std::to_string;
@@ -89,8 +90,9 @@ struct PrettyPrinter {
       if (i.index() == 0) {
         auto inv = get<0>(i);
         auto& task = inv.GetTask();
-        fp.Out(task.GetName() + "(");
-        const auto& args = task.GetStrArgs();
+        fp.Out(std::string{task->GetName()});
+        fp.Out("(");
+        const auto& args = task->GetStrArgs();
         for (size_t i = 0; i < args.size(); ++i) {
           if (i > 0) {
             fp.Out(", ");
@@ -100,7 +102,7 @@ struct PrettyPrinter {
         fp.Out(")");
       } else {
         auto resp = get<1>(i);
-        fp.Out("<-- " + to_string(resp.GetTask().GetRetVal()));
+        fp.Out("<-- " + to_string(resp.GetTask()->GetRetVal()));
       }
       assert(fp.rest > 0 && "increase cell_width in pretty printer");
       print_spaces(fp.rest);
@@ -118,8 +120,7 @@ struct PrettyPrinter {
   // Helps to debug full histories.
   template <typename Out_t>
   void PrettyPrint(
-      const std::vector<std::pair<int, std::reference_wrapper<StackfulTask>>>&
-          result,
+      const std::vector<std::pair<int, std::reference_wrapper<Task>>>& result,
       Out_t& out) {
     int cell_width = 20;  // Up it if necessary. Enough for now.
 
@@ -139,8 +140,12 @@ struct PrettyPrinter {
       }
     };
 
+    int spaces = 7;
+    print_spaces(spaces);
     print_separator();
+
     // Header.
+    print_spaces(spaces);
     out << "|";
     for (size_t i = 0; i < threads_num; ++i) {
       int rest = cell_width - 1 /*T*/ - to_string(i).size();
@@ -151,6 +156,7 @@ struct PrettyPrinter {
     }
     out << "\n";
 
+    print_spaces(spaces);
     print_separator();
 
     auto print_empty_cell = [&]() {
@@ -158,8 +164,19 @@ struct PrettyPrinter {
       out << "|";
     };
 
+    std::map<CoroBase*, int> index;
+
     // Rows.
     for (const auto& i : result) {
+      auto base = i.second.get().get();
+      if (index.find(base) == index.end()) {
+        int sz = index.size();
+        index[base] = sz;
+      }
+      int length = std::to_string(index[base]).size();
+      std::cout << index[base];
+      assert(spaces - length >= 0);
+      print_spaces(7 - length);
       int num = i.first;
       out << "|";
       for (int j = 0; j < num; ++j) {
@@ -168,7 +185,17 @@ struct PrettyPrinter {
 
       FitPrinter fp{out, cell_width};
       fp.Out(" ");
-      fp.Out(i.second.get().GetName());
+      fp.Out(std::string{i.second.get()->GetName()});
+      fp.Out("(");
+      const auto& args = i.second.get()->GetStrArgs();
+      for (int i = 0; i < args.size(); ++i) {
+        if (i > 0) {
+          fp.Out(", ");
+        }
+        fp.Out(args[i]);
+      }
+      fp.Out(")");
+
       assert(fp.rest > 0 && "increase cell_width in pretty printer");
       print_spaces(fp.rest);
       out << "|";
@@ -179,6 +206,7 @@ struct PrettyPrinter {
       out << "\n";
     }
 
+    print_spaces(spaces);
     print_separator();
   }
 

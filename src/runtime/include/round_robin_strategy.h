@@ -17,7 +17,7 @@ struct RoundRobinStrategy : PickStrategy<TargetObj> {
     auto &threads = PickStrategy<TargetObj>::threads;
     for (size_t attempt = 0; attempt < threads.size(); ++attempt) {
       auto cur = (next_task++) % threads.size();
-      if (!threads[cur].empty() && threads[cur].back().IsParked()) {
+      if (!threads[cur].empty() && threads[cur].back()->IsParked()) {
         continue;
       }
       return cur;

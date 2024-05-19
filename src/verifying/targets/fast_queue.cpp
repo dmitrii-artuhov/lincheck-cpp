@@ -47,9 +47,45 @@ class MPMCBoundedQueue {
     tail_.store(0);
   }
 
-  int Push(int value);
+  non_atomic int Push(int value) {
+    while (true) {
+      auto h = head_.load(/*std::memory_order_relaxed*/);
+      auto hid = h & max_size_;
+      auto gen = vec_[hid].generation.load(/*std::memory_order_relaxed*/);
+      if (gen == h) {
+        if (head_.compare_exchange_weak(
+                h, h + 1 /*, std::memory_order_acquire*/)) {
+          // I am owner of the element.
+          vec_[hid].val = value;
+          vec_[hid].generation.fetch_add(1 /*, std::memory_order_release*/);
+          return true;
+        }
+      } else if (gen < h) {
+        return false;
+      }
+    }
+  }
 
-  int Pop();
+  non_atomic int Pop() {
+    while (true) {
+      auto t = tail_.load(/*std::memory_order_relaxed*/);
+      auto tid = t & max_size_;
+      auto gen = vec_[tid].generation.load(/*std::memory_order_relaxed*/);
+      if (gen == t + 1) {
+        if (tail_.compare_exchange_weak(
+                t, t + 1 /*, std::memory_order_acquire*/)) {
+          int ret = std::move(vec_[tid].val);
+          vec_[tid].generation.fetch_add(
+              max_size_ /*, std::memory_order_release*/);
+          return ret;
+        }
+      } else {
+        if (gen < t + 1) {
+          return 0;
+        }
+      }
+    }
+  }
 
  private:
   size_t max_size_;
@@ -67,45 +103,9 @@ class MPMCBoundedQueue {
 // POP
 // 1 == tail + 1? 1 == 1
 
-target_method(generateInt, int, MPMCBoundedQueue, Push, int value) {
-  while (true) {
-    auto h = head_.load(/*std::memory_order_relaxed*/);
-    auto hid = h & max_size_;
-    auto gen = vec_[hid].generation.load(/*std::memory_order_relaxed*/);
-    if (gen == h) {
-      if (head_.compare_exchange_weak(h,
-                                      h + 1 /*, std::memory_order_acquire*/)) {
-        // I am owner of the element.
-        vec_[hid].val = value;
-        vec_[hid].generation.fetch_add(1 /*, std::memory_order_release*/);
-        return true;
-      }
-    } else if (gen < h) {
-      return false;
-    }
-  }
-}
+target_method(generateInt, int, MPMCBoundedQueue, Push, int);
 
-target_method(ltest::generators::genEmpty, int, MPMCBoundedQueue, Pop) {
-  while (true) {
-    auto t = tail_.load(/*std::memory_order_relaxed*/);
-    auto tid = t & max_size_;
-    auto gen = vec_[tid].generation.load(/*std::memory_order_relaxed*/);
-    if (gen == t + 1) {
-      if (tail_.compare_exchange_weak(t,
-                                      t + 1 /*, std::memory_order_acquire*/)) {
-        int ret = std::move(vec_[tid].val);
-        vec_[tid].generation.fetch_add(
-            max_size_ /*, std::memory_order_release*/);
-        return ret;
-      }
-    } else {
-      if (gen < t + 1) {
-        return 0;
-      }
-    }
-  }
-}
+target_method(ltest::generators::genEmpty, int, MPMCBoundedQueue, Pop);
 
 using spec_t = ltest::Spec<MPMCBoundedQueue, spec::Queue, spec::QueueHash,
                            spec::QueueEquals>;

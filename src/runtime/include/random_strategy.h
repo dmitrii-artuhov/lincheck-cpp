@@ -20,7 +20,7 @@ struct RandomStrategy : PickStrategy<TargetObj> {
     pick_weights.clear();
     auto &threads = PickStrategy<TargetObj>::threads;
     for (size_t i = 0; i < threads.size(); ++i) {
-      if (!threads[i].empty() && threads[i].back().IsParked()) {
+      if (!threads[i].empty() && threads[i].back()->IsParked()) {
         continue;
       }
       pick_weights.push_back(weights[i]);
@@ -30,7 +30,7 @@ struct RandomStrategy : PickStrategy<TargetObj> {
         std::discrete_distribution<>(pick_weights.begin(), pick_weights.end());
     auto num = thread_distribution(PickStrategy<TargetObj>::rng);
     for (size_t i = 0; i < threads.size(); ++i) {
-      if (!threads[i].empty() && threads[i].back().IsParked()) {
+      if (!threads[i].empty() && threads[i].back()->IsParked()) {
         continue;
       }
       if (num == 0) {

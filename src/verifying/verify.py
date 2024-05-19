@@ -11,13 +11,16 @@ file_dir = os.path.join(
 artifacts_dir_default = os.path.join(file_dir, "artifacts")
 runtime_dir = os.path.join(file_dir, "..", "runtime")
 
-# Don't forget rebuild llvm pass after changes.
+# Don't forget rebuild llvm passes after changes.
 llvm_plugin_path = os.path.join(
     file_dir, "..", "build", "codegen", "CoroGenPass.so")
 
+yield_plugh_path = os.path.join(
+    file_dir, "..", "build", "codegen", "YieldPass.so")
+
 deps = list(map(lambda f: os.path.join(runtime_dir, f), [
     "lib.cpp", "scheduler.cpp", "lin_check.cpp", "logger.cpp",
-    "verifying.cpp", "generators.cpp", "builders.cpp", "pretty_printer.cpp",
+    "verifying.cpp", "generators.cpp", "pretty_printer.cpp",
 ]))
 
 clang = "clang++"
@@ -104,64 +107,38 @@ def run(threads, tasks, switches, rounds, verbose, strategy, weights):
 # Check src/Makefle to understand debug build logic and unsafe reasonable.
 
 
-def build_unsafe(src, artifacts_dir):
+def run_build(src, artifacts_dir, debug=False):
+    cmd = [clang]
+    cmd.extend(build_flags)
+    if debug:
+        cmd.append("-g")
+    cmd.append(f"-fpass-plugin={yield_plugh_path}")
+    cmd.extend(deps)
+    cmd.append(src.name)
+    cmd.extend(["-o", os.path.join(artifacts_dir, "run")])
+    rc, _ = run_command_and_get_output(cmd, cwd=file_dir)
+    assert rc == 0
+
+
+def run_build_on_optimized(src, artifacts_dir, debug=False):
     # Compile target to bytecode.
     cmd = [clang]
     cmd.extend(build_flags)
-    cmd.extend(["-emit-llvm", "-S", "-fno-discard-value-names"])
-    cmd.append(src.name)
-    cmd.extend(["-o", os.path.join(artifacts_dir, "bytecode.bc")])
-    rc, _ = run_command_and_get_output(cmd, cwd=file_dir)
-    assert rc == 0
-
-    # Run llvm pass on optimized code.
-    # Can lead to incostintency.
-    cmd = [clang]
-    cmd.extend(build_flags)
-    cmd.append(f"-fpass-plugin={llvm_plugin_path}")
-    cmd.extend(deps)
-    cmd.append(os.path.join(artifacts_dir, "bytecode.bc"))
-    cmd.extend(["-o", os.path.join(artifacts_dir, "run")])
-    rc, _ = run_command_and_get_output(cmd, cwd=file_dir)
-    assert rc == 0
-    pass
-
-
-def build_debug(src, artifacts_dir):
-    # Compile to bytecode with pass.
-    cmd = [clang]
-    cmd.extend(build_flags)
+    if debug:
+        cmd.append("-g")
     cmd.extend(["-emit-llvm", "-S"])
-    cmd.append("-fno-discard-value-names")
-    cmd.append(f"-fpass-plugin={llvm_plugin_path}")
     cmd.append(src.name)
     cmd.extend(["-o", os.path.join(artifacts_dir, "bytecode.bc")])
     rc, _ = run_command_and_get_output(cmd, cwd=file_dir)
     assert rc == 0
 
-    # Compile to binary.
+    # Run yield pass on optimized code.
     cmd = [clang]
     cmd.extend(build_flags)
-    cmd.append("-g")
-    cmd.append("-fno-discard-value-names")
+    cmd.append(f"-fpass-plugin={yield_plugh_path}")
+    cmd.extend(deps)
     cmd.append(os.path.join(artifacts_dir, "bytecode.bc"))
-    cmd.extend(deps)
     cmd.extend(["-o", os.path.join(artifacts_dir, "run")])
-
-    rc, _ = run_command_and_get_output(cmd, cwd=file_dir)
-    assert rc == 0
-    pass
-
-
-def build_stable(src, artifacts_dir):
-    cmd = [clang]
-    cmd.extend(build_flags)
-    cmd.append("-fno-discard-value-names")
-    cmd.append(f"-fpass-plugin={llvm_plugin_path}")
-    cmd.append(src.name)
-    cmd.extend(deps)
-    cmd.extend(["-o", os.path.join(artifacts_dir, "run")])
-
     rc, _ = run_command_and_get_output(cmd, cwd=file_dir)
     assert rc == 0
 
@@ -170,25 +147,24 @@ def build_stable(src, artifacts_dir):
 @click.option("-s", "--src", required=True, help="source path",
               type=click.File("r"))
 @click.option("-g", "--debug", help="debug build", type=bool, is_flag=True)
-@click.option("-u", "--unsafe", help="unsafe build", type=bool, is_flag=True)
 @click.option("-a", "--artifacts_dir", help="dir for artifacts", type=str,
               default=None)
-def build(src, debug, unsafe, artifacts_dir):
+@click.option("--no-optimized", help="run pass on unopimized code", type=bool,
+              is_flag=True)
+def build(src, debug, no_optimized, artifacts_dir):
     artifacts_dir = artifacts_dir or artifacts_dir_default
 
     # Create artifacts dir.
     if not os.path.exists(artifacts_dir):
         os.mkdir(artifacts_dir)
 
-    if unsafe:
-        print("building unsafe...")
-        build_unsafe(src, artifacts_dir)
-    elif debug:
-        print("building debug...")
-        build_debug(src, artifacts_dir)
+    if no_optimized:
+        print("building non optimized")
+        run_build(src, artifacts_dir, debug)
     else:
-        print("building stable...")
-        build_stable(src, artifacts_dir)
+        print("building...")
+        run_build_on_optimized(src, artifacts_dir, debug)
+    print("OK")
 
 
 cli = click.CommandCollection(sources=[cmd])

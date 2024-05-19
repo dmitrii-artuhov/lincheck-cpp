@@ -8,6 +8,8 @@ namespace ltest {
 
 namespace generators {
 
+extern std::shared_ptr<Token> generated_token;
+
 // Makes single argument from the value.
 template <typename T>
 auto makeSingleArg(T&& arg) {
@@ -15,12 +17,9 @@ auto makeSingleArg(T&& arg) {
   return std::tuple<arg_type>{std::forward<arg_type>(arg)};
 }
 
-std::tuple<> genEmpty();
+std::tuple<> genEmpty(size_t thread_num);
 
-std::tuple<std::shared_ptr<Token>> genToken();
-
-// TODO: concatenate generated tuples.
-// sum_generator<arg1gen, arg2gen> or something else.
+std::tuple<std::shared_ptr<Token>> genToken(size_t thread_num);
 
 }  // namespace generators
 

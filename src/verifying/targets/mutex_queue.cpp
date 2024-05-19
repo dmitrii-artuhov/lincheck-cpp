@@ -11,8 +11,27 @@
 const int N = 100;
 
 struct Queue {
-  void Push(std::shared_ptr<Token> token, int v);
-  int Pop(std::shared_ptr<Token> token);
+  non_atomic void Push(std::shared_ptr<Token> token, int v) {
+    mutex.Lock(token);
+    a[head++] = v;
+    ++cnt;
+    assert(cnt == 1);
+    --cnt;
+    mutex.Unlock();
+  }
+
+  non_atomic int Pop(std::shared_ptr<Token> token) {
+    mutex.Lock(token);
+    int e = 0;
+    if (head - tail > 0) {
+      e = a[tail++];
+    }
+    ++cnt;
+    assert(cnt == 1);
+    --cnt;
+    mutex.Unlock();
+    return e;
+  }
 
   void Reset() {
     mutex = Mutex{};
@@ -37,29 +56,10 @@ auto generateArgs() {
   return std::tuple_cat(token, _int);
 }
 
-target_method(generateArgs, void, Queue, Push, std::shared_ptr<Token> token,
-              int v) {
-  mutex.Lock(token);
-  a[head++] = v;
-  ++cnt;
-  assert(cnt == 1);
-  --cnt;
-  mutex.Unlock();
-}
+target_method(generateArgs, void, Queue, Push, std::shared_ptr<Token>, int);
 
 target_method(ltest::generators::genToken, int, Queue, Pop,
-              std::shared_ptr<Token> token) {
-  mutex.Lock(token);
-  int e = 0;
-  if (head - tail > 0) {
-    e = a[tail++];
-  }
-  ++cnt;
-  assert(cnt == 1);
-  --cnt;
-  mutex.Unlock();
-  return e;
-}
+              std::shared_ptr<Token>);
 
 using QueueCls = spec::Queue<std::tuple<std::shared_ptr<Token>, int>, 1>;
 

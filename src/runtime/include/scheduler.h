@@ -2,19 +2,12 @@
 #include <limits>
 #include <map>
 #include <optional>
-#include <variant>
 
 #include "lib.h"
+#include "lincheck.h"
 #include "logger.h"
 #include "pretty_print.h"
 #include "stable_vector.h"
-
-// ModelChecker is the general checker interface which is implemented by
-// different checkers, each of which checks its own consistency model
-struct ModelChecker {
-  virtual bool Check(
-      const std::vector<std::variant<Invoke, Response>>& history) = 0;
-};
 
 // Strategy is the general strategy interface which decides which task
 // will be the next one it can be implemented by different strategies, such as:
@@ -22,7 +15,7 @@ struct ModelChecker {
 struct Strategy {
   // Returns the next tasks,
   // the flag which tells is the task new, and the thread number.
-  virtual std::tuple<StackfulTask&, bool, int> Next() = 0;
+  virtual std::tuple<Task, bool, int> Next() = 0;
 
   // Strategy should stop all tasks that already have been started
   virtual void StartNextRound() = 0;
@@ -31,7 +24,7 @@ struct Strategy {
 };
 
 struct Scheduler {
-  using FullHistory = std::vector<std::reference_wrapper<StackfulTask>>;
+  using FullHistory = std::vector<std::reference_wrapper<Task>>;
   using SeqHistory = std::vector<std::variant<Invoke, Response>>;
   using Result = std::optional<std::pair<FullHistory, SeqHistory>>;
 
@@ -83,7 +76,7 @@ struct TLAScheduler : Scheduler {
     for (size_t i = 0; i < threads_count; ++i) {
       threads.emplace_back(Thread{
           .id = i,
-          .tasks = StableVector<StackfulTask>{},
+          .tasks = StableVector<Task>{},
       });
     }
   };
@@ -98,7 +91,7 @@ struct TLAScheduler : Scheduler {
  private:
   struct Thread {
     size_t id;
-    StableVector<StackfulTask> tasks;
+    StableVector<Task> tasks;
   };
 
   // TLAScheduler enumerates all possible executions with finished max_tasks.
@@ -115,7 +108,7 @@ struct TLAScheduler : Scheduler {
   // Frame struct describes one row of this table.
   struct Frame {
     // Pointer to the in task thread.
-    StackfulTask* task{};
+    Task* task{};
     // Is true if the task was created at this step.
     bool is_new{};
   };
@@ -127,7 +120,7 @@ struct TLAScheduler : Scheduler {
   void TerminateTasks() {
     for (size_t i = 0; i < threads.size(); ++i) {
       if (!threads[i].tasks.empty()) {
-        threads[i].tasks.back().Terminate();
+        threads[i].tasks.back()->Terminate();
       }
     }
   }
@@ -145,11 +138,11 @@ struct TLAScheduler : Scheduler {
       if (frame.is_new) {
         // It was a new task.
         // So restart it from the beginning with the same args.
-        task->StartFromTheBeginning(&state);
+        *task = (*task)->Restart(&state);
       } else {
         // It was a not new task, hence, we recreated in early.
       }
-      task->Resume();
+      (*task)->Resume();
     }
   }
 
@@ -182,11 +175,12 @@ struct TLAScheduler : Scheduler {
       sequential_history.emplace_back(Invoke(task, thread_id));
     }
 
-    task.Resume();
-    bool is_finished = task.IsReturned();
+    assert(!task->IsParked());
+    task->Resume();
+    bool is_finished = task->IsReturned();
     if (is_finished) {
       finished_tasks++;
-      auto result = task.GetRetVal();
+      auto result = task->GetRetVal();
       sequential_history.emplace_back(Response(task, result, thread_id));
     }
 
@@ -199,7 +193,7 @@ struct TLAScheduler : Scheduler {
       }
     } else {
       log() << "run round: " << finished_rounds << "\n";
-      pretty_printer.PrettyPrint(sequential_history, log());
+      pretty_printer.PrettyPrint(full_history, log());
       log() << "===============================================\n\n";
       log().flush();
       // Stop, check if the the generated history is linearizable.
@@ -238,8 +232,8 @@ struct TLAScheduler : Scheduler {
     for (size_t i = 0; i < threads.size(); ++i) {
       auto& thread = threads[i];
       auto& tasks = thread.tasks;
-      if (!tasks.empty() && !tasks.back().IsReturned()) {
-        if (tasks.back().IsParked()) {
+      if (!tasks.empty() && !tasks.back()->IsReturned()) {
+        if (tasks.back()->IsParked()) {
           continue;
         }
         all_parked = false;
@@ -260,14 +254,14 @@ struct TLAScheduler : Scheduler {
       for (auto cons : constructors) {
         frame.is_new = true;
         auto size_before = tasks.size();
-        tasks.emplace_back(StackfulTask{cons, &state});
+        tasks.emplace_back(cons(&state, i));
 
         auto [is_over, res] = ResumeTask(frame, step, switches, thread, true);
         if (is_over || res.has_value()) {
           return {is_over, res};
         }
 
-        tasks.back().Terminate();
+        tasks.back()->Terminate();
         tasks.pop_back();
         auto size_after = thread.tasks.size();
         assert(size_before == size_after);
@@ -294,8 +288,7 @@ struct TLAScheduler : Scheduler {
   size_t finished_rounds{};
   TargetObj state{};
   std::vector<std::variant<Invoke, Response>> sequential_history;
-  std::vector<std::pair<int, std::reference_wrapper<StackfulTask>>>
-      full_history;
+  std::vector<std::pair<int, std::reference_wrapper<Task>>> full_history;
   std::vector<size_t> thread_id_history;
   StableVector<Thread> threads;
   StableVector<Frame> frames;
