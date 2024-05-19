@@ -62,9 +62,6 @@ struct BlockingMethodWrapper : BlockingMethod {
   struct CoroutineResponse {
     struct promise_type {
       CoroutineResponse get_return_object() {
-        //        std::cout <<
-        //        std::coroutine_handle<promise_type>::from_promise(*this).address()
-        //        << std::endl;
         return {.h = std::coroutine_handle<promise_type>::from_promise(*this)};
       }
       std::suspend_never initial_suspend() { return {}; }

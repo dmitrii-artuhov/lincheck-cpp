@@ -86,6 +86,7 @@ bool LinearizabilityCheckerRecursive<LinearSpecificationObject,
       }
 
       Invoke minimal_op = std::get<Invoke>(history[i]);
+      assert(specification_methods.find(minimal_op.GetTask().GetName()) != specification_methods.end());
       auto method =
           specification_methods.find(minimal_op.GetTask().GetName())->second;
 
