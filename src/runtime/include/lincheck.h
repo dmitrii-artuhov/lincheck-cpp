@@ -9,8 +9,6 @@
 
 #include "lib.h"
 
-using Task = std::shared_ptr<CoroBase>;
-
 struct Response {
   Response(const Task& task, int result, int thread_id);
 
@@ -34,34 +32,63 @@ struct Invoke {
   std::reference_wrapper<const Task> task;
 };
 
-struct RequestInvoke : Invoke {
-  RequestInvoke(const Task& task, int thread_id)
-      : Invoke(task, thread_id) {}
-};
-struct RequestResponse : Response {
-  RequestResponse(const Task& task, int result, int thread_id)
-      : Response(task, result, thread_id) {}
+struct RequestInvoke {
+  RequestInvoke(const DualTask& task, int thread_id)
+      : thread_id(thread_id), task(task) {}
+
+  [[nodiscard]] const DualTask& GetTask() const;
+
+  int thread_id;
+
+ private:
+  std::reference_wrapper<const DualTask> task;
 };
 
-struct FollowUpInvoke : Invoke {
-  FollowUpInvoke(const Task& task, int thread_id)
-      : Invoke(task, thread_id) {}
+struct RequestResponse {
+  RequestResponse(const DualTask& task, int thread_id)
+      : thread_id(thread_id), task(task) {}
+
+  [[nodiscard]] const DualTask& GetTask() const;
+
+  int thread_id;
+
+ private:
+  std::reference_wrapper<const DualTask> task;
 };
-struct FollowUpResponse : Response {
-  FollowUpResponse(const Task& task, int result, int thread_id)
-      : Response(task, result, thread_id) {}
+
+struct FollowUpInvoke {
+  FollowUpInvoke(const DualTask& task, int thread_id)
+      : thread_id(thread_id), task(task) {}
+
+  [[nodiscard]] const DualTask& GetTask() const;
+
+  int thread_id;
+
+ private:
+  std::reference_wrapper<const DualTask> task;
+};
+
+struct FollowUpResponse {
+  FollowUpResponse(const DualTask& task, int thread_id)
+      : thread_id(thread_id), task(task) {}
+
+  [[nodiscard]] const DualTask& GetTask() const;
+
+  //  int result;
+  int thread_id;
+
+ private:
+  std::reference_wrapper<const DualTask> task;
 };
 
 using HistoryEvent =
     std::variant<Invoke, Response, RequestInvoke, RequestResponse,
                  FollowUpInvoke, FollowUpResponse>;
 
-
 // ModelChecker is the general checker interface which is implemented by
 // different checkers, each of which checks its own consistency model
 struct ModelChecker {
-  virtual bool Check(
-      const std::vector<std::variant<Invoke, Response>>& history) = 0;
+  virtual bool Check(const std::vector<HistoryEvent>& history) = 0;
 };
 
 using MethodName = std::string;
@@ -70,7 +97,7 @@ using MethodName = std::string;
 // response_index)
 
 std::map<size_t, size_t> get_inv_res_mapping(
-    const std::vector<std::variant<Invoke, Response>>& history);
+    const std::vector<HistoryEvent>& history);
 
 std::map<size_t, size_t> get_inv_res_full_mapping(
     const std::vector<HistoryEvent>& history);
@@ -96,8 +123,7 @@ struct LinearizabilityChecker : ModelChecker {
   LinearizabilityChecker(MethodMap specification_methods,
                          LinearSpecificationObject first_state);
 
-  bool Check(const std::vector<std::variant<Invoke, Response>>& fixed_history)
-      override;
+  bool Check(const std::vector<HistoryEvent>& fixed_history) override;
 
  private:
   MethodMap specification_methods;
@@ -151,10 +177,11 @@ LinearizabilityChecker<LinearSpecificationObject, SpecificationObjectHash,
 // Each invoke event in the history has to have a related response event
 template <class LinearSpecificationObject, class SpecificationObjectHash,
           class SpecificationObjectEqual>
-bool LinearizabilityChecker<LinearSpecificationObject, SpecificationObjectHash,
-                            SpecificationObjectEqual>::
-    Check(const std::vector<std::variant<Invoke, Response>>& history) {
-  // head entry
+bool LinearizabilityChecker<
+    LinearSpecificationObject, SpecificationObjectHash,
+    SpecificationObjectEqual>::Check(const std::vector<HistoryEvent>& history) {
+  // TODO: the history mustn't have events other than invoke and response,
+  // should add check here head entry
   size_t current_section_start = 0;
   LinearSpecificationObject data_structure_state = first_state;
   // indexes of invokes

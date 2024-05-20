@@ -15,26 +15,46 @@ StrategyScheduler::StrategyScheduler(Strategy &sched_class,
 
 Scheduler::Result StrategyScheduler::runRound() {
   // History of invoke and response events which is required for the checker
-  std::vector<std::variant<Invoke, Response>> sequential_history;
+  std::vector<HistoryEvent> sequential_history;
   // Full history of the current execution in the Run function
-  std::vector<std::reference_wrapper<Task>> full_history;
+  std::vector<std::variant<Task, DualTask>> full_history;
 
   for (size_t finished_tasks = 0; finished_tasks < max_tasks;) {
     auto [next_task, is_new, thread_id] = strategy.Next();
 
-    // fill the sequential history
-    if (is_new) {
-      sequential_history.emplace_back(Invoke(next_task, thread_id));
-    }
-    full_history.emplace_back(next_task);
+    if (std::holds_alternative<Task>(next_task)) {
+      auto task = std::get<Task>(next_task);
+      if (is_new) {
+        sequential_history.emplace_back(Invoke(task, thread_id));
+      }
 
-    assert(!next_task->IsReturned());
-    next_task->Resume();
-    if (next_task->IsReturned()) {
-      finished_tasks++;
+      full_history.emplace_back(task);
+      task->Resume();
+      if (task->IsReturned()) {
+        finished_tasks++;
 
-      auto result = next_task->GetRetVal();
-      sequential_history.emplace_back(Response(next_task, result, thread_id));
+        auto result = task->GetRetVal();
+        sequential_history.emplace_back(Response(task, result, thread_id));
+      }
+    } else {
+      auto task = std::get<DualTask>(next_task);
+      if (is_new) {
+        sequential_history.emplace_back(RequestInvoke(task, thread_id));
+        task->SetFollowUpTerminateCallback([&sequential_history, &task,
+                                            &thread_id]() {
+          // TODO: подумать над thread_id
+          sequential_history.emplace_back(FollowUpResponse(task, thread_id));
+        });
+      }
+
+      assert(!task->IsRequestFinished());
+      full_history.emplace_back(task);
+      task->ResumeRequest();
+
+      if (task->IsRequestFinished()) {
+        sequential_history.emplace_back(RequestResponse(task, thread_id));
+        sequential_history.emplace_back(FollowUpInvoke(task, thread_id));
+      }
     }
   }
 

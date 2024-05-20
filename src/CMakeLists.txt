@@ -16,6 +16,8 @@ add_compile_options(-g)
 #add_compile_options(-I/opt/homebrew/opt/protobuf@26/include)
 #add_link_options(-fsanitize=address -DADDRESS_SANITIZER)
 add_link_options(-g)
+#set(CMAKE_C_FLAGS_INIT "-fsanitize=undefined")
+#set(CMAKE_CXX_FLAGS_INIT "-fsanitize=undefined")
 
 add_subdirectory(third_party)
 

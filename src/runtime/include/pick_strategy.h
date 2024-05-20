@@ -9,7 +9,7 @@ struct PickStrategy : Strategy {
   virtual size_t Pick() = 0;
 
   explicit PickStrategy(size_t threads_count,
-                        std::vector<TaskBuilder> constructors)
+                        std::vector<TasksBuilder> constructors)
       : next_task(0),
         threads_count(threads_count),
         constructors(std::move(constructors)),
@@ -27,12 +27,16 @@ struct PickStrategy : Strategy {
 
   // If there aren't any non returned tasks and the amount of finished tasks
   // is equal to the max_tasks the finished task will be returned
-  std::tuple<Task, bool, int> Next() override {
+  std::tuple<std::variant<Task, DualTask>, bool, int> Next() override {
     auto current_task = Pick();
 
     // it's the first task if the queue is empty
     if (threads[current_task].empty() ||
-        threads[current_task].back()->IsReturned()) {
+        (std::holds_alternative<Task>(threads[current_task].back()) &&
+         std::get<Task>(threads[current_task].back())->IsReturned()) ||
+        (std::holds_alternative<DualTask>(threads[current_task].back()) &&
+         std::get<DualTask>(threads[current_task].back())
+             ->IsFollowUpFinished())) {
       // a task has finished or the queue is empty, so we add a new task
       auto constructor = constructors.at(distribution(rng));
       threads[current_task].emplace_back(constructor(&state, current_task));
@@ -46,7 +50,7 @@ struct PickStrategy : Strategy {
     TerminateTasks();
     for (auto& thread : threads) {
       // We don't have to keep references alive
-      while (thread.size() > 0) {
+      while (!thread.empty()) {
         thread.pop_back();
       }
     }
@@ -65,7 +69,7 @@ struct PickStrategy : Strategy {
   void TerminateTasks() {
     for (size_t i = 0; i < threads.size(); ++i) {
       if (!threads[i].empty()) {
-        threads[i].back()->Terminate();
+        Terminate(threads[i].back());
       }
     }
   }
@@ -73,12 +77,12 @@ struct PickStrategy : Strategy {
   TargetObj state{};
   size_t next_task = 0;
   size_t threads_count;
-  std::vector<TaskBuilder> constructors;
+  std::vector<TasksBuilder> constructors;
   // RoundRobinStrategy struct is the owner of all tasks, and all
   // references can't be invalidated before the end of the round,
   // so we have to contains all tasks in queues(queue doesn't invalidate the
   // references)
-  std::vector<StableVector<Task>> threads;
+  std::vector<StableVector<std::variant<Task, DualTask>>> threads;
   std::uniform_int_distribution<std::mt19937::result_type> distribution;
   std::mt19937 rng;
 };

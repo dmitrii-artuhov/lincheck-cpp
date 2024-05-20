@@ -13,7 +13,7 @@
 template <typename TargetObj>
 struct PctStrategy : Strategy {
   explicit PctStrategy(size_t threads_count,
-                       std::vector<TaskBuilder> constructors)
+                       std::vector<TasksBuilder> constructors)
       : threads_count(threads_count),
         current_depth(1),
         current_schedule_length(0),
@@ -50,14 +50,21 @@ struct PctStrategy : Strategy {
 
   // If there aren't any non returned tasks and the amount of finished tasks
   // is equal to the max_tasks the finished task will be returned
-  std::tuple<Task, bool, int> Next() override {
+  std::tuple<std::variant<Task, DualTask>, bool, int> Next() override {
     size_t max = std::numeric_limits<size_t>::min();
     size_t index_of_max = 0;
     // Have to ignore waiting threads, so can't do it faster than O(n)
     for (size_t i = 0; i < threads.size(); ++i) {
-      // Ignore waiting threads
-      // TODO: IsSuspended???
-      if (!threads[i].empty() && threads[i].back()->IsSuspended()) {
+      // Ignore waiting tasks
+      if ((!threads[i].empty() &&
+           std::holds_alternative<Task>(threads[i].back()) &&
+           std::get<Task>(threads[i].back())->IsSuspended()) ||
+          (!threads[i].empty() &&
+           std::holds_alternative<DualTask>(threads[i].back())) &&
+              std::get<DualTask>(threads[i].back())->IsRequestFinished()) {
+        // skip dual tasks that already have finished the request
+        // section(follow-up will be executed in another task, so we can't
+        // resume)
         continue;
       }
 
@@ -76,7 +83,11 @@ struct PctStrategy : Strategy {
     }
 
     if (threads[index_of_max].empty() ||
-        threads[index_of_max].back()->IsReturned()) {
+        (std::holds_alternative<Task>(threads[index_of_max].back()) &&
+         std::get<Task>(threads[index_of_max].back())->IsReturned()) ||
+        (std::holds_alternative<DualTask>(threads[index_of_max].back()) &&
+         std::get<DualTask>(threads[index_of_max].back())
+             ->IsFollowUpFinished())) {
       auto constructor = constructors.at(constructors_distribution(rng));
       threads[index_of_max].emplace_back(constructor(&state, index_of_max));
       return {threads[index_of_max].back(), true, index_of_max};
@@ -103,7 +114,7 @@ struct PctStrategy : Strategy {
     PrepareForDepth(current_depth, new_k);
 
     for (auto &thread : threads) {
-      thread = StableVector<Task>();
+      thread = StableVector<std::variant<Task, DualTask>>();
     }
   }
 
@@ -128,15 +139,15 @@ struct PctStrategy : Strategy {
   }
 
   void TerminateTasks() {
-    for (size_t i = 0; i < threads.size(); ++i) {
-      if (!threads[i].empty()) {
-        threads[i].back()->Terminate();
+    for (auto &thread : threads) {
+      if (!thread.empty()) {
+        Terminate(thread.back());
       }
     }
   }
 
   TargetObj state{};
-  std::vector<TaskBuilder> constructors;
+  std::vector<TasksBuilder> constructors;
   std::vector<size_t> k_statistics;
   size_t threads_count;
   size_t current_depth;
@@ -147,7 +158,7 @@ struct PctStrategy : Strategy {
   // references can't be invalidated before the end of the round,
   // so we have to contains all tasks in queues(queue doesn't invalidate the
   // references)
-  std::vector<StableVector<Task>> threads;
+  std::vector<StableVector<std::variant<Task, DualTask>>> threads;
   std::uniform_int_distribution<std::mt19937::result_type>
       constructors_distribution;
   std::mt19937 rng;

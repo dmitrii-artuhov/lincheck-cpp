@@ -23,6 +23,14 @@ void CoroBody(int signum) {
   longjmp(sched_ctx, 1);
 }
 
+void Terminate(std::variant<Task, DualTask> task) {
+  if (std::holds_alternative<Task>(task)) {
+    std::get<Task>(task)->Terminate();
+  } else {
+    std::get<DualTask>(task)->Terminate();
+  }
+}
+
 std::shared_ptr<CoroBase> CoroBase::GetPtr() { return shared_from_this(); }
 
 void CoroBase::SetToken(std::shared_ptr<Token> token) { this->token = token; }
@@ -72,8 +80,7 @@ void CoroBase::Terminate() {
            "coroutine is spinning too long, possible wrong terminating order");
   }
 }
-bool CoroBase::IsBlocking() const { return false; }
-bool CoroBase::IsSuspended() const { return false; }
+// bool CoroBase::IsSuspended() const { return false; }
 
 void Token::Reset() { parked = false; }
 

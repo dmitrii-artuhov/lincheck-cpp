@@ -29,14 +29,24 @@ struct PrettyPrinter {
            cell_width
   */
   template <typename Out_t>
-  void PrettyPrint(const std::vector<std::variant<Invoke, Response>>& result,
-                   Out_t& out) {
-    auto get_thread_num = [](const std::variant<Invoke, Response>& v) {
+  void PrettyPrint(const std::vector<HistoryEvent>& result, Out_t& out) {
+    auto get_thread_num = [](const HistoryEvent& v) {
       // Crutch.
       if (v.index() == 0) {
         return get<0>(v).thread_id;
+      } else if (v.index() == 1) {
+        return get<1>(v).thread_id;
+      } else if (v.index() == 2) {
+        return get<2>(v).thread_id;
+      } else if (v.index() == 3) {
+        return get<3>(v).thread_id;
+      } else if (v.index() == 4) {
+        return get<4>(v).thread_id;
+      } else if (v.index() == 5) {
+        return get<5>(v).thread_id;
       }
-      return get<1>(v).thread_id;
+      throw std::invalid_argument("unknown event in get num");
+      return 0;
     };
 
     int cell_width = 20;  // Up it if necessary. Enough for now.
@@ -120,7 +130,8 @@ struct PrettyPrinter {
   // Helps to debug full histories.
   template <typename Out_t>
   void PrettyPrint(
-      const std::vector<std::pair<int, std::reference_wrapper<Task>>>& result,
+      //      const std::vector<std::pair<int, std::reference_wrapper<Task>>>&
+      //      result,
       Out_t& out) {
     int cell_width = 20;  // Up it if necessary. Enough for now.
 
@@ -164,47 +175,48 @@ struct PrettyPrinter {
       out << "|";
     };
 
-    std::map<CoroBase*, int> index;
-
-    // Rows.
-    for (const auto& i : result) {
-      auto base = i.second.get().get();
-      if (index.find(base) == index.end()) {
-        int sz = index.size();
-        index[base] = sz;
-      }
-      int length = std::to_string(index[base]).size();
-      std::cout << index[base];
-      assert(spaces - length >= 0);
-      print_spaces(7 - length);
-      int num = i.first;
-      out << "|";
-      for (int j = 0; j < num; ++j) {
-        print_empty_cell();
-      }
-
-      FitPrinter fp{out, cell_width};
-      fp.Out(" ");
-      fp.Out(std::string{i.second.get()->GetName()});
-      fp.Out("(");
-      const auto& args = i.second.get()->GetStrArgs();
-      for (int i = 0; i < args.size(); ++i) {
-        if (i > 0) {
-          fp.Out(", ");
-        }
-        fp.Out(args[i]);
-      }
-      fp.Out(")");
-
-      assert(fp.rest > 0 && "increase cell_width in pretty printer");
-      print_spaces(fp.rest);
-      out << "|";
-
-      for (size_t j = 0; j < threads_num - num - 1; ++j) {
-        print_empty_cell();
-      }
-      out << "\n";
-    }
+    // TODO: Fix
+    //    std::map<Task*, int> index;
+    //
+    //    // Rows.
+    //    for (const auto& i : result) {
+    //      auto base = i.second.get().get();
+    //      if (index.find(base) == index.end()) {
+    //        int sz = index.size();
+    //        index[base] = sz;
+    //      }
+    //      int length = std::to_string(index[base]).size();
+    //      std::cout << index[base];
+    //      assert(spaces - length >= 0);
+    //      print_spaces(7 - length);
+    //      int num = i.first;
+    //      out << "|";
+    //      for (int j = 0; j < num; ++j) {
+    //        print_empty_cell();
+    //      }
+    //
+    //      FitPrinter fp{out, cell_width};
+    //      fp.Out(" ");
+    //      fp.Out(std::string{i.second.get()->GetName()});
+    //      fp.Out("(");
+    //      const auto& args = i.second.get()->GetStrArgs();
+    //      for (int i = 0; i < args.size(); ++i) {
+    //        if (i > 0) {
+    //          fp.Out(", ");
+    //        }
+    //        fp.Out(args[i]);
+    //      }
+    //      fp.Out(")");
+    //
+    //      assert(fp.rest > 0 && "increase cell_width in pretty printer");
+    //      print_spaces(fp.rest);
+    //      out << "|";
+    //
+    //      for (size_t j = 0; j < threads_num - num - 1; ++j) {
+    //        print_empty_cell();
+    //      }
+    //      out << "\n";
+    //    }
 
     print_spaces(spaces);
     print_separator();

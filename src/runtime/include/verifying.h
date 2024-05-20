@@ -3,6 +3,7 @@
 
 #include "generators.h"
 #include "lib.h"
+#include "lincheck_dual.h"
 #include "lincheck_recursive.h"
 #include "logger.h"
 #include "pct_strategy.h"
@@ -11,7 +12,6 @@
 #include "round_robin_strategy.h"
 #include "scheduler.h"
 #include "verifying_macro.h"
-#include "lincheck_dual.h"
 
 namespace ltest {
 
@@ -48,7 +48,8 @@ std::vector<std::string> parse_opts(std::vector<std::string> args, Opts &opts);
 std::vector<std::string> split(const std::string &s, char delim);
 
 template <typename TargetObj>
-std::unique_ptr<Strategy> MakeStrategy(Opts &opts, std::vector<TaskBuilder> l) {
+std::unique_ptr<Strategy> MakeStrategy(Opts &opts,
+                                       std::vector<TasksBuilder> l) {
   switch (opts.typ) {
     case RR: {
       std::cout << "round-robin\n";
@@ -93,7 +94,7 @@ struct StrategySchedulerWrapper : StrategyScheduler {
 
 template <typename TargetObj>
 std::unique_ptr<Scheduler> MakeScheduler(ModelChecker &checker, Opts &opts,
-                                         std::vector<TaskBuilder> l,
+                                         std::vector<TasksBuilder> l,
                                          PrettyPrinter &pretty_printer) {
   std::cout << "strategy = ";
   switch (opts.typ) {
@@ -106,13 +107,14 @@ std::unique_ptr<Scheduler> MakeScheduler(ModelChecker &checker, Opts &opts,
           opts.rounds);
       return scheduler;
     }
-    case TLA: {
-      std::cout << "tla\n";
-      auto scheduler = std::make_unique<TLAScheduler<TargetObj>>(
-          opts.tasks, opts.rounds, opts.threads, opts.switches, std::move(l),
-          checker, pretty_printer);
-      return scheduler;
-    }
+      //    case TLA: {
+      //      std::cout << "tla\n";
+      //      auto scheduler = std::make_unique<TLAScheduler<TargetObj>>(
+      //          opts.tasks, opts.rounds, opts.threads, opts.switches,
+      //          std::move(l), checker, pretty_printer);
+      //      return scheduler;
+      //    }
+      assert("TOODO:::::");
   }
 }
 
@@ -196,20 +198,20 @@ void RunDual(int argc, char *argv[]) {
 
 }  // namespace ltest
 
-#define LTEST_ENTRYPOINT(spec_obj_t)        \
-  namespace ltest {                         \
-  std::vector<TaskBuilder> task_builders{}; \
-  }                                         \
-  int main(int argc, char *argv[]) {        \
-    ltest::Run<spec_obj_t>(argc, argv);     \
-    return 0;                               \
-  }                                         \
+#define LTEST_ENTRYPOINT(spec_obj_t)         \
+  namespace ltest {                          \
+  std::vector<TasksBuilder> task_builders{}; \
+  }                                          \
+  int main(int argc, char *argv[]) {         \
+    ltest::Run<spec_obj_t>(argc, argv);      \
+    return 0;                                \
+  }
 
-#define LTEST_ENTRYPOINT_DUAL(spec_obj_t)        \
-  namespace ltest {                         \
-  std::vector<TaskBuilder> task_builders{}; \
-  }                                         \
-  int main(int argc, char *argv[]) {        \
-    ltest::RunDual<spec_obj_t>(argc, argv);     \
-    return 0;                               \
+#define LTEST_ENTRYPOINT_DUAL(spec_obj_t)    \
+  namespace ltest {                          \
+  std::vector<TasksBuilder> task_builders{}; \
+  }                                          \
+  int main(int argc, char *argv[]) {         \
+    ltest::RunDual<spec_obj_t>(argc, argv);  \
+    return 0;                                \
   }\

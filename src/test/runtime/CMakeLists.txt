@@ -20,8 +20,10 @@ add_executable(
         lin_check_dual_test
         lin_check_dual_test.cpp
 )
+target_compile_options(lin_check_test PUBLIC -fsanitize=undefined)
+target_link_options(lin_check_test PUBLIC -fsanitize=undefined)
 
-target_compile_options(lin_check_test PRIVATE -Wall -Wextra -Werror -pedantic-errors)
+target_compile_options(lin_check_test PRIVATE -g -Wall -Wextra -Werror -pedantic-errors)
 
 target_link_libraries(
         lin_check_test
@@ -31,7 +33,7 @@ target_link_libraries(
         GTest::gmock
 )
 
-target_compile_options(lin_check_dual_test PRIVATE -Wall -Wextra -Werror -pedantic-errors)
+target_compile_options(lin_check_dual_test PRIVATE -g -Wall -Wextra -Werror -pedantic-errors)
 
 target_link_libraries(
         lin_check_dual_test

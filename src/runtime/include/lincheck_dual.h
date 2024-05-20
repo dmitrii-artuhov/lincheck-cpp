@@ -79,8 +79,7 @@ struct BlockingMethodWrapper : BlockingMethod {
 
 // This is the modified wg algorithm version, see docs for more details
 template <class LinearSpecificationObject>
-struct LinearizabilityDualChecker {
-  // TODO: оборачивать уже в чекере
+struct LinearizabilityDualChecker : ModelChecker {
   using BlockingMethodFactory = std::function<std::shared_ptr<BlockingMethod>(
       LinearSpecificationObject*, void* args)>;
 
@@ -193,7 +192,8 @@ bool LinearizabilityDualChecker<LinearSpecificationObject>::Check(
         // checker
         Invoke minimal_op = std::get<Invoke>(history[i]);
         NonBlockingMethod method = std::get<NonBlockingMethod>(
-            specification_methods.find(minimal_op.GetTask()->GetName())->second);
+            specification_methods.find(minimal_op.GetTask()->GetName())
+                ->second);
 
         LinearSpecificationObject data_structure_state_copy =
             data_structure_state;
@@ -234,7 +234,8 @@ bool LinearizabilityDualChecker<LinearSpecificationObject>::Check(
         // will be considering the corresponding follow up part
         RequestInvoke minimal_op = std::get<RequestInvoke>(history[i]);
         BlockingMethodFactory mf = std::get<BlockingMethodFactory>(
-            specification_methods.find(minimal_op.GetTask()->GetName())->second);
+            specification_methods.find(minimal_op.GetTask()->GetName())
+                ->second);
 
         LinearSpecificationObject data_structure_state_copy =
             data_structure_state;

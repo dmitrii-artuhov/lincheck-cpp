@@ -1,6 +1,8 @@
-#include "../../runtime/include/lincheck_dual.h"
 #include <functional>
 #include <map>
+#include <queue>
+
+#include "../../runtime/include/lincheck_dual.h"
 namespace spec {
 
 template <typename PushArgTuple = std::tuple<int>, std::size_t ValueIndex = 0>
@@ -20,7 +22,8 @@ struct CoroutineQueue {
 
   struct ReceivePromise {
     explicit ReceivePromise(CoroutineQueue& queue) : queue(queue) {
-      elem = std::make_shared<std::optional<int>>(std::optional<int>(std::nullopt));
+      elem = std::make_shared<std::optional<int>>(
+          std::optional<int>(std::nullopt));
     }
     bool await_ready() { return false; }
 
@@ -70,8 +73,10 @@ struct CoroutineQueue {
   };
 
   static auto GetMethods() {
-    LinearizabilityDualChecker<CoroutineQueue<>>::BlockingMethodFactory receive = [](CoroutineQueue<>* c,
-       [[maybe_unused]] void* args) -> std::shared_ptr<BlockingMethod> {
+    LinearizabilityDualChecker<CoroutineQueue<>>::BlockingMethodFactory
+        receive =
+            [](CoroutineQueue<>* c,
+               [[maybe_unused]] void* args) -> std::shared_ptr<BlockingMethod> {
       return std::shared_ptr<BlockingMethod>(
           new BlockingMethodWrapper<CoroutineQueue<>::ReceivePromise>(
               c->Receive()));
@@ -82,9 +87,9 @@ struct CoroutineQueue {
     };
   }
 
-private:
+ private:
   std::queue<ReceivePromise> receivers;
   std::queue<SendPromise> senders;
 };
 
-};
+};  // namespace spec

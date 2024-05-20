@@ -1,8 +1,9 @@
+#include "../specs/coroutine_queue.h"
+
 #include <coroutine>
 #include <memory>
 #include <optional>
 #include <queue>
-#include "../specs/coroutine_queue.h"
 
 #include "../../runtime/include/verifying.h"
 
@@ -15,9 +16,7 @@ struct CoroutineQueue {
         senders(std::queue<SendPromise>()) {}
 
   SendPromise Send(int elem) { return SendPromise(elem, *this); }
-  ReceivePromise Receive() {
-    return ReceivePromise(*this);
-  }
+  ReceivePromise Receive() { return ReceivePromise(*this); }
 
   //  ReceivePromise Receive() { return ReceivePromise(*this); }
 
@@ -31,10 +30,14 @@ struct CoroutineQueue {
     bool await_ready() { return false; }
 
     non_atomic void await_suspend(std::coroutine_handle<> h) {
+      std::cout << "size: " << queue.senders.size() << std::endl;
       if (!queue.senders.empty()) {
+        std::cout << "size: " << queue.senders.size() << std::endl;
+//        std::cout << "magic happened" << std::endl;
         SendPromise send_req = queue.senders.back();
         queue.senders.pop();
         *elem = send_req.elem;
+        assert(!send_req.sender.done());
         send_req.sender();
         h();
       } else {
@@ -43,7 +46,10 @@ struct CoroutineQueue {
       }
     }
 
-    std::optional<int> await_resume() { return *elem; }
+    int await_resume() {
+      assert(elem.get()->has_value());
+      return **elem;
+    }
 
     std::coroutine_handle<> receiver;
     std::shared_ptr<std::optional<int>> elem;
@@ -55,11 +61,12 @@ struct CoroutineQueue {
 
     bool await_ready() { return false; }
 
-    void await_suspend(std::coroutine_handle<> h) {
+    non_atomic void await_suspend(std::coroutine_handle<> h) {
       if (!queue.receivers.empty()) {
         ReceivePromise receiver = queue.receivers.back();
         queue.receivers.pop();
         *(receiver.elem) = elem;
+        assert(!receiver.receiver.done());
         receiver.receiver();
         h();
       } else {
@@ -75,17 +82,28 @@ struct CoroutineQueue {
     CoroutineQueue& queue;
   };
 
+  void Reset() {
+    receivers = {};
+    senders = {};
+  }
+
  private:
   std::queue<ReceivePromise> receivers;
   std::queue<SendPromise> senders;
 };
 
+// Arguments generator.
+auto generateInt(size_t unused_param) {
+  return ltest::generators::makeSingleArg(rand() % 10 + 1);
+}
 
 target_method_dual(ltest::generators::genEmpty, CoroutineQueue::ReceivePromise,
                    CoroutineQueue, Receive);
 
+target_method_dual(generateInt, CoroutineQueue::SendPromise,
+                   CoroutineQueue, Send, int);
+
 // Specify target structure and it's sequential specification.
-using spec_t =
-    ltest::SpecDual<CoroutineQueue, spec::CoroutineQueue<>>;
+using spec_t = ltest::SpecDual<CoroutineQueue, spec::CoroutineQueue<>>;
 
 LTEST_ENTRYPOINT_DUAL(spec_t);

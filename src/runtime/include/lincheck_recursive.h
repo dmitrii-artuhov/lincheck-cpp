@@ -20,8 +20,7 @@ struct LinearizabilityCheckerRecursive : ModelChecker {
   LinearizabilityCheckerRecursive(MethodMap specification_methods,
                                   LinearSpecificationObject first_state);
 
-  bool Check(const std::vector<std::variant<Invoke, Response>>& fixed_history)
-      override;
+  bool Check(const std::vector<HistoryEvent>& fixed_history) override;
 
  private:
   std::map<MethodName, Method> specification_methods;
@@ -46,10 +45,9 @@ LinearizabilityCheckerRecursive<LinearSpecificationObject,
 
 template <class LinearSpecificationObject, class SpecificationObjectHash,
           class SpecificationObjectEqual>
-bool LinearizabilityCheckerRecursive<LinearSpecificationObject,
-                                     SpecificationObjectHash,
-                                     SpecificationObjectEqual>::
-    Check(const std::vector<std::variant<Invoke, Response>>& history) {
+bool LinearizabilityCheckerRecursive<
+    LinearSpecificationObject, SpecificationObjectHash,
+    SpecificationObjectEqual>::Check(const std::vector<HistoryEvent>& history) {
   // It's a crunch, but it's required because the semantics of this
   // implementation must be the same as the semantics of the non-recursive
   // implementation
@@ -58,14 +56,13 @@ bool LinearizabilityCheckerRecursive<LinearSpecificationObject,
   }
   std::map<size_t, size_t> inv_res = get_inv_res_mapping(history);
 
-  std::function<bool(const std::vector<std::variant<Invoke, Response>>&,
-                     std::vector<bool>&, LinearSpecificationObject)>
+  std::function<bool(const std::vector<HistoryEvent>&, std::vector<bool>&,
+                     LinearSpecificationObject)>
       recursive_step;
 
-  recursive_step =
-      [&](const std::vector<std::variant<Invoke, Response>>& history,
-          std::vector<bool>& linearized,
-          LinearSpecificationObject data_structure_state) -> bool {
+  recursive_step = [&](const std::vector<HistoryEvent>& history,
+                       std::vector<bool>& linearized,
+                       LinearSpecificationObject data_structure_state) -> bool {
     // the fixed_history is empty
     if (std::reduce(linearized.begin(), linearized.end(), true,
                     std::bit_and<>())) {
@@ -86,11 +83,11 @@ bool LinearizabilityCheckerRecursive<LinearSpecificationObject,
       }
 
       Invoke minimal_op = std::get<Invoke>(history[i]);
-      assert(specification_methods.find(minimal_op.GetTask()->GetName()) != specification_methods.end());
+      assert(specification_methods.find(minimal_op.GetTask()->GetName()) !=
+             specification_methods.end());
       auto method = specification_methods
                         .find(std::string{minimal_op.GetTask()->GetName()})
                         ->second;
-
 
       LinearSpecificationObject data_structure_state_copy =
           data_structure_state;
