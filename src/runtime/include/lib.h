@@ -146,7 +146,23 @@ using Task = std::shared_ptr<TaskAbstract>;
 using DualTask = std::shared_ptr<DualTaskAbstract>;
 
 // (this_ptr, thread_num) -> Task | DualTask
-using TasksBuilder = std::function<std::variant<Task, DualTask>(void*, size_t)>;
+struct TasksBuilder {
+  using BuilderFunc = std::function<std::variant<Task, DualTask>(void*, size_t)>;
+  TasksBuilder(std::string name, BuilderFunc func): name(name), builder_func(func) {}
+
+  const std::string& GetName() const {
+    return name;
+  }
+
+  std::variant<Task, DualTask> Build(void* this_ptr, size_t thread_id) {
+    return builder_func(this_ptr, thread_id);
+  }
+
+private:
+  std::string name;
+  BuilderFunc builder_func;
+};
+//using TasksBuilder = std::function<std::variant<Task, DualTask>(void*, size_t)>;
 
 void Terminate(std::variant<Task, DualTask>);
 
@@ -236,8 +252,9 @@ struct Coro final : public CoroBase {
      * to decide, in which order the tasks should be terminated.
      *
      */
+     // TODO: how to restart callback here?
     assert(IsReturned());
-    auto coro = New(func, this_ptr, args, args_to_strings, name);
+    auto coro = New(func, this_ptr, args, args_for_return, args_to_strings, name);
     if (token != nullptr) {
       coro->token = std::move(token);
     }
@@ -249,12 +266,14 @@ struct Coro final : public CoroBase {
   // Target.
   static std::shared_ptr<CoroBase> New(CoroF func, void* this_ptr,
                                        std::shared_ptr<void> args,
+                                       std::shared_ptr<void> args_for_return,
                                        ArgsToStringsF args_to_strings,
                                        std::string_view name) {
     auto c = std::make_shared<Coro>();
     c->func = std::move(func);
     c->args = std::move(args);
     c->name = name;
+    c->args_for_return = args_for_return;
     c->args_to_strings = std::move(args_to_strings);
     c->this_ptr = this_ptr;
     c->stack = std::unique_ptr<char[]>(new char[STACK_SIZE]);
@@ -332,10 +351,10 @@ struct Coro final : public CoroBase {
 
   std::vector<std::string> GetStrArgs() const override {
     assert(args_to_strings != nullptr);
-    return args_to_strings(args);
+    return args_to_strings(args_for_return);
   }
 
-  void* GetArgs() const override { return args.get(); }
+  void* GetArgs() const override { return args_for_return.get(); }
 
   ~Coro() { VALGRIND_STACK_DEREGISTER(val_stack_id); }
 
@@ -344,6 +363,7 @@ struct Coro final : public CoroBase {
   CoroF func;
   // Pointer to the arguments, points to the std::tuple<Args...>.
   std::shared_ptr<void> args;
+  std::shared_ptr<void> args_for_return;
   // Function that can make strings from args for pretty printing.
   std::function<std::vector<std::string>(std::shared_ptr<void>)>
       args_to_strings;

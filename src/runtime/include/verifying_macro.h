@@ -59,14 +59,14 @@ struct TargetMethod<int, Target, Args...> {
             void *this_ptr, size_t thread_num) -> std::variant<Task, DualTask> {
       auto args = std::shared_ptr<void>(new std::tuple(gen(thread_num)));
       auto coro = Coro<Target, Args...>::New(
-          method, this_ptr, args, &ltest::toStringArgs<Args...>, method_name);
+          method, this_ptr, args, args, &ltest::toStringArgs<Args...>, method_name);
       if (ltest::generators::generated_token) {
         coro->SetToken(ltest::generators::generated_token);
         ltest::generators::generated_token.reset();
       }
       return std::make_shared<TaskImplFromCoro>(TaskImplFromCoro(coro));
     };
-    ltest::task_builders.push_back(builder);
+    ltest::task_builders.push_back(TasksBuilder(std::string(method_name), builder));
   }
 };
 
@@ -77,6 +77,21 @@ struct Wrapper {
   Wrapper(F f) : f(std::move(f)) {}
   int operator()(void *this_ptr, Args &&...args) {
     f(reinterpret_cast<Target *>(this_ptr), std::forward<Args>(args)...);
+    return 0;
+  }
+};
+
+// Checks does await_suspended returned false, if so calls the callback by hands
+template <typename Target>
+struct DualMethodWrapper {
+  std::function<bool(Target *, std::coroutine_handle<>)> await_suspend;
+  DualMethodWrapper(std::function<bool(Target *, std::coroutine_handle<>)> await_suspend) : await_suspend(std::move(await_suspend)) {}
+
+  int operator()(void *this_ptr, std::coroutine_handle<> callback) {
+    bool need_suspend = await_suspend(reinterpret_cast<Target *>(this_ptr), callback);
+    if (!need_suspend) {
+      callback();
+    }
     return 0;
   }
 };
@@ -97,11 +112,11 @@ struct CoroutineResponse {
 template<typename Awaitable>
 CoroutineResponse StartCallback(Awaitable *awaitable, std::shared_ptr<DualTaskImplFromCoro> coro) {
   co_await std::suspend_always{};
-  std::cout << "in callback";
+
+  // Add FollowUpResonse event to the history
   coro->callback();
   coro->is_follow_up_finished = true;
-  int res = awaitable->await_resume();
-  coro->return_value = res;
+  coro->return_value = awaitable->await_resume();
 }
 
 template <typename Awaitable, typename Target, typename... Args>
@@ -110,7 +125,7 @@ struct TargetMethodDual {
   TargetMethodDual(
       std::string_view method_name,
       std::function<std::tuple<Args...>(size_t)> gen, Method method,
-      std::function<void(Awaitable *, std::coroutine_handle<>)> await_suspend) {
+      std::function<bool(Awaitable *, std::coroutine_handle<>)> await_suspend) {
     auto dual_builder =
         [gen = std::move(gen), method_name, method = std::move(method),
          await_suspend = std::move(await_suspend)](
@@ -137,11 +152,12 @@ struct TargetMethodDual {
 
       // Set task for the await_suspend on the awaitable object
       auto wrapper =
-          Wrapper<Awaitable, decltype(await_suspend), std::coroutine_handle<>>{
+          DualMethodWrapper<Awaitable>{
               await_suspend};
       coro = Coro<Awaitable, std::coroutine_handle<>>::New(
           wrapper, awaitable,
           std::shared_ptr<void>(new std::tuple(callback)),
+          args,
           &ltest::toStringArgs<Args...>, method_name);
       // TODO: crutch, fix order and dependencies
       dual_coro->method = coro;
@@ -151,7 +167,7 @@ struct TargetMethodDual {
       }
       return dual_coro;
     };
-    ltest::task_builders.push_back(dual_builder);
+    ltest::task_builders.push_back(TasksBuilder(std::string(method_name), dual_builder));
   }
 };
 
@@ -167,14 +183,14 @@ struct TargetMethod<void, Target, Args...> {
       auto wrapper = Wrapper<Target, decltype(method), Args...>{method};
       auto args = std::shared_ptr<void>(new std::tuple(gen(thread_num)));
       auto coro = Coro<Target, Args...>::New(
-          wrapper, this_ptr, args, &ltest::toStringArgs<Args...>, method_name);
+          wrapper, this_ptr, args, args, &ltest::toStringArgs<Args...>, method_name);
       if (ltest::generators::generated_token) {
         coro->SetToken(ltest::generators::generated_token);
         ltest::generators::generated_token.reset();
       }
       return std::make_shared<TaskImplFromCoro>(TaskImplFromCoro(coro));
     };
-    ltest::task_builders.push_back(builder);
+    ltest::task_builders.push_back(TasksBuilder(std::string(method_name), builder));
   }
 };
 
@@ -187,8 +203,8 @@ struct TargetMethod<void, Target, Args...> {
   ltest::TargetMethod<ret, cls __VA_OPT__(, ) __VA_ARGS__> \
       symbol##_ltest_method_cls{symbol##_task_name, gen, &cls::symbol};
 
-#define target_method_dual(gen, promise_type, cls, symbol, ...)         \
+#define target_method_dual(gen, promise_type, promise_type_name, cls, symbol, ...)         \
   declare_task_name(symbol);                                            \
   ltest::TargetMethodDual<promise_type, cls __VA_OPT__(, ) __VA_ARGS__> \
       symbol##_ltest_method_cls{symbol##_task_name, gen, &cls::symbol,  \
-                                &cls::promise_type::await_suspend};
+                                &cls::promise_type_name::await_suspend};

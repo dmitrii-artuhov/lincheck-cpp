@@ -44,7 +44,7 @@ std::shared_ptr<MockTask> CreateMockTask(std::string name, int ret_val,
       .WillRepeatedly(testing::Return(ret_val));
   EXPECT_CALL(*mock, GetName())
       .Times(testing::AnyNumber())
-      .WillRepeatedly(testing::Return(name));
+      .WillRepeatedly(testing::Return(std::move(name)));
   EXPECT_CALL(*mock, GetArgs())
       .Times(testing::AnyNumber())
       .WillRepeatedly(testing::Return(args));
@@ -60,7 +60,7 @@ std::shared_ptr<MockDualTask> CreateMockDualTask(std::string name, int ret_val,
       .WillRepeatedly(testing::Return(ret_val));
   EXPECT_CALL(*mock, GetName())
       .Times(testing::AnyNumber())
-      .WillRepeatedly(testing::Return(name));
+      .WillRepeatedly(testing::Return(std::move(name)));
   EXPECT_CALL(*mock, GetArgs())
       .Times(testing::AnyNumber())
       .WillRepeatedly(testing::Return(args));

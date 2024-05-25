@@ -72,7 +72,7 @@ std::unique_ptr<Strategy> MakeStrategy(Opts &opts,
     case PCT:
       log() << "pct";
       return std::make_unique<PctStrategy<TargetObj>>(opts.threads,
-                                                      std::move(l));
+                                                      std::move(l), true);
     default:
       assert(false && "unexpected typ");
   }

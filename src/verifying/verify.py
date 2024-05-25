@@ -26,8 +26,10 @@ deps = list(map(lambda f: os.path.join(runtime_dir, f), [
 clang = "clang++"
 opt = "opt"
 llvm_dis = "llvm-dis"
-build_flags = ["-O3", "-std=c++2a"]
-# build_flags = ["-O3", "-g", "-std=c++2a", "-fsanitize=address", "-DADDRESS_SANITIZER"]
+# build_flags = ["-O3", "-std=c++2a"]
+build_flags1 = ["-g", "-std=c++20", "-O0", "-fno-omit-frame-pointer", "-DADDRESS_SANITIZER", "-fsanitize=undefined"]
+build_flags2 = ["-g", "-std=c++20", "-O0", "-ggdb3"]
+# build_flags = ["-g", "-std=c++2a", "-fsanitize=address", "-DADDRESS_SANITIZER -fsanitize-address-use-after-return=always"]
 
 
 def read_file(path):
@@ -123,21 +125,40 @@ def run_build(src, artifacts_dir, debug=False):
 def run_build_on_optimized(src, artifacts_dir, debug=False):
     # Compile target to bytecode.
     cmd = [clang]
-    cmd.extend(build_flags)
+    cmd.extend(build_flags2)
     if debug:
         cmd.append("-g")
+    cmd.extend(["-I", "/home/src/verifying/targets/vk_channel"])
+    cmd.extend(["-I", "/home/src/verifying/targets/vk_channel"])
+    cmd.extend(["/home/src/verifying/targets/vk_channel/channel.cpp"])
+    cmd.extend(["/home/src/verifying/targets/vk_channel/hazard-ptr.cpp"])
+    cmd.extend(["/home/src/verifying/targets/vk_channel/indexer.cpp"])
+    cmd.extend(["/home/src/verifying/targets/vk_channel/lock-free-list.cpp"])
+    cmd.extend(["/home/src/verifying/targets/vk_channel/precise-time.cpp"])
+    cmd.extend(["/home/src/verifying/targets/vk_channel/scheduler.cpp"])
+    cmd.extend(["/home/src/verifying/targets/vk_channel/time-point-handle.cpp"])
     cmd.extend(["-emit-llvm", "-S"])
     cmd.append(src.name)
-    cmd.extend(["-o", os.path.join(artifacts_dir, "bytecode.bc")])
+    # cmd.extend(["-o", artifacts_dir])
+    # cmd.extend(["-o", os.path.join(artifacts_dir, "bytecode.bc")])
     rc, _ = run_command_and_get_output(cmd, cwd=file_dir)
     assert rc == 0
 
     # Run yield pass on optimized code.
     cmd = [clang]
-    cmd.extend(build_flags)
+    cmd.extend(build_flags1)
+    if debug:
+        cmd.append("-g")
     cmd.append(f"-fpass-plugin={yield_plugh_path}")
     cmd.extend(deps)
-    cmd.append(os.path.join(artifacts_dir, "bytecode.bc"))
+    cmd.extend(["channel.ll"])
+    cmd.extend(["hazard-ptr.ll"])
+    cmd.extend(["indexer.ll"])
+    cmd.extend(["lock-free-list.ll"])
+    cmd.extend(["precise-time.ll"])
+    cmd.extend(["scheduler.ll"])
+    cmd.extend(["time-point-handle.ll"])
+    # cmd.append(os.path.join(artifacts_dir, "bytecode.bc"))
     cmd.extend(["-o", os.path.join(artifacts_dir, "run")])
     rc, _ = run_command_and_get_output(cmd, cwd=file_dir)
     assert rc == 0

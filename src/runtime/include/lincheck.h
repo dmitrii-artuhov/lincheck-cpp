@@ -5,6 +5,7 @@
 #include <map>
 #include <stdexcept>
 #include <unordered_set>
+#include <utility>
 #include <variant>
 
 #include "lib.h"
@@ -33,31 +34,31 @@ struct Invoke {
 };
 
 struct RequestInvoke {
-  RequestInvoke(const DualTask& task, int thread_id)
-      : thread_id(thread_id), task(task) {}
+  RequestInvoke(DualTask task, int thread_id)
+      : thread_id(thread_id), task(std::move(task)) {}
 
   [[nodiscard]] const DualTask& GetTask() const;
 
   int thread_id;
 
  private:
-  std::reference_wrapper<const DualTask> task;
+  DualTask task;
 };
 
 struct RequestResponse {
-  RequestResponse(const DualTask& task, int thread_id)
-      : thread_id(thread_id), task(task) {}
+  RequestResponse(DualTask task, int thread_id)
+      : thread_id(thread_id), task(std::move(task)) {}
 
   [[nodiscard]] const DualTask& GetTask() const;
 
   int thread_id;
 
  private:
-  std::reference_wrapper<const DualTask> task;
+  DualTask task;
 };
 
 struct FollowUpInvoke {
-  FollowUpInvoke(const DualTask& task, int thread_id)
+  FollowUpInvoke(DualTask task, int thread_id)
       : thread_id(thread_id), task(task) {}
 
   [[nodiscard]] const DualTask& GetTask() const;
@@ -65,11 +66,11 @@ struct FollowUpInvoke {
   int thread_id;
 
  private:
-  std::reference_wrapper<const DualTask> task;
+   DualTask task;
 };
 
 struct FollowUpResponse {
-  FollowUpResponse(const DualTask& task, int thread_id)
+  FollowUpResponse(DualTask task, int thread_id)
       : thread_id(thread_id), task(task) {}
 
   [[nodiscard]] const DualTask& GetTask() const;
@@ -78,7 +79,7 @@ struct FollowUpResponse {
   int thread_id;
 
  private:
-  std::reference_wrapper<const DualTask> task;
+  DualTask task;
 };
 
 using HistoryEvent =

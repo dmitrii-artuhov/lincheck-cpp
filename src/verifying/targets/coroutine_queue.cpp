@@ -29,7 +29,7 @@ struct CoroutineQueue {
     }
     bool await_ready() { return false; }
 
-    non_atomic void await_suspend(std::coroutine_handle<> h) {
+    non_atomic bool await_suspend(std::coroutine_handle<> h) {
       std::cout << "size: " << queue.senders.size() << std::endl;
       if (!queue.senders.empty()) {
         std::cout << "size: " << queue.senders.size() << std::endl;
@@ -39,10 +39,11 @@ struct CoroutineQueue {
         *elem = send_req.elem;
         assert(!send_req.sender.done());
         send_req.sender();
-        h();
+        return false;
       } else {
         receiver = h;
         queue.receivers.push(*this);
+        return true;
       }
     }
 
@@ -61,17 +62,18 @@ struct CoroutineQueue {
 
     bool await_ready() { return false; }
 
-    non_atomic void await_suspend(std::coroutine_handle<> h) {
+    non_atomic bool await_suspend(std::coroutine_handle<> h) {
       if (!queue.receivers.empty()) {
         ReceivePromise receiver = queue.receivers.back();
         queue.receivers.pop();
         *(receiver.elem) = elem;
         assert(!receiver.receiver.done());
         receiver.receiver();
-        h();
+        return false;
       } else {
         sender = h;
         queue.senders.push(*this);
+        return true;
       }
     }
 

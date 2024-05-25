@@ -233,6 +233,7 @@ bool LinearizabilityDualChecker<LinearSpecificationObject>::Check(
         // an answer in the request part answer have to be ready only when we
         // will be considering the corresponding follow up part
         RequestInvoke minimal_op = std::get<RequestInvoke>(history[i]);
+        assert(specification_methods.find(minimal_op.GetTask()->GetName()) != specification_methods.end());
         BlockingMethodFactory mf = std::get<BlockingMethodFactory>(
             specification_methods.find(minimal_op.GetTask()->GetName())
                 ->second);
@@ -275,6 +276,19 @@ bool LinearizabilityDualChecker<LinearSpecificationObject>::Check(
         size_t request_index = followup_request[followup_response_index];
         assert(dual_requests.find(request_index) != dual_requests.end());
         std::shared_ptr<BlockingMethod> method = dual_requests[request_index];
+
+        // unfinished history
+        if (inv_res.find(i) == inv_res.end()) {
+          linearized[i] = true;
+          seq_history.emplace_back(history[i], i);
+          if (recursive_step(history, linearized, data_structure_state)) {
+            return true;
+          }
+          data_structure_state =
+              fix_history_update_duals({i, inv_res[i]}, linearized);
+          linearized[i] = false;
+          continue;
+        }
 
         // If the method doesn't ready just keep execution
         if (method->IsFinished() &&

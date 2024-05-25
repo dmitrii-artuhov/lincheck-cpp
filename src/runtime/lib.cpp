@@ -24,11 +24,11 @@ void CoroBody(int signum) {
 }
 
 void Terminate(std::variant<Task, DualTask> task) {
-  if (std::holds_alternative<Task>(task)) {
-    std::get<Task>(task)->Terminate();
-  } else {
-    std::get<DualTask>(task)->Terminate();
-  }
+//  if (std::holds_alternative<Task>(task)) {
+//    std::get<Task>(task)->Terminate();
+//  } else {
+//    std::get<DualTask>(task)->Terminate();
+//  }
 }
 
 std::shared_ptr<CoroBase> CoroBase::GetPtr() { return shared_from_this(); }

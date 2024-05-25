@@ -12,13 +12,15 @@
 // equivalent to the halt problem), k should be good approximation
 template <typename TargetObj>
 struct PctStrategy : Strategy {
+  // TODO: doc about is_another_required
   explicit PctStrategy(size_t threads_count,
-                       std::vector<TasksBuilder> constructors)
+                       const std::vector<TasksBuilder>& constructors, bool is_another_required)
       : threads_count(threads_count),
         current_depth(1),
         current_schedule_length(0),
         constructors(constructors),
-        threads() {
+        threads(),
+        is_another_required(is_another_required) {
     std::random_device dev;
     rng = std::mt19937(dev());
     constructors_distribution =
@@ -61,7 +63,10 @@ struct PctStrategy : Strategy {
            std::get<Task>(threads[i].back())->IsSuspended()) ||
           (!threads[i].empty() &&
            std::holds_alternative<DualTask>(threads[i].back())) &&
-              std::get<DualTask>(threads[i].back())->IsRequestFinished()) {
+              std::get<DualTask>(threads[i].back())->IsRequestFinished() &&
+              !std::get<DualTask>(threads[i].back())->IsFollowUpFinished()
+          ) {
+        // dual waiting if request finished, but follow up isn't
         // skip dual tasks that already have finished the request
         // section(follow-up will be executed in another task, so we can't
         // resume)
@@ -73,6 +78,22 @@ struct PctStrategy : Strategy {
         index_of_max = i;
       }
     }
+
+//    if (max == std::numeric_limits<size_t>::min()) {
+//      for (auto& thread : threads) {
+//        if (thread.empty()) {
+//          std::cout << "empty" << std::endl;
+//        }
+//
+//        auto& task = thread.back();
+//        if (std::holds_alternative<Task>(task)) {
+//          std::cout << std::get<Task>(task)->GetName() << std::endl;
+//        } else {
+//          std::cout << std::get<DualTask>(task)->GetName() << std::endl;
+//        }
+//      }
+//      assert(false);
+//    }
 
     // Check whether the priority change is required
     current_schedule_length++;
@@ -89,7 +110,20 @@ struct PctStrategy : Strategy {
          std::get<DualTask>(threads[index_of_max].back())
              ->IsFollowUpFinished())) {
       auto constructor = constructors.at(constructors_distribution(rng));
-      threads[index_of_max].emplace_back(constructor(&state, index_of_max));
+      if (is_another_required) {
+        auto names = CountNames(index_of_max);
+        // TODO: выглядит непонятно и так себе
+        while (true) {
+          names.insert(constructor.GetName());
+          if (names.size() == 1) {
+            constructor = constructors.at(constructors_distribution(rng));
+          } else {
+            break;
+          }
+        }
+      }
+
+      threads[index_of_max].emplace_back(constructor.Build(&state, index_of_max));
       return {threads[index_of_max].back(), true, index_of_max};
     }
 
@@ -121,6 +155,26 @@ struct PctStrategy : Strategy {
   ~PctStrategy() { TerminateTasks(); }
 
  private:
+   std::unordered_set<std::string> CountNames(size_t except_thread) {
+     std::unordered_set<std::string> names;
+
+     for (size_t i = 0; i < threads.size(); ++i) {
+       auto& thread = threads[i];
+       if (thread.empty() || i == except_thread) {
+         continue;
+       }
+
+       auto& task = thread.back();
+       if (std::holds_alternative<Task>(task)) {
+         names.insert(std::get<Task>(task)->GetName());
+       } else {
+         names.insert(std::get<DualTask>(task)->GetName());
+       }
+     }
+
+     return names;
+   }
+
   void PrepareForDepth(size_t depth, size_t k) {
     // Generates priorities
     priorities = std::vector<size_t>(threads_count);
@@ -159,6 +213,7 @@ struct PctStrategy : Strategy {
   // so we have to contains all tasks in queues(queue doesn't invalidate the
   // references)
   std::vector<StableVector<std::variant<Task, DualTask>>> threads;
+  bool is_another_required;
   std::uniform_int_distribution<std::mt19937::result_type>
       constructors_distribution;
   std::mt19937 rng;

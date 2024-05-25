@@ -29,7 +29,7 @@ struct CoroutineQueue {
 
     void await_suspend(std::coroutine_handle<> h) {
       if (!queue.senders.empty()) {
-        SendPromise send_req = queue.senders.back();
+        SendPromise send_req = queue.senders.front();
         queue.senders.pop();
         *elem = send_req.elem;
         send_req.sender();
@@ -54,7 +54,7 @@ struct CoroutineQueue {
 
     void await_suspend(std::coroutine_handle<> h) {
       if (!queue.receivers.empty()) {
-        ReceivePromise receiver = queue.receivers.back();
+        ReceivePromise receiver = queue.receivers.front();
         queue.receivers.pop();
         *(receiver.elem) = elem;
         receiver.receiver();
@@ -82,8 +82,19 @@ struct CoroutineQueue {
               c->Receive()));
     };
 
+    LinearizabilityDualChecker<CoroutineQueue<>>::BlockingMethodFactory
+        send =
+            [](CoroutineQueue<>* c,
+               void* args) -> std::shared_ptr<BlockingMethod> {
+          auto real_args = reinterpret_cast<std::tuple<int> *>(args);
+          return std::shared_ptr<BlockingMethod>(
+          new BlockingMethodWrapper<CoroutineQueue<>::SendPromise>(
+              c->Send(std::get<0>(*real_args))));
+    };
+
     return LinearizabilityDualChecker<CoroutineQueue<>>::MethodMap{
-        {"Receive", receive},
+        {"receive", receive},
+        {"send", send},
     };
   }
 

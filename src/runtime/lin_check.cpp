@@ -49,34 +49,34 @@ std::map<size_t, size_t> get_inv_res_mapping(
 // response_index)
 std::map<size_t, size_t> get_inv_res_full_mapping(
     const std::vector<HistoryEvent>& history) {
-  std::map<size_t, size_t> inv_res;      // inv -> corresponding response
-  std::map<Task, size_t> uids;  // uid -> res
-  std::map<DualTask, size_t> follow_up_uids;
-  std::map<DualTask, size_t> requests_uids;
+  std::map<size_t, size_t> inv_res{};      // inv -> corresponding response
+  std::map<Task, size_t> uids{};  // uid -> res
+  std::map<DualTask, size_t> follow_up_uids{};
+  std::map<DualTask, size_t> requests_uids{};
 
   for (size_t i = 0; i < history.size(); ++i) {
-    auto el = history[i];
-    if (std::holds_alternative<Invoke>(history[i])) {
-      const Invoke& inv = std::get<Invoke>(el);
+    auto event = history[i];
+    if (std::holds_alternative<Invoke>(event)) {
+      const Invoke& inv = std::get<Invoke>(event);
       uids[inv.GetTask()] = i;
-    } else if (std::holds_alternative<RequestInvoke>(history[i])) {
-      const RequestInvoke& inv = std::get<RequestInvoke>(el);
+    } else if (std::holds_alternative<RequestInvoke>(event)) {
+      const RequestInvoke& inv = std::get<RequestInvoke>(event);
       requests_uids[inv.GetTask()] = i;
-    } else if (std::holds_alternative<FollowUpInvoke>(history[i])) {
-      const FollowUpInvoke& inv = std::get<FollowUpInvoke>(el);
+    } else if (std::holds_alternative<FollowUpInvoke>(event)) {
+      const FollowUpInvoke& inv = std::get<FollowUpInvoke>(event);
       follow_up_uids[inv.GetTask()] = i;
-    } else if (std::holds_alternative<Response>(history[i])) {
-      const Response& res = std::get<Response>(el);
+    } else if (std::holds_alternative<Response>(event)) {
+      const Response& res = std::get<Response>(event);
       assert(uids.find(res.GetTask()) != uids.end());
       auto inv_id = uids[res.GetTask()];
       inv_res[inv_id] = i;
-    } else if (std::holds_alternative<RequestResponse>(history[i])) {
-      const RequestResponse& res = std::get<RequestResponse>(el);
+    } else if (std::holds_alternative<RequestResponse>(event)) {
+      const RequestResponse& res = std::get<RequestResponse>(event);
       assert(requests_uids.find(res.GetTask()) != requests_uids.end());
       auto inv_id = requests_uids[res.GetTask()];
       inv_res[inv_id] = i;
-    } else if (std::holds_alternative<FollowUpResponse>(history[i])) {
-      const FollowUpResponse& res = std::get<FollowUpResponse>(el);
+    } else if (std::holds_alternative<FollowUpResponse>(event)) {
+      const FollowUpResponse& res = std::get<FollowUpResponse>(event);
       assert(follow_up_uids.find(res.GetTask()) != follow_up_uids.end());
       auto inv_id = follow_up_uids[res.GetTask()];
       inv_res[inv_id] = i;
