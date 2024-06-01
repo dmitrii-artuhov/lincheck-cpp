@@ -259,24 +259,15 @@ bool LinearizabilityDualChecker<LinearSpecificationObject>::Check(
         if (recursive_step(history, linearized, data_structure_state_copy)) {
           return true;
         }
-        // go back and reproduce state and duals
-        seq_history.pop_back();
-        linearized[i] = false;
-        if (inv_res.find(i) != inv_res.end()) {
-          linearized[inv_res[i]] = false;
-          seq_history.pop_back();
-        }
-        std::tie(data_structure_state, dual_requests) =
-            ReproduceSeqHistory(seq_history);
-      } else if (std::holds_alternative<FollowUpInvoke>(history[i])) {
-        // Blocking method follow-up section, have to check the return value
-        // there
-        FollowUpInvoke minimal_op = std::get<FollowUpInvoke>(history[i]);
-        size_t followup_response_index = inv_res[i];
-        size_t request_index = followup_request[followup_response_index];
-        assert(dual_requests.find(request_index) != dual_requests.end());
-        std::shared_ptr<BlockingMethod> method = dual_requests[request_index];
 
+        // go back and reproduce state and duals
+        std::vector<size_t> indexes_to_clear({i});
+        if (inv_res.find(i) != inv_res.end()) {
+          indexes_to_clear.push_back(inv_res[i]);
+        }
+        data_structure_state =
+            fix_history_update_duals(std::move(indexes_to_clear), linearized);
+      } else if (std::holds_alternative<FollowUpInvoke>(history[i])) {
         // unfinished history
         if (inv_res.find(i) == inv_res.end()) {
           linearized[i] = true;
@@ -284,11 +275,19 @@ bool LinearizabilityDualChecker<LinearSpecificationObject>::Check(
           if (recursive_step(history, linearized, data_structure_state)) {
             return true;
           }
+
           data_structure_state =
-              fix_history_update_duals({i, inv_res[i]}, linearized);
-          linearized[i] = false;
+              fix_history_update_duals({i}, linearized);
           continue;
         }
+
+        // Blocking method follow-up section, have to check the return value
+        // there
+        FollowUpInvoke minimal_op = std::get<FollowUpInvoke>(history[i]);
+        size_t followup_response_index = inv_res[i];
+        size_t request_index = followup_request[followup_response_index];
+        assert(dual_requests.find(request_index) != dual_requests.end());
+        std::shared_ptr<BlockingMethod> method = dual_requests[request_index];
 
         // If the method doesn't ready just keep execution
         if (method->IsFinished() &&
@@ -328,6 +327,7 @@ LinearizabilityDualChecker<LinearSpecificationObject>::ReproduceSeqHistory(
     if (std::holds_alternative<Invoke>(event_pair.first)) {
       Invoke op = std::get<Invoke>(event_pair.first);
 
+      assert(specification_methods.find(op.GetTask()->GetName()) != specification_methods.end());
       NonBlockingMethod method = std::get<NonBlockingMethod>(
           specification_methods.find(op.GetTask()->GetName())->second);
 

@@ -53,11 +53,11 @@ TEST(LinearizabilityCheckerCounterTest, SmallLinearizableHistory) {
   auto empty_args_unique = std::make_unique<std::tuple<>>(std::tuple<>{});
   void* empty_args = reinterpret_cast<void*>(empty_args_unique.get());
 
-  auto first_task = CreateMockTask("faa", 3, empty_args);
-  auto second_task = CreateMockTask("get", 3, empty_args);
-  auto third_task = CreateMockTask("faa", 2, empty_args);
-  auto fourth_task = CreateMockTask("faa", 1, empty_args);
-  auto fifth_task = CreateMockTask("faa", 0, empty_args);
+  Task first_task = CreateMockTask("faa", 3, empty_args);
+  Task second_task = CreateMockTask("get", 3, empty_args);
+  Task third_task = CreateMockTask("faa", 2, empty_args);
+  Task fourth_task = CreateMockTask("faa", 1, empty_args);
+  Task fifth_task = CreateMockTask("faa", 0, empty_args);
 
   std::vector<HistoryEvent> history{};
   history.emplace_back(Invoke(first_task, 0));
@@ -89,11 +89,11 @@ TEST(LinearizabilityCheckerCounterTest, SmallUnlinearizableHistory) {
   auto empty_args_unique = std::make_unique<std::tuple<>>(std::tuple<>{});
   void* empty_args = reinterpret_cast<void*>(empty_args_unique.get());
 
-  auto first_task = CreateMockTask("faa", 2, empty_args);
-  auto second_task = CreateMockTask("get", 3, empty_args);
-  auto third_task = CreateMockTask("faa", 100, empty_args);
-  auto fourth_task = CreateMockTask("faa", 1, empty_args);
-  auto fifth_task = CreateMockTask("faa", 0, empty_args);
+  Task first_task = CreateMockTask("faa", 2, empty_args);
+  Task second_task = CreateMockTask("get", 3, empty_args);
+  Task third_task = CreateMockTask("faa", 100, empty_args);
+  Task fourth_task = CreateMockTask("faa", 1, empty_args);
+  Task fifth_task = CreateMockTask("faa", 0, empty_args);
 
   std::vector<HistoryEvent> history{};
   history.emplace_back(Invoke(first_task, 0));
@@ -125,11 +125,11 @@ TEST(LinearizabilityCheckerCounterTest, ExtendedLinearizableHistory) {
   auto empty_args_unique = std::make_unique<std::tuple<>>(std::tuple<>{});
   void* empty_args = reinterpret_cast<void*>(empty_args_unique.get());
 
-  auto first_task = CreateMockTask("faa", 2, empty_args);
-  auto second_task = CreateMockTask("get", 3, empty_args);
-  auto third_task = CreateMockTask("faa", 100, empty_args);
-  auto fourth_task = CreateMockTask("faa", 1, empty_args);
-  auto fifth_task = CreateMockTask("faa", 0, empty_args);
+  Task first_task = CreateMockTask("faa", 2, empty_args);
+  Task second_task = CreateMockTask("get", 3, empty_args);
+  Task third_task = CreateMockTask("faa", 100, empty_args);
+  Task fourth_task = CreateMockTask("faa", 1, empty_args);
+  Task fifth_task = CreateMockTask("faa", 0, empty_args);
 
   std::vector<HistoryEvent> history{};
   history.emplace_back(Invoke(first_task, 0));
@@ -141,9 +141,9 @@ TEST(LinearizabilityCheckerCounterTest, ExtendedLinearizableHistory) {
   EXPECT_EQ(checker.Check(history), true);
 }
 
-std::vector<std::shared_ptr<MockTask>> create_mocks(
+std::vector<Task> create_mocks(
     const std::vector<bool>& b_history) {
-  std::vector<std::shared_ptr<MockTask>> mocks;
+  std::vector<Task> mocks;
   mocks.reserve(b_history.size());
   size_t adds = 0;
   // TODO: lifetime of the arguments is less than lifetime of the mocks, but the
@@ -164,7 +164,7 @@ std::vector<std::shared_ptr<MockTask>> create_mocks(
 }
 
 std::vector<HistoryEvent> create_history(
-    const std::vector<std::shared_ptr<MockTask>>& mocks) {
+    const std::vector<Task>& mocks) {
   std::vector<HistoryEvent> history;
   history.reserve(2 * mocks.size());
 

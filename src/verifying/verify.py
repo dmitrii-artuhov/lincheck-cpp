@@ -27,7 +27,7 @@ clang = "clang++"
 opt = "opt"
 llvm_dis = "llvm-dis"
 # build_flags = ["-O3", "-std=c++2a"]
-build_flags1 = ["-g", "-std=c++20", "-O0", "-fno-omit-frame-pointer", "-DADDRESS_SANITIZER", "-fsanitize=undefined"]
+build_flags1 = ["-g", "-std=c++20", "-O0", "-fno-omit-frame-pointer", "-DADDRESS_SANITIZER", "-fsanitize=address"]
 build_flags2 = ["-g", "-std=c++20", "-O0", "-ggdb3"]
 # build_flags = ["-g", "-std=c++2a", "-fsanitize=address", "-DADDRESS_SANITIZER -fsanitize-address-use-after-return=always"]
 

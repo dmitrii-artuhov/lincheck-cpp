@@ -116,7 +116,7 @@ struct PrettyPrinter {
         fp.Out("<-- " + to_string(resp.GetTask()->GetRetVal()));
       } else if (std::holds_alternative<RequestInvoke>(i)) {
         auto inv = std::get<RequestInvoke>(i);
-        auto& task = inv.GetTask();
+        const DualTask & task = inv.GetTask();
         fp.Out(std::string{task->GetName()});
         fp.Out("Dual (");
         const auto& args = task->GetStrArgs();
@@ -128,7 +128,7 @@ struct PrettyPrinter {
         }
         fp.Out(")");
       } else if (std::holds_alternative<RequestResponse>(i)) {
-        auto resp = std::get<RequestResponse>(i);
+//        auto resp = std::get<RequestResponse>(i);
         fp.Out("<-- Request ended");
       } else if (std::holds_alternative<FollowUpInvoke>(i)) {
         fp.Out("FollowUpInvoke");

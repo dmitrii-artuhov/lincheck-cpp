@@ -37,7 +37,7 @@ Scheduler::Result StrategyScheduler::runRound() {
         sequential_history.emplace_back(Response(task, result, thread_id));
       }
     } else {
-      DualTask task = std::get<DualTask>(next_task);
+      DualTask &task = std::get<DualTask>(next_task);
       if (is_new) {
         sequential_history.emplace_back(RequestInvoke(task, thread_id));
         task->SetFollowUpTerminateCallback([&sequential_history, &finished_tasks, task,
@@ -71,7 +71,7 @@ Scheduler::Result StrategyScheduler::runRound() {
     }
   }
 
-  pretty_printer.PrettyPrint(sequential_history, log());
+//  pretty_printer.PrettyPrint(sequential_history, log());
 
   if (!checker.Check(sequential_history)) {
     return std::make_pair(full_history, sequential_history);

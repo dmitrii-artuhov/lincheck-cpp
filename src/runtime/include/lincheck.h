@@ -34,44 +34,40 @@ struct Invoke {
 };
 
 struct RequestInvoke {
-  RequestInvoke(DualTask task, int thread_id)
-      : thread_id(thread_id), task(std::move(task)) {}
+  RequestInvoke(const DualTask& task, int thread_id);
 
   [[nodiscard]] const DualTask& GetTask() const;
 
   int thread_id;
 
  private:
-  DualTask task;
+  std::reference_wrapper<const DualTask> task;
 };
 
 struct RequestResponse {
-  RequestResponse(DualTask task, int thread_id)
-      : thread_id(thread_id), task(std::move(task)) {}
+  RequestResponse(const DualTask &task, int thread_id);
 
   [[nodiscard]] const DualTask& GetTask() const;
 
   int thread_id;
 
  private:
-  DualTask task;
+   std::reference_wrapper<const DualTask> task;
 };
 
 struct FollowUpInvoke {
-  FollowUpInvoke(DualTask task, int thread_id)
-      : thread_id(thread_id), task(task) {}
+  FollowUpInvoke(const DualTask& task, int thread_id);
 
   [[nodiscard]] const DualTask& GetTask() const;
 
   int thread_id;
 
  private:
-   DualTask task;
+   std::reference_wrapper<const DualTask> task;
 };
 
 struct FollowUpResponse {
-  FollowUpResponse(DualTask task, int thread_id)
-      : thread_id(thread_id), task(task) {}
+  FollowUpResponse(const DualTask& task, int thread_id);
 
   [[nodiscard]] const DualTask& GetTask() const;
 
@@ -79,7 +75,7 @@ struct FollowUpResponse {
   int thread_id;
 
  private:
-  DualTask task;
+   std::reference_wrapper<const DualTask> task;
 };
 
 using HistoryEvent =

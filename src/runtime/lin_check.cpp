@@ -108,19 +108,33 @@ std::map<size_t, size_t> get_followup_res_request_inv_mapping(
 }
 
 Invoke::Invoke(const Task& task, int thread_id)
-    : task(task), thread_id(thread_id) {}
+    : task(std::cref(task)), thread_id(thread_id) {}
 
 Response::Response(const Task& task, int result, int thread_id)
-    : task(task), result(result), thread_id(thread_id) {}
+    : task(std::cref(task)), result(result), thread_id(thread_id) {}
 
-const Task& Invoke::GetTask() const { return this->task; }
+RequestInvoke::RequestInvoke(const DualTask& task, int thread_id)
+    : thread_id(thread_id), task(std::cref(task)) {}
 
-const Task& Response::GetTask() const { return this->task; }
+RequestResponse::RequestResponse(const DualTask &task, int thread_id)
+    : thread_id(thread_id), task(std::cref(task)) {}
 
-const DualTask& RequestInvoke::GetTask() const { return this->task; }
+FollowUpInvoke::FollowUpInvoke(const DualTask& task, int thread_id)
+    : thread_id(thread_id), task(std::cref(task)) {}
 
-const DualTask& RequestResponse::GetTask() const { return this->task; }
+FollowUpResponse::FollowUpResponse(const DualTask& task, int thread_id)
+    : thread_id(thread_id), task(std::cref(task)) {}
 
-const DualTask& FollowUpInvoke::GetTask() const { return this->task; }
+const Task& Invoke::GetTask() const { return this->task.get(); }
 
-const DualTask& FollowUpResponse::GetTask() const { return this->task; }
+const Task& Response::GetTask() const { return this->task.get(); }
+
+const DualTask& RequestInvoke::GetTask() const { return this->task.get(); }
+
+const DualTask& RequestResponse::GetTask() const { return this->task.get(); }
+
+const DualTask& FollowUpInvoke::GetTask() const { return this->task.get(); }
+
+const DualTask& FollowUpResponse::GetTask() const { return this->task.get(); }
+
+

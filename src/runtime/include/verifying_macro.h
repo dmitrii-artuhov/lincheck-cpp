@@ -117,6 +117,7 @@ CoroutineResponse StartCallback(Awaitable *awaitable, std::shared_ptr<DualTaskIm
   coro->callback();
   coro->is_follow_up_finished = true;
   coro->return_value = awaitable->await_resume();
+  delete awaitable;
 }
 
 template <typename Awaitable, typename Target, typename... Args>

@@ -27,7 +27,7 @@ struct PickStrategy : Strategy {
 
   // If there aren't any non returned tasks and the amount of finished tasks
   // is equal to the max_tasks the finished task will be returned
-  std::tuple<std::variant<Task, DualTask>, bool, int> Next() override {
+  std::tuple<std::variant<Task, DualTask>&, bool, int> Next() override {
     auto current_task = Pick();
 
     // it's the first task if the queue is empty

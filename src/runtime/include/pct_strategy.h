@@ -52,7 +52,7 @@ struct PctStrategy : Strategy {
 
   // If there aren't any non returned tasks and the amount of finished tasks
   // is equal to the max_tasks the finished task will be returned
-  std::tuple<std::variant<Task, DualTask>, bool, int> Next() override {
+  std::tuple<std::variant<Task, DualTask>&, bool, int> Next() override {
     size_t max = std::numeric_limits<size_t>::min();
     size_t index_of_max = 0;
     // Have to ignore waiting threads, so can't do it faster than O(n)
@@ -138,6 +138,9 @@ struct PctStrategy : Strategy {
     state.Reset();
     // Update statistics
     current_depth++;
+    if (current_depth >= 10) {
+      current_depth = 10;
+    }
     k_statistics.push_back(current_schedule_length);
     current_schedule_length = 0;
 

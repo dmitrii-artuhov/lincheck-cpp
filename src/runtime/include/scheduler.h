@@ -15,7 +15,7 @@
 struct Strategy {
   // Returns the next tasks,
   // the flag which tells is the task new, and the thread number.
-  virtual std::tuple<std::variant<Task, DualTask>, bool, int> Next() = 0;
+  virtual std::tuple<std::variant<Task, DualTask>&, bool, int> Next() = 0;
 
   // Strategy should stop all tasks that already have been started
   virtual void StartNextRound() = 0;
