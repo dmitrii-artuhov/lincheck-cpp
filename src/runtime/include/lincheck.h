@@ -45,14 +45,14 @@ struct RequestInvoke {
 };
 
 struct RequestResponse {
-  RequestResponse(const DualTask &task, int thread_id);
+  RequestResponse(const DualTask& task, int thread_id);
 
   [[nodiscard]] const DualTask& GetTask() const;
 
   int thread_id;
 
  private:
-   std::reference_wrapper<const DualTask> task;
+  std::reference_wrapper<const DualTask> task;
 };
 
 struct FollowUpInvoke {
@@ -63,7 +63,7 @@ struct FollowUpInvoke {
   int thread_id;
 
  private:
-   std::reference_wrapper<const DualTask> task;
+  std::reference_wrapper<const DualTask> task;
 };
 
 struct FollowUpResponse {
@@ -75,7 +75,7 @@ struct FollowUpResponse {
   int thread_id;
 
  private:
-   std::reference_wrapper<const DualTask> task;
+  std::reference_wrapper<const DualTask> task;
 };
 
 using HistoryEvent =

@@ -15,8 +15,8 @@ struct CoroutineQueue {
       : receivers(std::queue<ReceivePromise>()),
         senders(std::queue<SendPromise>()) {}
 
-  SendPromise Send(int elem) { return SendPromise(elem, *this); }
-  ReceivePromise Receive() { return ReceivePromise(*this); }
+  SendPromise send(int elem) { return SendPromise(elem, *this); }
+  ReceivePromise receive() { return ReceivePromise(*this); }
 
   //  ReceivePromise Receive() { return ReceivePromise(*this); }
 
@@ -33,8 +33,9 @@ struct CoroutineQueue {
       std::cout << "size: " << queue.senders.size() << std::endl;
       if (!queue.senders.empty()) {
         std::cout << "size: " << queue.senders.size() << std::endl;
-//        std::cout << "magic happened" << std::endl;
+        //        std::cout << "magic happened" << std::endl;
         SendPromise send_req = queue.senders.back();
+        CoroYield();
         queue.senders.pop();
         *elem = send_req.elem;
         assert(!send_req.sender.done());
@@ -65,6 +66,7 @@ struct CoroutineQueue {
     non_atomic bool await_suspend(std::coroutine_handle<> h) {
       if (!queue.receivers.empty()) {
         ReceivePromise receiver = queue.receivers.back();
+        CoroYield();
         queue.receivers.pop();
         *(receiver.elem) = elem;
         assert(!receiver.receiver.done());
@@ -100,10 +102,10 @@ auto generateInt(size_t unused_param) {
 }
 
 target_method_dual(ltest::generators::genEmpty, CoroutineQueue::ReceivePromise,
-                   CoroutineQueue, Receive);
+                   ReceivePromise, CoroutineQueue, receive);
 
-target_method_dual(generateInt, CoroutineQueue::SendPromise,
-                   CoroutineQueue, Send, int);
+target_method_dual(generateInt, CoroutineQueue::SendPromise, SendPromise,
+                   CoroutineQueue, send, int);
 
 // Specify target structure and it's sequential specification.
 using spec_t = ltest::SpecDual<CoroutineQueue, spec::CoroutineQueue<>>;

@@ -14,7 +14,8 @@ template <typename TargetObj>
 struct PctStrategy : Strategy {
   // TODO: doc about is_another_required
   explicit PctStrategy(size_t threads_count,
-                       const std::vector<TasksBuilder>& constructors, bool is_another_required)
+                       const std::vector<TasksBuilder>& constructors,
+                       bool is_another_required)
       : threads_count(threads_count),
         current_depth(1),
         current_schedule_length(0),
@@ -64,8 +65,7 @@ struct PctStrategy : Strategy {
           (!threads[i].empty() &&
            std::holds_alternative<DualTask>(threads[i].back())) &&
               std::get<DualTask>(threads[i].back())->IsRequestFinished() &&
-              !std::get<DualTask>(threads[i].back())->IsFollowUpFinished()
-          ) {
+              !std::get<DualTask>(threads[i].back())->IsFollowUpFinished()) {
         // dual waiting if request finished, but follow up isn't
         // skip dual tasks that already have finished the request
         // section(follow-up will be executed in another task, so we can't
@@ -79,21 +79,21 @@ struct PctStrategy : Strategy {
       }
     }
 
-//    if (max == std::numeric_limits<size_t>::min()) {
-//      for (auto& thread : threads) {
-//        if (thread.empty()) {
-//          std::cout << "empty" << std::endl;
-//        }
-//
-//        auto& task = thread.back();
-//        if (std::holds_alternative<Task>(task)) {
-//          std::cout << std::get<Task>(task)->GetName() << std::endl;
-//        } else {
-//          std::cout << std::get<DualTask>(task)->GetName() << std::endl;
-//        }
-//      }
-//      assert(false);
-//    }
+    //    if (max == std::numeric_limits<size_t>::min()) {
+    //      for (auto& thread : threads) {
+    //        if (thread.empty()) {
+    //          std::cout << "empty" << std::endl;
+    //        }
+    //
+    //        auto& task = thread.back();
+    //        if (std::holds_alternative<Task>(task)) {
+    //          std::cout << std::get<Task>(task)->GetName() << std::endl;
+    //        } else {
+    //          std::cout << std::get<DualTask>(task)->GetName() << std::endl;
+    //        }
+    //      }
+    //      assert(false);
+    //    }
 
     // Check whether the priority change is required
     current_schedule_length++;
@@ -123,7 +123,8 @@ struct PctStrategy : Strategy {
         }
       }
 
-      threads[index_of_max].emplace_back(constructor.Build(&state, index_of_max));
+      threads[index_of_max].emplace_back(
+          constructor.Build(&state, index_of_max));
       return {threads[index_of_max].back(), true, index_of_max};
     }
 
@@ -131,15 +132,15 @@ struct PctStrategy : Strategy {
   }
 
   void StartNextRound() override {
-    log() << "depth: " << current_depth << "\n";
+    //    log() << "depth: " << current_depth << "\n";
     // Reconstruct target as we start from the beginning.
     TerminateTasks();
 
     state.Reset();
     // Update statistics
     current_depth++;
-    if (current_depth >= 10) {
-      current_depth = 10;
+    if (current_depth >= 50) {
+      current_depth = 50;
     }
     k_statistics.push_back(current_schedule_length);
     current_schedule_length = 0;
@@ -150,7 +151,7 @@ struct PctStrategy : Strategy {
     log() << "k: " << new_k << "\n";
     PrepareForDepth(current_depth, new_k);
 
-    for (auto &thread : threads) {
+    for (auto& thread : threads) {
       thread = StableVector<std::variant<Task, DualTask>>();
     }
   }
@@ -158,25 +159,25 @@ struct PctStrategy : Strategy {
   ~PctStrategy() { TerminateTasks(); }
 
  private:
-   std::unordered_set<std::string> CountNames(size_t except_thread) {
-     std::unordered_set<std::string> names;
+  std::unordered_set<std::string> CountNames(size_t except_thread) {
+    std::unordered_set<std::string> names;
 
-     for (size_t i = 0; i < threads.size(); ++i) {
-       auto& thread = threads[i];
-       if (thread.empty() || i == except_thread) {
-         continue;
-       }
+    for (size_t i = 0; i < threads.size(); ++i) {
+      auto& thread = threads[i];
+      if (thread.empty() || i == except_thread) {
+        continue;
+      }
 
-       auto& task = thread.back();
-       if (std::holds_alternative<Task>(task)) {
-         names.insert(std::get<Task>(task)->GetName());
-       } else {
-         names.insert(std::get<DualTask>(task)->GetName());
-       }
-     }
+      auto& task = thread.back();
+      if (std::holds_alternative<Task>(task)) {
+        names.insert(std::get<Task>(task)->GetName());
+      } else {
+        names.insert(std::get<DualTask>(task)->GetName());
+      }
+    }
 
-     return names;
-   }
+    return names;
+  }
 
   void PrepareForDepth(size_t depth, size_t k) {
     // Generates priorities
@@ -196,7 +197,7 @@ struct PctStrategy : Strategy {
   }
 
   void TerminateTasks() {
-    for (auto &thread : threads) {
+    for (auto& thread : threads) {
       if (!thread.empty()) {
         Terminate(thread.back());
       }

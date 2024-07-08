@@ -116,7 +116,7 @@ struct PrettyPrinter {
         fp.Out("<-- " + to_string(resp.GetTask()->GetRetVal()));
       } else if (std::holds_alternative<RequestInvoke>(i)) {
         auto inv = std::get<RequestInvoke>(i);
-        const DualTask & task = inv.GetTask();
+        const DualTask& task = inv.GetTask();
         fp.Out(std::string{task->GetName()});
         fp.Out("Dual (");
         const auto& args = task->GetStrArgs();
@@ -128,7 +128,7 @@ struct PrettyPrinter {
         }
         fp.Out(")");
       } else if (std::holds_alternative<RequestResponse>(i)) {
-//        auto resp = std::get<RequestResponse>(i);
+        //        auto resp = std::get<RequestResponse>(i);
         fp.Out("<-- Request ended");
       } else if (std::holds_alternative<FollowUpInvoke>(i)) {
         fp.Out("FollowUpInvoke");
@@ -153,99 +153,99 @@ struct PrettyPrinter {
   }
 
   // Helps to debug full histories.
-//  template <typename Out_t>
-//  void PrettyPrint(
-//            const std::vector<std::pair<int, std::reference_wrapper<Task>>>&
-//            result,
-//      Out_t& out) {
-//    int cell_width = 20;  // Up it if necessary. Enough for now.
-//
-//    auto print_separator = [&out, this, cell_width]() {
-//      out << "*";
-//      for (int i = 0; i < threads_num; ++i) {
-//        for (int j = 0; j < cell_width; ++j) {
-//          out << "-";
-//        }
-//        out << "*";
-//      }
-//      out << "\n";
-//    };
-//    auto print_spaces = [&out](int count) {
-//      for (int i = 0; i < count; ++i) {
-//        out << " ";
-//      }
-//    };
-//
-//    int spaces = 7;
-//    print_spaces(spaces);
-//    print_separator();
-//
-//    // Header.
-//    print_spaces(spaces);
-//    out << "|";
-//    for (size_t i = 0; i < threads_num; ++i) {
-//      int rest = cell_width - 1 /*T*/ - to_string(i).size();
-//      print_spaces(rest / 2);
-//      out << "T" << i;
-//      print_spaces(rest - rest / 2);
-//      out << "|";
-//    }
-//    out << "\n";
-//
-//    print_spaces(spaces);
-//    print_separator();
-//
-//    auto print_empty_cell = [&]() {
-//      print_spaces(cell_width);
-//      out << "|";
-//    };
-//
-////     TODO: Fix
-//        std::map<Task*, int> index;
-//
-//        // Rows.
-//        for (const auto& i : result) {
-//          auto base = i.second.get().get();
-//          if (index.find(base) == index.end()) {
-//            int sz = index.size();
-//            index[base] = sz;
-//          }
-//          int length = std::to_string(index[base]).size();
-//          std::cout << index[base];
-//          assert(spaces - length >= 0);
-//          print_spaces(7 - length);
-//          int num = i.first;
-//          out << "|";
-//          for (int j = 0; j < num; ++j) {
-//            print_empty_cell();
-//          }
-//
-//          FitPrinter fp{out, cell_width};
-//          fp.Out(" ");
-//          fp.Out(std::string{i.second.get()->GetName()});
-//          fp.Out("(");
-//          const auto& args = i.second.get()->GetStrArgs();
-//          for (int i = 0; i < args.size(); ++i) {
-//            if (i > 0) {
-//              fp.Out(", ");
-//            }
-//            fp.Out(args[i]);
-//          }
-//          fp.Out(")");
-//
-//          assert(fp.rest > 0 && "increase cell_width in pretty printer");
-//          print_spaces(fp.rest);
-//          out << "|";
-//
-//          for (size_t j = 0; j < threads_num - num - 1; ++j) {
-//            print_empty_cell();
-//          }
-//          out << "\n";
-//        }
-//
-//    print_spaces(spaces);
-//    print_separator();
-//  }
+  //  template <typename Out_t>
+  //  void PrettyPrint(
+  //            const std::vector<std::pair<int, std::reference_wrapper<Task>>>&
+  //            result,
+  //      Out_t& out) {
+  //    int cell_width = 20;  // Up it if necessary. Enough for now.
+  //
+  //    auto print_separator = [&out, this, cell_width]() {
+  //      out << "*";
+  //      for (int i = 0; i < threads_num; ++i) {
+  //        for (int j = 0; j < cell_width; ++j) {
+  //          out << "-";
+  //        }
+  //        out << "*";
+  //      }
+  //      out << "\n";
+  //    };
+  //    auto print_spaces = [&out](int count) {
+  //      for (int i = 0; i < count; ++i) {
+  //        out << " ";
+  //      }
+  //    };
+  //
+  //    int spaces = 7;
+  //    print_spaces(spaces);
+  //    print_separator();
+  //
+  //    // Header.
+  //    print_spaces(spaces);
+  //    out << "|";
+  //    for (size_t i = 0; i < threads_num; ++i) {
+  //      int rest = cell_width - 1 /*T*/ - to_string(i).size();
+  //      print_spaces(rest / 2);
+  //      out << "T" << i;
+  //      print_spaces(rest - rest / 2);
+  //      out << "|";
+  //    }
+  //    out << "\n";
+  //
+  //    print_spaces(spaces);
+  //    print_separator();
+  //
+  //    auto print_empty_cell = [&]() {
+  //      print_spaces(cell_width);
+  //      out << "|";
+  //    };
+  //
+  ////     TODO: Fix
+  //        std::map<Task*, int> index;
+  //
+  //        // Rows.
+  //        for (const auto& i : result) {
+  //          auto base = i.second.get().get();
+  //          if (index.find(base) == index.end()) {
+  //            int sz = index.size();
+  //            index[base] = sz;
+  //          }
+  //          int length = std::to_string(index[base]).size();
+  //          std::cout << index[base];
+  //          assert(spaces - length >= 0);
+  //          print_spaces(7 - length);
+  //          int num = i.first;
+  //          out << "|";
+  //          for (int j = 0; j < num; ++j) {
+  //            print_empty_cell();
+  //          }
+  //
+  //          FitPrinter fp{out, cell_width};
+  //          fp.Out(" ");
+  //          fp.Out(std::string{i.second.get()->GetName()});
+  //          fp.Out("(");
+  //          const auto& args = i.second.get()->GetStrArgs();
+  //          for (int i = 0; i < args.size(); ++i) {
+  //            if (i > 0) {
+  //              fp.Out(", ");
+  //            }
+  //            fp.Out(args[i]);
+  //          }
+  //          fp.Out(")");
+  //
+  //          assert(fp.rest > 0 && "increase cell_width in pretty printer");
+  //          print_spaces(fp.rest);
+  //          out << "|";
+  //
+  //          for (size_t j = 0; j < threads_num - num - 1; ++j) {
+  //            print_empty_cell();
+  //          }
+  //          out << "\n";
+  //        }
+  //
+  //    print_spaces(spaces);
+  //    print_separator();
+  //  }
 
  private:
   // Counts how much symbols is left after printing.

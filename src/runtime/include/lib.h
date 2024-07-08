@@ -147,22 +147,21 @@ using DualTask = std::shared_ptr<DualTaskAbstract>;
 
 // (this_ptr, thread_num) -> Task | DualTask
 struct TasksBuilder {
-  using BuilderFunc = std::function<std::variant<Task, DualTask>(void*, size_t)>;
-  TasksBuilder(std::string name, BuilderFunc func): name(name), builder_func(func) {}
+  using BuilderFunc =
+      std::function<std::variant<Task, DualTask>(void*, size_t)>;
+  TasksBuilder(std::string name, BuilderFunc func)
+      : name(name), builder_func(func) {}
 
-  const std::string& GetName() const {
-    return name;
-  }
+  const std::string& GetName() const { return name; }
 
   std::variant<Task, DualTask> Build(void* this_ptr, size_t thread_id) {
     return builder_func(this_ptr, thread_id);
   }
 
-private:
+ private:
   std::string name;
   BuilderFunc builder_func;
 };
-//using TasksBuilder = std::function<std::variant<Task, DualTask>(void*, size_t)>;
 
 void Terminate(std::variant<Task, DualTask>);
 
@@ -252,9 +251,10 @@ struct Coro final : public CoroBase {
      * to decide, in which order the tasks should be terminated.
      *
      */
-     // TODO: how to restart callback here?
+    // TODO: how to restart callback here?
     assert(IsReturned());
-    auto coro = New(func, this_ptr, args, args_for_return, args_to_strings, name);
+    auto coro =
+        New(func, this_ptr, args, args_for_return, args_to_strings, name);
     if (token != nullptr) {
       coro->token = std::move(token);
     }
@@ -371,17 +371,25 @@ struct Coro final : public CoroBase {
   void* this_ptr;
 };
 
+// Awaitable is a type of an awaitable object whose await_suspende method
+// is presented in this DualTaskImplFromCoro
+// DualTaskImplFromCoro owns the awaitable object, so the type is required
+// for safe delete
+template<class Awaitable>
 struct DualTaskImplFromCoro : DualTaskAbstract {
-  DualTaskImplFromCoro(std::shared_ptr<CoroBase> method)
+  DualTaskImplFromCoro(const DualTaskImplFromCoro& other) = default;
+
+  DualTaskImplFromCoro(std::shared_ptr<CoroBase> method, std::shared_ptr<Awaitable> awaitable_object)
       : method(method),
         callback([]() {}),
         is_follow_up_finished(false),
-        return_value({}) {}
+        return_value({}),
+        awaitable_object(awaitable_object) {}
 
   // Не будет работать, перезапустится только функция для промиса, но промис уже
   // сломан
   virtual std::shared_ptr<DualTaskAbstract> Restart(void* this_ptr) override {
-    return std::make_shared<DualTaskImplFromCoro>(method->Restart(this_ptr));
+    return std::make_shared<DualTaskImplFromCoro>(method->Restart(this_ptr), std::shared_ptr<Awaitable>{(Awaitable*)this_ptr});
   }
 
   virtual void ResumeRequest() override {
@@ -389,13 +397,17 @@ struct DualTaskImplFromCoro : DualTaskAbstract {
     method->Resume();
   }
 
-  virtual bool IsRequestFinished() const override { return method->IsReturned(); }
+  virtual bool IsRequestFinished() const override {
+    return method->IsReturned();
+  }
 
   virtual void SetFollowUpTerminateCallback(std::function<void()> c) override {
     callback = c;
   };
 
-  virtual bool IsFollowUpFinished() const override { return is_follow_up_finished; }
+  virtual bool IsFollowUpFinished() const override {
+    return is_follow_up_finished;
+  }
 
   virtual int GetRetVal() const override {
     assert(return_value.has_value());
@@ -412,14 +424,23 @@ struct DualTaskImplFromCoro : DualTaskAbstract {
 
   virtual void Terminate() override { method->Terminate(); }
 
-  // private:
+  void FinishTask(int result) {
+    callback();
+    is_follow_up_finished = true;
+    return_value = result;
+  }
+
+  // TODO: it's a crutch, should be private
   //  This field represents await_suspend method with yields
   std::shared_ptr<CoroBase> method;
+   private:
+
   // Callback that will be called when the follow-up section for this task
   // will be finished
   std::function<void()> callback;
   bool is_follow_up_finished;
   std::optional<int> return_value;
+  std::shared_ptr<Awaitable> awaitable_object;
 };
 
 struct TaskImplFromCoro : TaskAbstract {

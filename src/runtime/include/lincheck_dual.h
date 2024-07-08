@@ -10,6 +10,11 @@
 // unfortunately it's not obvious how to cache results of blocking calls(see
 // docs for details), so now it's a separate struct
 struct BlockingMethod {
+  BlockingMethod() = default;
+  // It's not possible to copy a coroutine state
+  BlockingMethod(const BlockingMethod& o) = delete;
+  BlockingMethod& operator=(const BlockingMethod& o) = delete;
+
   // Starts a new coroutine and the blocking method inside
   virtual void StartRequest() = 0;
   // Returns whether followup finished successfully
@@ -24,18 +29,21 @@ struct BlockingMethod {
 // of a blocking method)
 template <class PromiseType>
 struct BlockingMethodWrapper : BlockingMethod {
+  BlockingMethodWrapper(const BlockingMethodWrapper& o) = delete;
+  BlockingMethodWrapper& operator=(const BlockingMethodWrapper& o) = delete;
+
   explicit BlockingMethodWrapper(PromiseType promise)
-      : promise(promise), coroutine_state(std::nullopt) {}
+      : promise(promise), coroutine_state(std::nullopt), result(std::nullopt) {}
 
   // starts a new coroutine and save the coroutine state
   void StartRequest() override {
     coroutine_state = std::move(StartRequestCoroutine());
   }
 
-  bool IsFinished() override { return result != std::nullopt; }
+  bool IsFinished() override { return result.has_value(); }
 
   int GetResult() override {
-    assert(result != std::nullopt);
+    assert(result.has_value());
     return result.value();
   }
 
@@ -44,11 +52,8 @@ struct BlockingMethodWrapper : BlockingMethod {
   BlockingMethodWrapper(BlockingMethodWrapper& other) = delete;
 
   ~BlockingMethodWrapper() override {
-    //    std::cout << "address " << coroutine_state->h.address() << std::endl;
-    if (coroutine_state->h) {
-      // TODO: Now there is a memory leak. If I use destroy then it's a heap use
-      // after free, it's not clear why.
-      //      coroutine_state->h.destroy();
+    if (coroutine_state.has_value() && coroutine_state.value().h) {
+      coroutine_state->h.destroy();
     }
   }
 
@@ -65,7 +70,8 @@ struct BlockingMethodWrapper : BlockingMethod {
         return {.h = std::coroutine_handle<promise_type>::from_promise(*this)};
       }
       std::suspend_never initial_suspend() { return {}; }
-      std::suspend_never final_suspend() noexcept { return {}; }
+      // Without final suspend the destroy function isn't working well
+      std::suspend_always final_suspend() noexcept { return {}; }
       void unhandled_exception() {}
     };
 
@@ -94,7 +100,7 @@ struct LinearizabilityDualChecker : ModelChecker {
   LinearizabilityDualChecker(MethodMap specification_methods,
                              LinearSpecificationObject first_state);
 
-  bool Check(const std::vector<HistoryEvent>& fixed_history);
+  bool Check(const std::vector<HistoryEvent>& fixed_history) override;
 
  private:
   // ReproduceSeqHistory applies all events from the sequential history to the
@@ -115,7 +121,7 @@ LinearizabilityDualChecker<LinearSpecificationObject>::
         LinearizabilityDualChecker::MethodMap specification_methods,
         LinearSpecificationObject first_state)
     : specification_methods(specification_methods), first_state(first_state) {
-  if (!std::is_copy_assignable_v<LinearSpecificationObject>) {
+  if (!std::is_copy_constructible_v<LinearSpecificationObject>) {
     // TODO: should do it in the compile time
     throw std::invalid_argument(
         "LinearSpecificationObject type have to be is_copy_assignable_v");
@@ -125,13 +131,6 @@ LinearizabilityDualChecker<LinearSpecificationObject>::
 template <class LinearSpecificationObject>
 bool LinearizabilityDualChecker<LinearSpecificationObject>::Check(
     const std::vector<HistoryEvent>& history) {
-  // It's a crunch, but it's required because the semantics of this
-  // implementation must be the same as the semantics of the non-recursive
-  // implementation
-  if (history.empty()) {
-    return true;
-  }
-
   // response -> invoke
   std::map<size_t, size_t> inv_res = get_inv_res_full_mapping(history);
   // follow_up_response -> request_invoke
@@ -139,34 +138,31 @@ bool LinearizabilityDualChecker<LinearSpecificationObject>::Check(
       get_followup_res_request_inv_mapping(history);
   // it can be a stack, but it's easier to use map: index -> method
   std::map<size_t, std::shared_ptr<BlockingMethod>> dual_requests;
+  LinearSpecificationObject data_structure_state = first_state;
   // current history
   std::vector<std::pair<HistoryEvent, size_t>> seq_history;
 
-  std::function<bool(const std::vector<HistoryEvent>&, std::vector<bool>&,
-                     LinearSpecificationObject)>
+  std::function<bool(const std::vector<HistoryEvent>&, std::vector<bool>&)>
       recursive_step;
 
-  std::function<LinearSpecificationObject(std::vector<size_t>&&,
-                                          std::vector<bool>&)>
+  std::function<void(std::vector<size_t>&&, std::vector<bool>&)>
       fix_history_update_duals =
           [&](std::vector<size_t>&& indexes, std::vector<bool>& linearized) {
             for (auto index : indexes) {
               seq_history.pop_back();
               linearized[index] = false;
             }
+
             // have to reproduce the state from the start, because it's
             // impossible to copy a blocking method, so dual_requests might be
             // corrupted by the recursive_step call
-            auto [state, duals] = ReproduceSeqHistory(seq_history);
-            dual_requests = duals;
-
-            return state;
+            std::tie(data_structure_state, dual_requests) =
+                ReproduceSeqHistory(seq_history);
           };
 
   recursive_step = [&](const std::vector<HistoryEvent>& history,
-                       std::vector<bool>& linearized,
-                       LinearSpecificationObject data_structure_state) -> bool {
-    // the fixed_history is empty
+                       std::vector<bool>& linearized) -> bool {
+    // Checks if the whole history is linearized
     if (std::reduce(linearized.begin(), linearized.end(), true,
                     std::bit_and<>())) {
       return true;
@@ -195,21 +191,23 @@ bool LinearizabilityDualChecker<LinearSpecificationObject>::Check(
             specification_methods.find(minimal_op.GetTask()->GetName())
                 ->second);
 
-        LinearSpecificationObject data_structure_state_copy =
-            data_structure_state;
-        // state is already have been copied, because it's the argument of the
-        // lambda
+        // Don't have to copy state here, because will have to reproduce it
+        // anyway
         int res =
-            method(&data_structure_state_copy, minimal_op.GetTask()->GetArgs());
+            method(&data_structure_state, minimal_op.GetTask()->GetArgs());
+
+        linearized[i] = true;
+        seq_history.emplace_back(history[i], i);
+        std::vector<size_t> indexes_to_clear{i};
 
         // If invoke doesn't have a response we can't check the response
         if (inv_res.find(i) == inv_res.end()) {
           linearized[i] = true;
           seq_history.emplace_back(history[i], i);
-          if (recursive_step(history, linearized, data_structure_state_copy)) {
+          if (recursive_step(history, linearized)) {
             return true;
           }
-          data_structure_state = fix_history_update_duals({i}, linearized);
+          fix_history_update_duals({i}, linearized);
           continue;
         }
 
@@ -221,34 +219,33 @@ bool LinearizabilityDualChecker<LinearSpecificationObject>::Check(
           linearized[inv_res[i]] = true;
           seq_history.emplace_back(history[inv_res[i]], inv_res[i]);
 
-          if (recursive_step(history, linearized, data_structure_state_copy)) {
+          if (recursive_step(history, linearized)) {
             return true;
           }
+
           // go back and reproduce state and duals
-          data_structure_state =
-              fix_history_update_duals({i, inv_res[i]}, linearized);
+          fix_history_update_duals({i, inv_res[i]}, linearized);
+        } else {
+          // Anyway have applied method to the struct
+          fix_history_update_duals(std::move(indexes_to_clear), linearized);
         }
       } else if (std::holds_alternative<RequestInvoke>(history[i])) {
         // Blocking method, try to linearize it, because we don't need to check
         // an answer in the request part answer have to be ready only when we
-        // will be considering the corresponding follow up part
+        // will be considering the corresponding follow-up part
         RequestInvoke minimal_op = std::get<RequestInvoke>(history[i]);
-        assert(specification_methods.find(minimal_op.GetTask()->GetName()) != specification_methods.end());
+        assert(specification_methods.find(minimal_op.GetTask()->GetName()) !=
+               specification_methods.end());
         BlockingMethodFactory mf = std::get<BlockingMethodFactory>(
             specification_methods.find(minimal_op.GetTask()->GetName())
                 ->second);
 
-        LinearSpecificationObject data_structure_state_copy =
-            data_structure_state;
-
         // Get out blocking method and save it to the map(stack)
         std::shared_ptr<BlockingMethod> method =
-            mf(&data_structure_state_copy, minimal_op.GetTask()->GetArgs());
+            mf(&data_structure_state, minimal_op.GetTask()->GetArgs());
         method->StartRequest();
         dual_requests[i] = method;
 
-        // TODO: better to write an if with res found/not found, because it's
-        // easier to read
         linearized[i] = true;
         seq_history.emplace_back(history[i], i);
         if (inv_res.find(i) != inv_res.end()) {
@@ -256,7 +253,7 @@ bool LinearizabilityDualChecker<LinearSpecificationObject>::Check(
           seq_history.emplace_back(history[inv_res[i]], inv_res[i]);
         }
 
-        if (recursive_step(history, linearized, data_structure_state_copy)) {
+        if (recursive_step(history, linearized)) {
           return true;
         }
 
@@ -265,19 +262,18 @@ bool LinearizabilityDualChecker<LinearSpecificationObject>::Check(
         if (inv_res.find(i) != inv_res.end()) {
           indexes_to_clear.push_back(inv_res[i]);
         }
-        data_structure_state =
-            fix_history_update_duals(std::move(indexes_to_clear), linearized);
+
+        fix_history_update_duals(std::move(indexes_to_clear), linearized);
       } else if (std::holds_alternative<FollowUpInvoke>(history[i])) {
-        // unfinished history
+        // unfinished history, don't have to check the result
         if (inv_res.find(i) == inv_res.end()) {
           linearized[i] = true;
           seq_history.emplace_back(history[i], i);
-          if (recursive_step(history, linearized, data_structure_state)) {
+          if (recursive_step(history, linearized)) {
             return true;
           }
 
-          data_structure_state =
-              fix_history_update_duals({i}, linearized);
+          fix_history_update_duals({i}, linearized);
           continue;
         }
 
@@ -293,17 +289,15 @@ bool LinearizabilityDualChecker<LinearSpecificationObject>::Check(
         if (method->IsFinished() &&
             method->GetResult() == minimal_op.GetTask()->GetRetVal()) {
           linearized[i] = true;
-          // TODO: might not have an answer, should be able to check unfinished
-          // histories
           seq_history.emplace_back(history[i], i);
           linearized[inv_res[i]] = true;
           seq_history.emplace_back(history[inv_res[i]], inv_res[i]);
 
-          if (recursive_step(history, linearized, data_structure_state)) {
+          if (recursive_step(history, linearized)) {
             return true;
           }
-          data_structure_state =
-              fix_history_update_duals({i, inv_res[i]}, linearized);
+
+          fix_history_update_duals({i, inv_res[i]}, linearized);
         }
       }
     }
@@ -312,7 +306,7 @@ bool LinearizabilityDualChecker<LinearSpecificationObject>::Check(
   };
 
   std::vector<bool> linearized(history.size(), false);
-  return recursive_step(history, linearized, first_state);
+  return recursive_step(history, linearized);
 }
 
 template <class LinearSpecificationObject>
@@ -327,7 +321,8 @@ LinearizabilityDualChecker<LinearSpecificationObject>::ReproduceSeqHistory(
     if (std::holds_alternative<Invoke>(event_pair.first)) {
       Invoke op = std::get<Invoke>(event_pair.first);
 
-      assert(specification_methods.find(op.GetTask()->GetName()) != specification_methods.end());
+      assert(specification_methods.find(op.GetTask()->GetName()) !=
+             specification_methods.end());
       NonBlockingMethod method = std::get<NonBlockingMethod>(
           specification_methods.find(op.GetTask()->GetName())->second);
 

@@ -8,8 +8,7 @@
 
 class MockTask : public TaskAbstract {
  public:
-  MOCK_METHOD(std::shared_ptr<TaskAbstract>, Restart, (void*),
-              (override));
+  MOCK_METHOD(std::shared_ptr<TaskAbstract>, Restart, (void*), (override));
   MOCK_METHOD(void, Resume, (), (override));
   MOCK_METHOD(bool, IsReturned, (), (const, override));
   MOCK_METHOD(int, GetRetVal, (), (const, override));
@@ -22,12 +21,12 @@ class MockTask : public TaskAbstract {
 };
 
 class MockDualTask : public DualTaskAbstract {
-public:
-  MOCK_METHOD(std::shared_ptr<DualTaskAbstract>, Restart, (void*),
-              (override));
+ public:
+  MOCK_METHOD(std::shared_ptr<DualTaskAbstract>, Restart, (void*), (override));
   MOCK_METHOD(void, ResumeRequest, (), (override));
   MOCK_METHOD(bool, IsRequestFinished, (), (const, override));
-  MOCK_METHOD(void, SetFollowUpTerminateCallback, (std::function<void()>), (override));
+  MOCK_METHOD(void, SetFollowUpTerminateCallback, (std::function<void()>),
+              (override));
   MOCK_METHOD(bool, IsFollowUpFinished, (), (const, override));
   MOCK_METHOD(int, GetRetVal, (), (const, override));
   MOCK_METHOD(std::string, GetName, (), (const, override));
@@ -53,7 +52,7 @@ std::shared_ptr<MockTask> CreateMockTask(std::string name, int ret_val,
 }
 
 std::shared_ptr<MockDualTask> CreateMockDualTask(std::string name, int ret_val,
-                                         void* args) {
+                                                 void* args) {
   std::shared_ptr<MockDualTask> mock = std::make_shared<MockDualTask>();
   EXPECT_CALL(*mock, GetRetVal())
       .Times(testing::AnyNumber())

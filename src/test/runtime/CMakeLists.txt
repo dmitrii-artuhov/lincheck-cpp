@@ -35,6 +35,8 @@ target_link_libraries(
 
 target_compile_options(lin_check_dual_test PRIVATE -g -Wall -Wextra -Werror -pedantic-errors)
 
+target_include_directories(lin_check_dual_test PRIVATE ../../verifying/specs)
+
 target_link_libraries(
         lin_check_dual_test
         PRIVATE

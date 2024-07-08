@@ -6,108 +6,42 @@
 #include "include/lincheck_dual.h"
 #include "include/scheduler.h"
 #include "stackfulltask_mock.h"
+#include "coroutine_queue.h"
 
-template <class T>
-struct CoroutineQueue {
-  struct SendPromise;
-  struct ReceivePromise;
-
-  CoroutineQueue()
-      : receivers(std::queue<ReceivePromise>()),
-        senders(std::queue<SendPromise>()) {}
-
-  SendPromise Send(T elem) { return SendPromise(elem, *this); }
-
-  ReceivePromise Receive() { return ReceivePromise(*this); }
-
-  size_t ReceiversCount() { return receivers.size(); }
-
-  struct ReceivePromise {
-    explicit ReceivePromise(CoroutineQueue<T>& queue) : queue(queue) {
-      elem = std::make_shared<std::optional<T>>(std::optional<T>(std::nullopt));
-    }
-    bool await_ready() { return false; }
-
-    void await_suspend(std::coroutine_handle<> h) {
-      if (!queue.senders.empty()) {
-        SendPromise send_req = queue.senders.front();
-        queue.senders.pop();
-        *elem = send_req.elem;
-        send_req.sender();
-        h();
-      } else {
-        receiver = h;
-        queue.receivers.push(*this);
-      }
-    }
-
-    std::optional<T> await_resume() { return *elem; }
-
-    std::coroutine_handle<> receiver;
-    std::shared_ptr<std::optional<T>> elem;
-    CoroutineQueue& queue;
-  };
-
-  struct SendPromise {
-    SendPromise(T elem, CoroutineQueue<T>& queue) : elem(elem), queue(queue) {}
-
-    bool await_ready() { return false; }
-
-    void await_suspend(std::coroutine_handle<> h) {
-      if (!queue.receivers.empty()) {
-        ReceivePromise receiver = queue.receivers.front();
-        queue.receivers.pop();
-        *(receiver.elem) = elem;
-        receiver.receiver();
-        h();
-      } else {
-        sender = h;
-        queue.senders.push(*this);
-      }
-    }
-
-    int await_resume() { return 0; }
-
-    std::coroutine_handle<> sender;
-    T elem;
-    CoroutineQueue& queue;
-  };
-
- private:
-  std::queue<ReceivePromise> receivers;
-  std::queue<SendPromise> senders;
-};
+using CoroutineQueue = spec::CoroutineQueue<>;
 
 namespace LinearizabilityDualCheckerTest {
 using ::testing::AnyNumber;
 using ::testing::Return;
 
-std::function<std::shared_ptr<BlockingMethod>(CoroutineQueue<int>*, void* args)>
-    send = [](CoroutineQueue<int>* c,
+std::function<std::shared_ptr<BlockingMethod>(CoroutineQueue*, void* args)>
+    send = [](CoroutineQueue* c,
               [[maybe_unused]] void* args) -> std::shared_ptr<BlockingMethod> {
+  // TODO: check type
   auto real_args = reinterpret_cast<std::tuple<int>*>(args);
   return std::shared_ptr<BlockingMethod>(
-      new BlockingMethodWrapper<CoroutineQueue<int>::SendPromise>(
+      new BlockingMethodWrapper<CoroutineQueue::SendPromise>(
           c->Send(std::get<0>(*real_args))));
 };
-std::function<std::shared_ptr<BlockingMethod>(CoroutineQueue<int>*, void* args)>
+std::function<std::shared_ptr<BlockingMethod>(CoroutineQueue*, void* args)>
     receive =
-        [](CoroutineQueue<int>* c,
+        [](CoroutineQueue* c,
            [[maybe_unused]] void* args) -> std::shared_ptr<BlockingMethod> {
   return std::shared_ptr<BlockingMethod>(
-      new BlockingMethodWrapper<CoroutineQueue<int>::ReceivePromise>(
+      new BlockingMethodWrapper<CoroutineQueue::ReceivePromise>(
           c->Receive()));
 };
 
-std::function<int(CoroutineQueue<int>*, void* args)> size =
-    [](CoroutineQueue<int>* c, [[maybe_unused]] void* args) -> int {
+std::function<int(CoroutineQueue*, void* args)> size =
+    [](CoroutineQueue* c, [[maybe_unused]] void* args) -> int {
   return c->ReceiversCount();
 };
 
 TEST(LinearizabilityDualCheckerQueueTest, SmallLinearizableHistory) {
-  CoroutineQueue<int> q;
-  LinearizabilityDualChecker<CoroutineQueue<int>> checker(
-      LinearizabilityDualChecker<CoroutineQueue<int>>::MethodMap{
+  CoroutineQueue q{};
+
+  LinearizabilityDualChecker<CoroutineQueue> checker(
+      LinearizabilityDualChecker<CoroutineQueue>::MethodMap{
           {"send", send},
           {"receive", receive},
       },
@@ -135,9 +69,9 @@ TEST(LinearizabilityDualCheckerQueueTest, SmallLinearizableHistory) {
 }
 
 TEST(LinearizabilityDualCheckerQueueTest, SmallUnlinearizableHistory) {
-  CoroutineQueue<int> q;
-  LinearizabilityDualChecker<CoroutineQueue<int>> checker(
-      LinearizabilityDualChecker<CoroutineQueue<int>>::MethodMap{
+  CoroutineQueue q;
+  LinearizabilityDualChecker<CoroutineQueue> checker(
+      LinearizabilityDualChecker<CoroutineQueue>::MethodMap{
           {"send", send},
           {"receive", receive},
       },
@@ -165,9 +99,9 @@ TEST(LinearizabilityDualCheckerQueueTest, SmallUnlinearizableHistory) {
 }
 
 TEST(LinearizabilityDualCheckerQueueTest, SmallUnlinearizableHistoryBadSend) {
-  CoroutineQueue<int> q;
-  LinearizabilityDualChecker<CoroutineQueue<int>> checker(
-      LinearizabilityDualChecker<CoroutineQueue<int>>::MethodMap{
+  CoroutineQueue q;
+  LinearizabilityDualChecker<CoroutineQueue> checker(
+      LinearizabilityDualChecker<CoroutineQueue>::MethodMap{
           {"send", send},
           {"receive", receive},
       },
@@ -204,9 +138,9 @@ TEST(LinearizabilityDualCheckerQueueTest, SmallUnlinearizableHistoryBadSend) {
 
 TEST(LinearizabilityDualCheckerQueueTest,
      SmallLinearizableHistoryWithNonBlocking) {
-  CoroutineQueue<int> q;
-  LinearizabilityDualChecker<CoroutineQueue<int>> checker(
-      LinearizabilityDualChecker<CoroutineQueue<int>>::MethodMap{
+  CoroutineQueue q;
+  LinearizabilityDualChecker<CoroutineQueue> checker(
+      LinearizabilityDualChecker<CoroutineQueue>::MethodMap{
           {"send", send}, {"receive", receive}, {"size", size}},
       q);
 
@@ -219,8 +153,8 @@ TEST(LinearizabilityDualCheckerQueueTest,
       "send", 0, reinterpret_cast<void*>(second_task_args.get()));
 
   auto third_task_args = std::make_unique<std::tuple<>>(std::tuple<>{});
-  Task third_task = CreateMockTask(
-      "size", 1, reinterpret_cast<void*>(third_task_args.get()));
+  Task third_task =
+      CreateMockTask("size", 1, reinterpret_cast<void*>(third_task_args.get()));
 
   std::vector<HistoryEvent> history{};
   history.emplace_back(Invoke(third_task, 4));
@@ -238,19 +172,21 @@ TEST(LinearizabilityDualCheckerQueueTest,
   EXPECT_EQ(checker.Check(history), true);
 }
 
-TEST(LinearizabilityDualCheckerQueueTest,
-     NonLinearizableHistoryWithBlocking) {
-  CoroutineQueue<int> q;
-  LinearizabilityDualChecker<CoroutineQueue<int>> checker(
-      LinearizabilityDualChecker<CoroutineQueue<int>>::MethodMap{
-          {"send", send}, {"receive", receive}},
+TEST(LinearizabilityDualCheckerQueueTest, NonLinearizableHistoryWithBlocking) {
+  CoroutineQueue q;
+  LinearizabilityDualChecker<CoroutineQueue> checker(
+      LinearizabilityDualChecker<CoroutineQueue>::MethodMap{
+          {"send", send},
+          {"receive", receive},
+      },
       q);
 
   auto first_receive_args = std::make_unique<std::tuple<>>(std::tuple<>{});
   DualTask first_receive = CreateMockDualTask(
       "receive", 778, reinterpret_cast<void*>(first_receive_args.get()));
 
-  auto first_send_args = std::make_unique<std::tuple<int>>(std::tuple<int>{778});
+  auto first_send_args =
+      std::make_unique<std::tuple<int>>(std::tuple<int>{778});
   DualTask first_send = CreateMockDualTask(
       "send", 0, reinterpret_cast<void*>(first_send_args.get()));
 
@@ -259,27 +195,29 @@ TEST(LinearizabilityDualCheckerQueueTest,
       "receive", 0, reinterpret_cast<void*>(second_receive_args.get()));
 
   std::vector<HistoryEvent> history{};
-  history.emplace_back(RequestInvoke(first_receive, 1)); // 0
-  history.emplace_back(RequestResponse(first_receive, 1)); // 1
-  history.emplace_back(FollowUpInvoke(first_receive, 1)); // 2
-  history.emplace_back(RequestInvoke(first_send, 0)); // 3
-  history.emplace_back(FollowUpResponse(first_receive, 1)); // 4
-  history.emplace_back(RequestInvoke(second_receive, 1)); // 5
-  history.emplace_back(RequestResponse(second_receive, 1)); // 6
-  history.emplace_back(FollowUpInvoke(second_receive, 1)); // 7
-  history.emplace_back(RequestResponse(first_send, 0)); // 8
-  history.emplace_back(FollowUpInvoke(first_send, 1)); // 9
-  history.emplace_back(FollowUpResponse(first_send, 0)); // 10
+  history.emplace_back(RequestInvoke(first_receive, 1));     // 0
+  history.emplace_back(RequestResponse(first_receive, 1));   // 1
+  history.emplace_back(FollowUpInvoke(first_receive, 1));    // 2
+  history.emplace_back(RequestInvoke(first_send, 0));        // 3
+  history.emplace_back(FollowUpResponse(first_receive, 1));  // 4
+  history.emplace_back(RequestInvoke(second_receive, 1));    // 5
+  history.emplace_back(RequestResponse(second_receive, 1));  // 6
+  history.emplace_back(FollowUpInvoke(second_receive, 1));   // 7
+  history.emplace_back(RequestResponse(first_send, 0));      // 8
+  history.emplace_back(FollowUpInvoke(first_send, 1));       // 9
+  history.emplace_back(FollowUpResponse(first_send, 0));     // 10
 
   EXPECT_EQ(checker.Check(history), true);
 }
 
 TEST(LinearizabilityDualCheckerQueueTest,
      NonLinearizableHistoryWithWrongReturnsOrder) {
-  CoroutineQueue<int> q;
-  LinearizabilityDualChecker<CoroutineQueue<int>> checker(
-      LinearizabilityDualChecker<CoroutineQueue<int>>::MethodMap{
-          {"send", send}, {"receive", receive}},
+  CoroutineQueue q;
+  LinearizabilityDualChecker<CoroutineQueue> checker(
+      LinearizabilityDualChecker<CoroutineQueue>::MethodMap{
+          {"send", send},
+          {"receive", receive},
+      },
       q);
 
   // receive 2 from the channel
@@ -300,7 +238,7 @@ TEST(LinearizabilityDualCheckerQueueTest,
   // send 2 into the channel
   auto second_send_args = std::make_unique<std::tuple<int>>(std::tuple<int>{2});
   DualTask second_send = CreateMockDualTask(
-      "send", 0, reinterpret_cast<void*>(second_receive_args.get()));
+      "send", 0, reinterpret_cast<void*>(second_send_args.get()));
 
   std::vector<HistoryEvent> history{};
   history.emplace_back(RequestInvoke(first_receive, 1));
@@ -328,6 +266,177 @@ TEST(LinearizabilityDualCheckerQueueTest,
   history.emplace_back(FollowUpResponse(second_receive, 1));
 
   EXPECT_EQ(checker.Check(history), false);
+}
+
+TEST(LinearizabilityDualCheckerQueueTest, SmallLinearizableHistoryWithoutEnd) {
+  CoroutineQueue q;
+  LinearizabilityDualChecker<CoroutineQueue> checker(
+      LinearizabilityDualChecker<CoroutineQueue>::MethodMap{
+          {"send", send},
+          {"receive", receive},
+      },
+      q);
+
+  auto first_receive_args = std::make_unique<std::tuple<>>(std::tuple<>{});
+  DualTask first_receive = CreateMockDualTask(
+      "receive", 1, reinterpret_cast<void*>(first_receive_args.get()));
+
+  auto first_send_args = std::make_unique<std::tuple<int>>(std::tuple<int>{1});
+  DualTask first_send = CreateMockDualTask(
+      "send", 0, reinterpret_cast<void*>(first_send_args.get()));
+
+  std::vector<HistoryEvent> history{};
+
+  history.emplace_back(RequestInvoke(first_receive, 1));    // 0
+  history.emplace_back(RequestResponse(first_receive, 1));  // 1
+  history.emplace_back(FollowUpInvoke(first_receive, 1));   // 2
+
+  history.emplace_back(RequestInvoke(first_send, 0));  // 3
+
+  history.emplace_back(FollowUpResponse(first_receive, 1));  // 4
+
+  EXPECT_EQ(checker.Check(history), true);
+}
+
+TEST(LinearizabilityDualCheckerQueueTest, LinearizableHistoryWithoutEnd) {
+  CoroutineQueue q;
+  LinearizabilityDualChecker<CoroutineQueue> checker(
+      LinearizabilityDualChecker<CoroutineQueue>::MethodMap{
+          {"send", send},
+          {"receive", receive},
+      },
+      q);
+  // receive 2 from the channel
+  auto first_receive_args = std::make_unique<std::tuple<>>(std::tuple<>{});
+  DualTask first_receive = CreateMockDualTask(
+      "receive", 1, reinterpret_cast<void*>(first_receive_args.get()));
+
+  // send 1 to the channel
+  auto first_send_args = std::make_unique<std::tuple<int>>(std::tuple<int>{1});
+  DualTask first_send = CreateMockDualTask(
+      "send", 0, reinterpret_cast<void*>(first_send_args.get()));
+
+  // receive 1 from the channel
+  auto second_receive_args = std::make_unique<std::tuple<>>(std::tuple<>{});
+  DualTask second_receive = CreateMockDualTask(
+      "receive", 2, reinterpret_cast<void*>(second_receive_args.get()));
+
+  // send 2 into the channel
+  auto second_send_args = std::make_unique<std::tuple<int>>(std::tuple<int>{2});
+  DualTask second_send = CreateMockDualTask(
+      "send", 0, reinterpret_cast<void*>(second_send_args.get()));
+
+  std::vector<HistoryEvent> history{};
+  history.emplace_back(RequestInvoke(first_receive, 1));    // 0
+  history.emplace_back(RequestResponse(first_receive, 1));  // 1
+  history.emplace_back(FollowUpInvoke(first_receive, 1));   // 2
+
+  history.emplace_back(RequestInvoke(first_send, 0));  // 3
+
+  history.emplace_back(FollowUpResponse(first_receive, 1));  // 4
+  history.emplace_back(RequestInvoke(second_receive, 1));    // 5
+  history.emplace_back(RequestResponse(second_receive, 1));  // 6
+  history.emplace_back(FollowUpInvoke(second_receive, 1));   // 7
+
+  history.emplace_back(RequestResponse(first_send, 0));   // 8
+  history.emplace_back(FollowUpInvoke(first_send, 0));    // 9
+  history.emplace_back(FollowUpResponse(first_send, 0));  // 10
+  history.emplace_back(RequestInvoke(second_send, 0));    // 11
+
+  history.emplace_back(FollowUpResponse(second_receive, 1));  // 12
+
+  EXPECT_EQ(checker.Check(history), true);
+}
+
+TEST(LinearizabilityDualCheckerQueueTest, LinearizableHistoryWithoutEnd2) {
+  CoroutineQueue q;
+  LinearizabilityDualChecker<CoroutineQueue> checker(
+      LinearizabilityDualChecker<CoroutineQueue>::MethodMap{
+          {"send", send},
+          {"receive", receive},
+      },
+      q);
+
+  auto first_receive_args = std::make_unique<std::tuple<>>(std::tuple<>{});
+  DualTask first_receive = CreateMockDualTask(
+      "receive", 1, reinterpret_cast<void*>(first_receive_args.get()));
+
+  auto second_receive_args = std::make_unique<std::tuple<>>(std::tuple<>{});
+  DualTask second_receive = CreateMockDualTask(
+      "receive", 2, reinterpret_cast<void*>(second_receive_args.get()));
+
+  auto first_send_args = std::make_unique<std::tuple<int>>(std::tuple<int>{1});
+  DualTask first_send = CreateMockDualTask(
+      "send", 0, reinterpret_cast<void*>(first_send_args.get()));
+
+  auto second_send_args = std::make_unique<std::tuple<int>>(std::tuple<int>{2});
+  DualTask second_send = CreateMockDualTask(
+      "send", 0, reinterpret_cast<void*>(second_send_args.get()));
+
+  std::vector<HistoryEvent> history{};
+
+  history.emplace_back(RequestInvoke(first_receive, 0));
+  history.emplace_back(RequestResponse(first_receive, 0));
+  history.emplace_back(FollowUpInvoke(first_receive, 0));
+
+  history.emplace_back(RequestInvoke(first_send, 1));
+
+  history.emplace_back(FollowUpResponse(first_receive, 0));
+  history.emplace_back(RequestInvoke(second_receive, 0));
+  history.emplace_back(RequestResponse(second_receive, 0));
+  history.emplace_back(FollowUpInvoke(second_receive, 0));
+
+  history.emplace_back(RequestResponse(first_send, 1));
+  history.emplace_back(FollowUpInvoke(first_send, 1));
+  history.emplace_back(FollowUpResponse(first_send, 1));
+  history.emplace_back(RequestInvoke(second_send, 1));
+
+  history.emplace_back(FollowUpResponse(second_receive, 0));
+
+  EXPECT_EQ(checker.Check(history), true);
+}
+
+TEST(LinearizabilityDualCheckerQueueTest, LinearizableHistoryWithoutEnd3) {
+  CoroutineQueue q;
+  LinearizabilityDualChecker<CoroutineQueue> checker(
+      LinearizabilityDualChecker<CoroutineQueue>::MethodMap{
+          {"send", send},
+          {"receive", receive},
+      },
+      q);
+
+  auto first_receive_args = std::make_unique<std::tuple<>>(std::tuple<>{});
+  DualTask first_receive = CreateMockDualTask(
+      "receive", 1, reinterpret_cast<void*>(first_receive_args.get()));
+
+  auto first_send_args = std::make_unique<std::tuple<int>>(std::tuple<int>{1});
+  DualTask first_send = CreateMockDualTask(
+      "send", 0, reinterpret_cast<void*>(first_send_args.get()));
+
+  std::vector<HistoryEvent> history{};
+
+  history.emplace_back(RequestInvoke(first_receive, 1));
+  history.emplace_back(RequestResponse(first_receive, 1));
+  history.emplace_back(FollowUpInvoke(first_receive, 1));
+
+  history.emplace_back(RequestInvoke(first_send, 0));
+
+  history.emplace_back(FollowUpResponse(first_receive, 1));
+
+  EXPECT_EQ(checker.Check(history), true);
+}
+
+TEST(LinearizabilityDualCheckerQueueTest, EmptyHistory) {
+  CoroutineQueue q;
+  LinearizabilityDualChecker<CoroutineQueue> checker(
+      LinearizabilityDualChecker<CoroutineQueue>::MethodMap{
+          {"send", send},
+          {"receive", receive},
+      },
+      q);
+  std::vector<HistoryEvent> history{};
+
+  EXPECT_EQ(checker.Check(history), true);
 }
 
 };  // namespace LinearizabilityDualCheckerTest

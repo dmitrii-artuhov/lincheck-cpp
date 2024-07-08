@@ -141,8 +141,7 @@ TEST(LinearizabilityCheckerCounterTest, ExtendedLinearizableHistory) {
   EXPECT_EQ(checker.Check(history), true);
 }
 
-std::vector<Task> create_mocks(
-    const std::vector<bool>& b_history) {
+std::vector<Task> create_mocks(const std::vector<bool>& b_history) {
   std::vector<Task> mocks;
   mocks.reserve(b_history.size());
   size_t adds = 0;
@@ -163,8 +162,7 @@ std::vector<Task> create_mocks(
   return mocks;
 }
 
-std::vector<HistoryEvent> create_history(
-    const std::vector<Task>& mocks) {
+std::vector<HistoryEvent> create_history(const std::vector<Task>& mocks) {
   std::vector<HistoryEvent> history;
   history.reserve(2 * mocks.size());
 

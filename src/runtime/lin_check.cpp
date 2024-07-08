@@ -9,8 +9,8 @@
 // response_index)
 std::map<size_t, size_t> get_inv_res_mapping(
     const std::vector<HistoryEvent>& history) {
-  std::map<size_t, size_t> inv_res;      // inv -> corresponding response
-  std::map<Task, size_t> uids;  // uid -> res
+  std::map<size_t, size_t> inv_res;  // inv -> corresponding response
+  std::map<Task, size_t> uids;       // uid -> res
 
   for (size_t i = 0; i < history.size(); ++i) {
     auto el = history[i];
@@ -19,21 +19,22 @@ std::map<size_t, size_t> get_inv_res_mapping(
       uids[inv.GetTask()] = i;
     } else if (std::holds_alternative<Response>(el)) {
       const Response& res = std::get<Response>(el);
-//      std::cout << "size: " << history.size() << " i " << i << std::endl;
-//      if (uids.find(res.GetTask()) == uids.end()) {
-//        for (auto& h : history) {
-//          if (std::holds_alternative<Invoke>(h)) {
-//            const Invoke& inv = std::get<Invoke>(h);
-//            std::cout << "inv " << inv.GetTask().get() << " "
-//                      << inv.GetTask()->GetName() << std::endl;
-//          } else {
-//            const Response& res1 = std::get<Response>(h);
-//            std::cout << "res " << res1.GetTask().get() << " "
-//                      << res1.GetTask()->GetName() << std::endl;
-//          }
-//        }
-//        std::cout << "aboba " << i << " " << res.GetTask().get() << std::endl;
-//      }
+      //      std::cout << "size: " << history.size() << " i " << i <<
+      //      std::endl; if (uids.find(res.GetTask()) == uids.end()) {
+      //        for (auto& h : history) {
+      //          if (std::holds_alternative<Invoke>(h)) {
+      //            const Invoke& inv = std::get<Invoke>(h);
+      //            std::cout << "inv " << inv.GetTask().get() << " "
+      //                      << inv.GetTask()->GetName() << std::endl;
+      //          } else {
+      //            const Response& res1 = std::get<Response>(h);
+      //            std::cout << "res " << res1.GetTask().get() << " "
+      //                      << res1.GetTask()->GetName() << std::endl;
+      //          }
+      //        }
+      //        std::cout << "aboba " << i << " " << res.GetTask().get() <<
+      //        std::endl;
+      //      }
       assert(uids.find(res.GetTask()) != uids.end());
       auto inv_id = uids[res.GetTask()];
       inv_res[inv_id] = i;
@@ -49,8 +50,8 @@ std::map<size_t, size_t> get_inv_res_mapping(
 // response_index)
 std::map<size_t, size_t> get_inv_res_full_mapping(
     const std::vector<HistoryEvent>& history) {
-  std::map<size_t, size_t> inv_res{};      // inv -> corresponding response
-  std::map<Task, size_t> uids{};  // uid -> res
+  std::map<size_t, size_t> inv_res{};  // inv -> corresponding response
+  std::map<Task, size_t> uids{};       // uid -> res
   std::map<DualTask, size_t> follow_up_uids{};
   std::map<DualTask, size_t> requests_uids{};
 
@@ -116,7 +117,7 @@ Response::Response(const Task& task, int result, int thread_id)
 RequestInvoke::RequestInvoke(const DualTask& task, int thread_id)
     : thread_id(thread_id), task(std::cref(task)) {}
 
-RequestResponse::RequestResponse(const DualTask &task, int thread_id)
+RequestResponse::RequestResponse(const DualTask& task, int thread_id)
     : thread_id(thread_id), task(std::cref(task)) {}
 
 FollowUpInvoke::FollowUpInvoke(const DualTask& task, int thread_id)
@@ -136,5 +137,3 @@ const DualTask& RequestResponse::GetTask() const { return this->task.get(); }
 const DualTask& FollowUpInvoke::GetTask() const { return this->task.get(); }
 
 const DualTask& FollowUpResponse::GetTask() const { return this->task.get(); }
-
-
