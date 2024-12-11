@@ -27,6 +27,8 @@ std::shared_ptr<CoroBase> CoroBase::GetPtr() { return shared_from_this(); }
 
 void CoroBase::SetToken(std::shared_ptr<Token> token) { this->token = token; }
 
+void CoroBase::SetRemoved(bool is_removed) { this->is_removed = is_removed; }
+
 void CoroBase::Resume() {
   this_coro = this->GetPtr();
   assert(!this_coro->IsReturned());

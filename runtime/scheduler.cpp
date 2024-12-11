@@ -1,5 +1,6 @@
-#include "include/scheduler.h"
+#include <numeric>
 
+#include "include/scheduler.h"
 #include "include/logger.h"
 #include "include/pretty_print.h"
 
@@ -70,7 +71,9 @@ StrategyScheduler::Result StrategyScheduler::replayRound(const std::vector<int>&
     }
     full_history.emplace_back(next_task);
 
-    log() << "Resume task: id=" << next_task_id << ", " << next_task->GetName() << ", thread-id=" << thread_id << "\n";
+    // log() << "Resume task: id=" << next_task_id << ", " << next_task->GetName() << ", thread-id=" << thread_id << "\n";
+
+    if (next_task->IsReturned()) continue;
 
     next_task->Resume();
     if (next_task->IsReturned()) {
@@ -79,14 +82,14 @@ StrategyScheduler::Result StrategyScheduler::replayRound(const std::vector<int>&
     }
   }
 
-  log() << "Replayed round: tasks ordering = ";
-  for (size_t i = 0; i < tasks_ordering.size(); ++i) {
-    int task_id = tasks_ordering[i];
-    log() << task_id;
-    if (i != tasks_ordering.size() - 1) log() << ",";
-    log() << " "; 
-  }
-  log() << "\n";
+  // log() << "Replayed round: tasks ordering = ";
+  // for (size_t i = 0; i < tasks_ordering.size(); ++i) {
+  //   int task_id = tasks_ordering[i];
+  //   log() << task_id;
+  //   if (i != tasks_ordering.size() - 1) log() << ",";
+  //   log() << " "; 
+  // }
+  // log() << "\n";
 
   pretty_printer.PrettyPrint(sequential_history, log());
 
@@ -97,15 +100,78 @@ StrategyScheduler::Result StrategyScheduler::replayRound(const std::vector<int>&
   return std::nullopt;
 }
 
-std::vector <int> StrategyScheduler::getTasksOrdering(const FullHistory& full_history) const {
+std::vector<int> StrategyScheduler::getTasksOrdering(const FullHistory& full_history, const std::unordered_set<int> exclude_task_ids) const {
   std::vector <int> tasks_ordering;
-  tasks_ordering.reserve(full_history.size());
   
   for (auto& task : full_history) {
+    if (exclude_task_ids.contains(task.get()->GetId())) continue;
     tasks_ordering.emplace_back(task.get()->GetId());
   }
 
   return tasks_ordering;
+}
+
+void StrategyScheduler::minimize(
+  std::pair<Scheduler::FullHistory, Scheduler::SeqHistory>& nonlinear_history
+) {
+  std::unordered_set<int> removed_tasks;
+  std::vector<std::reference_wrapper<const Task>> tasks;
+
+  for (const HistoryEvent& event : nonlinear_history.second) {
+    if (std::holds_alternative<Invoke>(event)) {
+      tasks.push_back(std::get<Invoke>(event).GetTask());
+    }
+  }
+
+  // remove single task
+  for (auto& task : tasks) {
+    int task_id = task.get()->GetId();
+
+    log() << "Try to remove task with id: " << task_id << "\n";
+    std::vector<int> new_ordering = getTasksOrdering(nonlinear_history.first, { task_id });
+    auto new_histories = replayRound(new_ordering);
+
+    if (new_histories.has_value()) {
+      nonlinear_history.first.swap(new_histories.value().first);
+      nonlinear_history.second.swap(new_histories.value().second);
+      removed_tasks.insert(task_id);
+      task.get()->SetRemoved(true);
+    }
+  }
+
+  // remove two tasks (for operations with semantics of add/remove)
+  for (auto& task_i : tasks) {
+    if (task_i.get()->IsRemoved()) continue;
+    
+    for (auto& task_j : tasks) {
+      if (task_j.get()->IsRemoved()) continue;
+
+      int task_i_id = task_i.get()->GetId();
+      int task_j_id = task_j.get()->GetId();
+      
+      if (task_i_id == task_j_id) continue;
+      
+      log() << "Try to remove task with id: " << task_i_id << " and " << task_j_id << "\n";
+      std::vector<int> new_ordering = getTasksOrdering(nonlinear_history.first, { task_i_id, task_j_id });
+      auto new_histories = replayRound(new_ordering);
+
+      if (new_histories.has_value()) {
+        nonlinear_history.first.swap(new_histories.value().first);
+        nonlinear_history.second.swap(new_histories.value().second);
+        
+        removed_tasks.insert(task_i_id);
+        removed_tasks.insert(task_j_id);
+        
+        task_i.get()->SetRemoved(true);
+        task_j.get()->SetRemoved(true);
+      }
+    }
+  }
+
+  // replay round one last time to get returned coroutine states
+  replayRound(getTasksOrdering(nonlinear_history.first, {}));
+
+  log() << "Finished minimization\n";
 }
 
 Scheduler::Result StrategyScheduler::Run() {
@@ -131,11 +197,18 @@ Scheduler::Result StrategyScheduler::Run() {
       log() << "\n";
 
       // TODO: add minimization here
-      log() << "Replaying round for test\n";
-      std::vector <int> tasks_ordering = getTasksOrdering(full_history);
-      auto res = replayRound(tasks_ordering);
+      log() << "Full nonlinear scenario: \n";
+      pretty_printer.PrettyPrint(sequential_history, log());
+      
+      log() << "Minimizing...\n";
+      minimize(histories.value());
 
       return histories;
+
+      // log() << "Replaying round for test\n";
+      // std::vector <int> tasks_ordering = getTasksOrdering(full_history);
+      // auto res = replayRound(tasks_ordering);
+      // return histories;
     }
     log() << "===============================================\n\n";
     log().flush();
