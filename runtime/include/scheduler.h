@@ -17,8 +17,14 @@ struct Strategy {
   // the flag which tells is the task new, and the thread number.
   virtual std::tuple<Task&, bool, int> Next() = 0;
 
-  // Strategy should stop all tasks that already have been started
+  virtual std::optional<std::tuple<Task&, int>> GetTask(int task_id) = 0;
+
+  // Removes all tasks to start a new round.
+  // (Note: strategy should stop all tasks that already have been started)
   virtual void StartNextRound() = 0;
+
+  // Resets the state of all created tasks in the strategy.
+  virtual void ResetCurrentRound() = 0;
 
   virtual ~Strategy() = default;
 
@@ -55,7 +61,9 @@ struct StrategyScheduler : Scheduler {
  private:
   Result runRound();
 
-  // Result replayRound(FullHistory tasks_order);
+  Result replayRound(const std::vector<int>& tasks_ordering);
+
+  std::vector <int> getTasksOrdering(const FullHistory& full_history) const;
 
   // Result minimizeHistory(Result nonlinear_history);
 
