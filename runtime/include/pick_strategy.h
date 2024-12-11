@@ -51,7 +51,7 @@ struct PickStrategy : Strategy<Verifier> {
         assert(false && "Oops, possible deadlock or incorrect verifier\n");
       }
       threads[current_task].emplace_back(
-          constructors[verified_constructor].Build(&state, current_task));
+          constructors[verified_constructor].Build(&state, current_task, this->next_task_id++));
       TaskWithMetaData task{threads[current_task].back(), true, current_task};
       return task;
     }
