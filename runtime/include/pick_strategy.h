@@ -100,7 +100,9 @@ struct PickStrategy : Strategy<Verifier> {
     for (auto& thread : threads) {
       size_t tasks_in_thread = thread.size();
       for (size_t i = 0; i < tasks_in_thread; ++i) {
-        thread[i] = thread[i]->Restart(&state);
+        if (!thread[i]->IsRemoved()) {
+          thread[i] = thread[i]->Restart(&state);
+        }
       }
     }
   }
@@ -114,9 +116,12 @@ struct PickStrategy : Strategy<Verifier> {
   // TODO: for non obstruction-free we need to take into account dependencies.
   void TerminateTasks() {
     state.Reset();
-    for (size_t i = 0; i < threads.size(); ++i) {
-      if (!threads[i].empty()) {
-        threads[i].back()->Terminate();
+    for (size_t i = 0; i < threads.size(); ++i) {      
+      for (size_t j = 0; j < threads[i].size(); ++j) {
+        auto& task = threads[i][j];
+        if (!task->IsReturned()) {
+          task->Terminate();
+        }
       }
     }
     this->sched_checker.Reset();

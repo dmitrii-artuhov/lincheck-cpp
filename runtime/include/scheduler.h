@@ -146,7 +146,9 @@ struct StrategyScheduler : public Scheduler {
 
   Result replayRound(const std::vector<int>& tasks_ordering);
 
-  std::vector <int> getTasksOrdering(const FullHistory& full_history) const;
+  std::vector<int> getTasksOrdering(const FullHistory& full_history, std::unordered_set<int> exclude_task_ids) const;
+
+  void minimize(std::pair<Scheduler::FullHistory, Scheduler::SeqHistory>& nonlinear_history);
 
   Strategy<Verifier>& strategy;
   ModelChecker& checker;
@@ -213,8 +215,11 @@ struct TLAScheduler : Scheduler {
   // TODO: for non obstruction-free we need to take into account dependencies.
   void TerminateTasks() {
     for (size_t i = 0; i < threads.size(); ++i) {
-      if (!threads[i].tasks.empty()) {
-        threads[i].tasks.back()->Terminate();
+      for (size_t j = 0; j < threads[i].tasks.size(); ++j) {
+        auto& task = threads[i].tasks[j];
+        if (!task->IsReturned()) {
+          task->Terminate();
+        }
       }
     }
   }

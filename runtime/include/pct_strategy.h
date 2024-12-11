@@ -160,7 +160,9 @@ struct PctStrategy : Strategy<Verifier> {
     for (auto& thread : threads) {
       size_t tasks_in_thread = thread.size();
       for (size_t i = 0; i < tasks_in_thread; ++i) {
-        thread[i] = thread[i]->Restart(&state);
+        if (!thread[i]->IsRemoved()) {
+          thread[i] = thread[i]->Restart(&state);
+        }
       }
     }
   }
@@ -204,8 +206,10 @@ struct PctStrategy : Strategy<Verifier> {
   void TerminateTasks() {
     state.Reset();
     for (auto& thread : threads) {
-      if (!thread.empty()) {
-        thread.back()->Terminate();
+      for (size_t i = 0; i < thread.size(); ++i) {
+        if (!thread[i]->IsReturned()) {
+          thread[i]->Terminate();
+        }
       }
     }
     this->sched_checker.Reset();
