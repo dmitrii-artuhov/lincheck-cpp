@@ -143,7 +143,7 @@ struct BaseStrategyWithThreads : public Strategy {
     int non_removed_tasks = 0;
     for (auto& thread : threads) {
       for (size_t i = 0; i < thread.size(); ++i) {
-        const auto& task = thread[i].get();
+        auto& task = thread[i];
         if (!IsTaskRemoved(task->GetId())) {
           non_removed_tasks++;
         }
