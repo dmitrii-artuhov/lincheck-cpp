@@ -36,6 +36,14 @@ void CoroBase::Resume() {
   this_coro.reset();
 }
 
+int CoroBase::GetId() const {
+  return id;
+}
+
+bool CoroBase::IsRemoved() const {
+  return is_removed;
+}
+
 int CoroBase::GetRetVal() const {
   assert(IsReturned());
   return ret;
