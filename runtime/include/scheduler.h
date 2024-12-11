@@ -494,7 +494,7 @@ struct TLAScheduler : Scheduler {
 
   Scheduler::Result Run() override {
     auto [_, res] = RunStep(0, 0);
-    return res;
+    return res; 
   }
 
   ~TLAScheduler() { TerminateTasks(); }
