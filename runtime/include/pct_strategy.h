@@ -97,7 +97,7 @@ struct PctStrategy : Strategy {
       }
 
       threads[index_of_max].emplace_back(
-          constructor.Build(&state, index_of_max));
+          constructor.Build(&state, index_of_max, next_task_id++));
       return {threads[index_of_max].back(), true, index_of_max};
     }
 
