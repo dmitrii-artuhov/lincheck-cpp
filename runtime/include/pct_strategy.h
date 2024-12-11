@@ -124,6 +124,8 @@ struct PctStrategy : Strategy {
   }
 
   void StartNextRound() override {
+    next_task_id = 0;
+    //    log() << "depth: " << current_depth << "\n";
     // Reconstruct target as we start from the beginning.
     TerminateTasks();
     for (auto& thread : threads) {
