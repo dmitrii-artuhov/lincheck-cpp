@@ -85,6 +85,9 @@ struct CoroBase : public std::enable_shared_from_this<CoroBase> {
   // Sets the token.
   void SetToken(std::shared_ptr<Token>);
 
+  // Sets IsRemoved state.
+  void SetRemoved(bool is_removed);
+
   // Checks if the coroutine is parked.
   bool IsParked() const;
 
