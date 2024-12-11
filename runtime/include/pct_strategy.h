@@ -187,7 +187,7 @@ private:
     log() << "k: " << new_k << "\n";
     PrepareForDepth(current_depth, new_k);
   }
-  
+
   std::unordered_set<std::string> CountNames(size_t except_thread) {
     std::unordered_set<std::string> names;
 
