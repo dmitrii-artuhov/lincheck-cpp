@@ -152,6 +152,8 @@ struct Scheduler {
 
   virtual Result Run() = 0;
 
+  // virtual Result minimizeHistory(Result nonlinear_history) = 0;
+
   virtual ~Scheduler() = default;
 };
 
@@ -185,6 +187,10 @@ struct StrategyScheduler : Scheduler {
   static std::vector<int> GetTasksOrdering(const FullHistory& full_history, std::unordered_set<int> exclude_task_ids);
 
   void Minimize(Scheduler::Histories& nonlinear_history, const RoundMinimizor& minimizor);
+
+  // Result replayRound(FullHistory tasks_order);
+
+  // Result minimizeHistory(Result nonlinear_history);
 
   Strategy& strategy;
 
