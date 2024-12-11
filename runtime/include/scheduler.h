@@ -21,6 +21,9 @@ struct Strategy {
   virtual void StartNextRound() = 0;
 
   virtual ~Strategy() = default;
+
+protected:
+  int next_task_id = 0;
 };
 
 struct Scheduler {
@@ -29,6 +32,8 @@ struct Scheduler {
   using Result = std::optional<std::pair<FullHistory, SeqHistory>>;
 
   virtual Result Run() = 0;
+
+  // virtual Result minimizeHistory(Result nonlinear_history) = 0;
 
   virtual ~Scheduler() = default;
 };
@@ -49,6 +54,10 @@ struct StrategyScheduler : Scheduler {
 
  private:
   Result runRound();
+
+  // Result replayRound(FullHistory tasks_order);
+
+  // Result minimizeHistory(Result nonlinear_history);
 
   Strategy& strategy;
 
@@ -83,7 +92,7 @@ struct TLAScheduler : Scheduler {
 
   Result Run() override {
     auto [_, res] = RunStep(0, 0);
-    return res;
+    return res; 
   }
 
   ~TLAScheduler() { TerminateTasks(); }
@@ -254,7 +263,7 @@ struct TLAScheduler : Scheduler {
       for (size_t cons_num = 0; auto cons : constructors) {
         frame.is_new = true;
         auto size_before = tasks.size();
-        tasks.emplace_back(cons.Build(&state, i));
+        tasks.emplace_back(cons.Build(&state, i, -1 /* TODO: fix task id for tla, because it is Scheduler and not Strategy class for some reason */));
 
         auto [is_over, res] = ResumeTask(frame, step, switches, thread, true);
         if (is_over || res.has_value()) {
