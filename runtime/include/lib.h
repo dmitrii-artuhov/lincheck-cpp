@@ -96,6 +96,8 @@ struct CoroBase : public std::enable_shared_from_this<CoroBase> {
     }
     return is_blocked;
   }
+  // Sets IsRemoved state.
+  void SetRemoved(bool is_removed);
 
   // Checks if the coroutine is parked.
   bool IsParked() const;
