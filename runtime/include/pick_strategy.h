@@ -59,6 +59,27 @@ struct PickStrategy : Strategy<Verifier> {
     return {threads[current_task].back(), false, current_task};
   }
 
+  // TODO: same iplementation for pct
+  std::optional<std::tuple<Task&, int>> GetTask(int task_id) override {
+    // TODO: can this be optimized?
+    int thread_id = 0;
+    for (auto& thread : threads) {
+      size_t tasks = thread.size();
+
+      for (size_t i = 0; i < tasks; ++i) {
+        Task& task = thread[i];
+        if (task->GetId() == task_id) {
+          std::tuple<Task&, int> result = { task, thread_id };
+          return result;
+          // return std::make_tuple(task, thread_id);
+        }
+      }
+
+      thread_id++;
+    }
+    return std::nullopt;
+  }
+
   void StartNextRound() override {
     TerminateTasks();
     for (auto& thread : threads) {
@@ -70,6 +91,18 @@ struct PickStrategy : Strategy<Verifier> {
 
     // Reinitial target as we start from the beginning.
     state.Reset();
+  }
+
+  // TODO: this method is identical for pick_strategy and for pct_strategy
+  void ResetCurrentRound() override {
+    TerminateTasks();
+    state.Reset();
+    for (auto& thread : threads) {
+      size_t tasks_in_thread = thread.size();
+      for (size_t i = 0; i < tasks_in_thread; ++i) {
+        thread[i] = thread[i]->Restart(&state);
+      }
+    }
   }
 
   ~PickStrategy() { TerminateTasks(); }
