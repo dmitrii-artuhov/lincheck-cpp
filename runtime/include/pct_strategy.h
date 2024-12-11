@@ -187,7 +187,27 @@ private:
     log() << "k: " << new_k << "\n";
     PrepareForDepth(current_depth, new_k);
   }
+<<<<<<< HEAD
   
+=======
+
+  void ResetCurrentRound() override {
+    TerminateTasks();
+    state.Reset();
+    for (auto& thread : threads) {
+      size_t tasks_in_thread = thread.size();
+      for (size_t i = 0; i < tasks_in_thread; ++i) {
+        if (!thread[i]->IsRemoved()) {
+          thread[i] = thread[i]->Restart(&state);
+        }
+      }
+    }
+  }
+
+  ~PctStrategy() { TerminateTasks(); }
+
+ private:
+>>>>>>> 909b7ea (Implement dumb minimization)
   std::unordered_set<std::string> CountNames(size_t except_thread) {
     std::unordered_set<std::string> names;
 

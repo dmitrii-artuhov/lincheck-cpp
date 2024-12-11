@@ -180,6 +180,11 @@ Scheduler::Result StrategyScheduler::Run() {
       Minimize(histories.value(), StrategyExplorationMinimizor(minimization_runs));
 
       return histories;
+
+      // log() << "Replaying round for test\n";
+      // std::vector <int> tasks_ordering = getTasksOrdering(full_history);
+      // auto res = replayRound(tasks_ordering);
+      // return histories;
     }
     log() << "===============================================\n\n";
     log().flush();
