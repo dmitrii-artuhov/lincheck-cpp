@@ -104,6 +104,25 @@ struct PctStrategy : Strategy {
     return {threads[index_of_max].back(), false, index_of_max};
   }
 
+  std::optional<std::tuple<Task&, int>> GetTask(int task_id) override {
+    // TODO: can this be optimized?
+    int thread_id = 0;
+    for (auto& thread : threads) {
+      size_t tasks = thread.size();
+
+      for (size_t i = 0; i < tasks; ++i) {
+        Task& task = thread[i];
+        if (task->GetId() == task_id) {
+          std::tuple<Task&, int> result = { task, thread_id };
+          return result;
+        }
+      }
+
+      thread_id++;
+    }
+    return std::nullopt;
+  }
+
   void StartNextRound() override {
     // Reconstruct target as we start from the beginning.
     TerminateTasks();
@@ -131,6 +150,17 @@ struct PctStrategy : Strategy {
 
     for (auto& thread : threads) {
       thread = StableVector<Task>();
+    }
+  }
+
+  void ResetCurrentRound() override {
+    TerminateTasks();
+    state.Reset();
+    for (auto& thread : threads) {
+      size_t tasks_in_thread = thread.size();
+      for (size_t i = 0; i < tasks_in_thread; ++i) {
+        thread[i] = thread[i]->Restart(&state);
+      }
     }
   }
 
