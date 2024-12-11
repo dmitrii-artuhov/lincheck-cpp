@@ -67,6 +67,8 @@ struct PickStrategy : Strategy {
   }
 
   void StartNextRound() override {
+    next_task_id = 0;
+
     TerminateTasks();
     for (auto& thread : threads) {
       // We don't have to keep references alive
