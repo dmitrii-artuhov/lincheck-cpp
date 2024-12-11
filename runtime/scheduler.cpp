@@ -82,16 +82,7 @@ StrategyScheduler::Result StrategyScheduler::replayRound(const std::vector<int>&
     }
   }
 
-  // log() << "Replayed round: tasks ordering = ";
-  // for (size_t i = 0; i < tasks_ordering.size(); ++i) {
-  //   int task_id = tasks_ordering[i];
-  //   log() << task_id;
-  //   if (i != tasks_ordering.size() - 1) log() << ",";
-  //   log() << " "; 
-  // }
-  // log() << "\n";
-
-  pretty_printer.PrettyPrint(sequential_history, log());
+  //pretty_printer.PrettyPrint(sequential_history, log());
 
   if (!checker.Check(sequential_history)) {
     return std::make_pair(full_history, sequential_history);
@@ -127,7 +118,7 @@ void StrategyScheduler::minimize(
   for (auto& task : tasks) {
     int task_id = task.get()->GetId();
 
-    log() << "Try to remove task with id: " << task_id << "\n";
+    // log() << "Try to remove task with id: " << task_id << "\n";
     std::vector<int> new_ordering = getTasksOrdering(nonlinear_history.first, { task_id });
     auto new_histories = replayRound(new_ordering);
 
@@ -151,7 +142,7 @@ void StrategyScheduler::minimize(
       
       if (task_i_id == task_j_id) continue;
       
-      log() << "Try to remove task with id: " << task_i_id << " and " << task_j_id << "\n";
+      // log() << "Try to remove task with id: " << task_i_id << " and " << task_j_id << "\n";
       std::vector<int> new_ordering = getTasksOrdering(nonlinear_history.first, { task_i_id, task_j_id });
       auto new_histories = replayRound(new_ordering);
 
@@ -168,10 +159,8 @@ void StrategyScheduler::minimize(
     }
   }
 
-  // replay round one last time to get returned coroutine states
+  // replay round one last time to put coroutines in `returned` state
   replayRound(getTasksOrdering(nonlinear_history.first, {}));
-
-  log() << "Finished minimization\n";
 }
 
 Scheduler::Result StrategyScheduler::Run() {
@@ -180,23 +169,8 @@ Scheduler::Result StrategyScheduler::Run() {
     auto histories = runRound();
 
     if (histories.has_value()) {
-      log() << "found failing sequential history:\n";
       auto& [full_history, sequential_history] = histories.value();
 
-      // Print the sequential history for debugging
-      for (auto history_point : sequential_history) {
-        if (std::holds_alternative<Invoke>(history_point)) {
-          Invoke& inv = std::get<Invoke>(history_point);
-          log() << "i(" << inv.thread_id << ", '" << inv.GetTask()->GetName()  << "'), ";
-        }
-        else {
-          Response& response = std::get<Response>(history_point);
-          log() << "r(" << response.thread_id << ", '" << response.GetTask()->GetName() << "'): " << response.result << ", ";
-        }
-      }
-      log() << "\n";
-
-      // TODO: add minimization here
       log() << "Full nonlinear scenario: \n";
       pretty_printer.PrettyPrint(sequential_history, log());
       
@@ -204,11 +178,6 @@ Scheduler::Result StrategyScheduler::Run() {
       minimize(histories.value());
 
       return histories;
-
-      // log() << "Replaying round for test\n";
-      // std::vector <int> tasks_ordering = getTasksOrdering(full_history);
-      // auto res = replayRound(tasks_ordering);
-      // return histories;
     }
     log() << "===============================================\n\n";
     log().flush();
@@ -217,27 +186,3 @@ Scheduler::Result StrategyScheduler::Run() {
 
   return std::nullopt;
 }
-
-// Scheduler::Result StrategyScheduler::minimizeHistory(Result nonlinear_history) {
-//   if (!nonlinear_history.has_value()) return nonlinear_history;
-
-//   auto& full_history = nonlinear_history.value().first;
-//   auto& sequential_history = nonlinear_history.value().second;
-
-//   log() << "Minimizing history:\n";
-//   pretty_printer.PrettyPrint(sequential_history, log());
-  
-//   int task_idx_rm = 0; // task index in the sequential_history which we try to remove
-
-//   while (task_idx_rm < sequential_history.size()) {
-//     while (std::holds_alternative<Response>(sequential_history[task_idx_rm])) {
-//       task_idx_rm++;
-//     }
-
-//     const Task& removed_task = std::get<Invoke>(sequential_history[task_idx_rm]).GetTask();
-//     log() << "Try remove task: (" << task_idx_rm << ") " << removed_task->GetName() << "\n";
-    
-//     // create a new `std::vector<int> threads_order`, in which `removed_task` will be excluded
-    
-//   }
-// }
