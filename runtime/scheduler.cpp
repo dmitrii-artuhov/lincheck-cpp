@@ -55,6 +55,15 @@ StrategyScheduler::Result StrategyScheduler::replayRound(const std::vector<int>&
   SeqHistory sequential_history;
   // TODO: `IsRunning` field might be added to `Task` instead
   std::unordered_set<int> started_tasks;
+  std::unordered_map<int, int> resumes_count; // TaskId -> Appearences in `tasks_ordering`
+
+  for (int next_task_id : tasks_ordering) {
+    resumes_count[next_task_id]++;
+  }
+
+  // log() << "\n\n\nReplaying round: ";
+  // for (int task_id : tasks_ordering) log() << task_id << " ";
+  // log() << "\n";
 
   for (int next_task_id : tasks_ordering) {
     bool is_new = started_tasks.contains(next_task_id) ? false : started_tasks.insert(next_task_id).second;
@@ -75,8 +84,17 @@ StrategyScheduler::Result StrategyScheduler::replayRound(const std::vector<int>&
 
     if (next_task->IsReturned()) continue;
 
-    next_task->Resume();
+    // if this is the last time this task appears in `tasks_ordering`, then complete it fully.
+    if (resumes_count[next_task_id] == 0) {
+      next_task->Terminate();
+    }
+    else {
+      resumes_count[next_task_id]--;
+      next_task->Resume();
+    }
+
     if (next_task->IsReturned()) {
+      // log() << "Return from task: " << next_task_id << "\n";
       auto result = next_task->GetRetVal();
       sequential_history.emplace_back(Response(next_task, result, thread_id));
     }
@@ -142,11 +160,14 @@ void StrategyScheduler::minimize(
       
       if (task_i_id == task_j_id) continue;
       
-      // log() << "Try to remove task with id: " << task_i_id << " and " << task_j_id << "\n";
+      // log() << "Try to remove tasks with ids: " << task_i_id << " and " << task_j_id << "\n";
       std::vector<int> new_ordering = getTasksOrdering(nonlinear_history.first, { task_i_id, task_j_id });
       auto new_histories = replayRound(new_ordering);
 
       if (new_histories.has_value()) {
+        // sequential history (Invoke/Response) must have even number of history events
+        assert(new_histories.value().second.size() % 2 == 0);
+
         nonlinear_history.first.swap(new_histories.value().first);
         nonlinear_history.second.swap(new_histories.value().second);
         
@@ -159,7 +180,8 @@ void StrategyScheduler::minimize(
     }
   }
 
-  // replay round one last time to put coroutines in `returned` state
+  // replay minimized round one last time to put coroutines in `returned` state
+  // (because multiple failed attempts to minimize new scenarios could leave tasks in invalid state)
   replayRound(getTasksOrdering(nonlinear_history.first, {}));
 }
 
