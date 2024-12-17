@@ -123,7 +123,6 @@ std::vector<int> StrategyScheduler::getTasksOrdering(const FullHistory& full_his
 void StrategyScheduler::minimize(
   std::pair<Scheduler::FullHistory, Scheduler::SeqHistory>& nonlinear_history
 ) {
-  std::unordered_set<int> removed_tasks;
   std::vector<std::reference_wrapper<const Task>> tasks;
 
   for (const HistoryEvent& event : nonlinear_history.second) {
@@ -143,7 +142,6 @@ void StrategyScheduler::minimize(
     if (new_histories.has_value()) {
       nonlinear_history.first.swap(new_histories.value().first);
       nonlinear_history.second.swap(new_histories.value().second);
-      removed_tasks.insert(task_id);
       task.get()->SetRemoved(true);
     }
   }
@@ -170,9 +168,6 @@ void StrategyScheduler::minimize(
 
         nonlinear_history.first.swap(new_histories.value().first);
         nonlinear_history.second.swap(new_histories.value().second);
-        
-        removed_tasks.insert(task_i_id);
-        removed_tasks.insert(task_j_id);
         
         task_i.get()->SetRemoved(true);
         task_j.get()->SetRemoved(true);
