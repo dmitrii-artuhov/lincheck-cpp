@@ -69,7 +69,7 @@ std::unique_ptr<Strategy> MakeStrategy(Opts &opts, std::vector<TaskBuilder> l) {
                                                       std::move(l), true);
     }
     default:
-      assert(false && "unexpected typ");
+      assert(false && "unexpected type");
   }
 }
 
