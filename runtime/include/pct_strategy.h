@@ -22,6 +22,8 @@ struct PctStrategy : Strategy {
         constructors(constructors),
         threads(),
         is_another_required(is_another_required) {
+    round_schedule.resize(threads_count, -1);
+
     std::random_device dev;
     rng = std::mt19937(dev());
     constructors_distribution =
@@ -114,11 +116,15 @@ struct PctStrategy : Strategy {
       }
 
       threads[index_of_max].emplace_back(
-          constructor.Build(&state, index_of_max, next_task_id++));
+          constructor.Build(&state, index_of_max, new_task_id++));
       return {threads[index_of_max].back(), true, index_of_max};
     }
 
     return {threads[index_of_max].back(), false, index_of_max};
+  }
+
+  std::tuple<Task&, bool, int> NextSchedule() override {
+    assert(false && "unimplemented");
   }
 
   std::optional<std::tuple<Task&, int>> GetTask(int task_id) override {
@@ -141,7 +147,8 @@ struct PctStrategy : Strategy {
   }
 
   void StartNextRound() override {
-    next_task_id = 0;
+    new_task_id = 0;
+
     //    log() << "depth: " << current_depth << "\n";
     // Reconstruct target as we start from the beginning.
     TerminateTasks();
@@ -175,6 +182,7 @@ struct PctStrategy : Strategy {
   void ResetCurrentRound() override {
     TerminateTasks();
     state.Reset();
+
     for (auto& thread : threads) {
       size_t tasks_in_thread = thread.size();
       for (size_t i = 0; i < tasks_in_thread; ++i) {
@@ -185,9 +193,41 @@ struct PctStrategy : Strategy {
     }
   }
 
+  int GetValidTasksCount() const override {
+    int non_removed_tasks = 0;
+    for (auto& thread : threads) {
+      for (size_t i = 0; i < thread.size(); ++i) {
+        auto& task = thread[i];
+        if (!task.get()->IsRemoved()) {
+          non_removed_tasks++;
+        }
+      }
+    }
+    return non_removed_tasks;
+  }
+
   ~PctStrategy() { TerminateTasks(); }
 
- private:
+protected:
+  int GetNextTaskInThread(int thread_index) const override {
+    auto& thread = threads[thread_index];
+    int task_index = round_schedule[thread_index];
+
+    while (
+      task_index < static_cast<int>(thread.size()) &&
+      (
+        task_index == -1 ||
+        thread[task_index].get()->IsReturned() ||
+        thread[task_index].get()->IsRemoved()
+      )
+    ) {
+      task_index++;
+    }
+
+    return task_index;
+  }
+
+private:
   std::unordered_set<std::string> CountNames(size_t except_thread) {
     std::unordered_set<std::string> names;
 
@@ -222,6 +262,9 @@ struct PctStrategy : Strategy {
   }
 
   void TerminateTasks() {
+    assert(round_schedule.size() == threads.size() && "sizes expected to be the same");
+    round_schedule.assign(round_schedule.size(), -1);
+
     for (auto& thread : threads) {
       for (size_t i = 0; i < thread.size(); ++i) {
         if (!thread[i]->IsReturned()) {
