@@ -76,7 +76,7 @@ struct PickStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
                             is_new, current_thread};
   }
 
-  // TODO: same iplementation for pct
+  // TODO: same implementation for pct
   std::optional<std::tuple<Task&, int>> GetTask(int task_id) override {
     // TODO: can this be optimized?
     int thread_id = 0;
