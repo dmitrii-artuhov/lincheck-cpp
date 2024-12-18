@@ -108,19 +108,6 @@ struct StrategyScheduler : public Scheduler {
   // history is a history with all events, where each element in the vector is a
   // Resume operation on the corresponding task
   Scheduler::Result Run() override {
-    // for (size_t i = 0; i < max_rounds; ++i) {
-    //   log() << "run round: " << i << "\n";
-    //   debug(stderr, "run round: %d\n", i);
-    //   auto seq_history = runRound();
-    //   if (seq_history.has_value()) {
-    //     return seq_history;
-    //   }
-    //   log() << "===============================================\n\n";
-    //   log().flush();
-    //   strategy.StartNextRound();
-    // }
-
-    // return std::nullopt;
     for (size_t i = 0; i < max_rounds; ++i) {
       log() << "run round: " << i << "\n";
       debug(stderr, "run round: %d\n", i);
@@ -280,7 +267,7 @@ struct StrategyScheduler : public Scheduler {
     std::unordered_set<int> exclude_task_ids
   ) const {
     std::vector <int> tasks_ordering;
-    
+
     for (auto& task : full_history) {
       if (exclude_task_ids.contains(task.get()->GetId())) continue;
       tasks_ordering.emplace_back(task.get()->GetId());
@@ -354,29 +341,31 @@ struct StrategyScheduler : public Scheduler {
   }
 
   void minimizeSameInterleaving(Histories& nonlinear_history) {
+    // TODO: get rid of this lambdas
     SingleTaskRemovedCallback onSingleTaskRemoved = [](
       StrategyScheduler *this_,
       const Scheduler::Histories& nonlinear_history,
       const Task& task
     ) -> Scheduler::Result {
       std::vector<int> new_ordering = this_->getTasksOrdering(nonlinear_history.first, { task->GetId() });
-        return this_->replayRound(new_ordering);
-      };
-  
-      TwoTasksRemovedCallback onTwoTasksRemoved = [](
-        StrategyScheduler *this_,
-        const Scheduler::Histories& nonlinear_history,
-        const Task& task_i,
-        const Task& task_j
-      ) -> Scheduler::Result {
-        std::vector<int> new_ordering = this_->getTasksOrdering(nonlinear_history.first, { task_i->GetId(), task_j->GetId() });
-        return this_->replayRound(new_ordering);
-      };
-    
-      minimize(nonlinear_history, onSingleTaskRemoved, onTwoTasksRemoved);
+      return this_->replayRound(new_ordering);
+    };
+
+    TwoTasksRemovedCallback onTwoTasksRemoved = [](
+      StrategyScheduler *this_,
+      const Scheduler::Histories& nonlinear_history,
+      const Task& task_i,
+      const Task& task_j
+    ) -> Scheduler::Result {
+      std::vector<int> new_ordering = this_->getTasksOrdering(nonlinear_history.first, { task_i->GetId(), task_j->GetId() });
+      return this_->replayRound(new_ordering);
+    };
+
+    minimize(nonlinear_history, onSingleTaskRemoved, onTwoTasksRemoved);
   }
 
   void minimizeWithStrategy(Histories& nonlinear_history) {
+    // TODO: get rid of this lambdas
     SingleTaskRemovedCallback onSingleTaskRemoved = [](
       StrategyScheduler* this_,
       const Scheduler::Histories& nonlinear_history,
@@ -385,14 +374,14 @@ struct StrategyScheduler : public Scheduler {
       task->SetRemoved(true);
       // TODO: `max_runs` should be parameter. Refactor by creating a separate minificator class and putting the whole logic there?
       Scheduler::Result new_histories = this_->exploreRound(10);
-  
+
       if (!new_histories.has_value()) {
         task->SetRemoved(false);
       }
-  
+
       return new_histories;
     };
-  
+
     TwoTasksRemovedCallback onTwoTasksRemoved = [](
       StrategyScheduler* this_,
       const Scheduler::Histories& nonlinear_history,
@@ -402,15 +391,15 @@ struct StrategyScheduler : public Scheduler {
       task_i->SetRemoved(true);
       task_j->SetRemoved(true);
       Scheduler::Result new_histories = this_->exploreRound(10);
-  
+
       if (!new_histories.has_value()) {
         task_i->SetRemoved(false);
         task_j->SetRemoved(false);
       }
-  
+
       return new_histories;
     };
-  
+
     minimize(nonlinear_history, onSingleTaskRemoved, onTwoTasksRemoved);
   }
 
