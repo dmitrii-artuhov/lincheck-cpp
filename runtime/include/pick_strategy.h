@@ -81,7 +81,7 @@ struct PickStrategy : Strategy<Verifier> {
   }
 
   void StartNextRound() override {
-    next_task_id = 0;
+    this->next_task_id = 0;
 
     TerminateTasks();
     for (auto& thread : threads) {
@@ -117,7 +117,6 @@ struct PickStrategy : Strategy<Verifier> {
   // Actually, we assume obstruction free here.
   // TODO: for non obstruction-free we need to take into account dependencies.
   void TerminateTasks() {
-    state.Reset();
     for (size_t i = 0; i < threads.size(); ++i) {      
       for (size_t j = 0; j < threads[i].size(); ++j) {
         auto& task = threads[i][j];
