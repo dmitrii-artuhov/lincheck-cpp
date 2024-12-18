@@ -70,7 +70,7 @@ std::unique_ptr<Strategy> MakeStrategy(Opts &opts, std::vector<TaskBuilder> l) {
           opts.threads, std::move(l), opts.forbid_all_same);
     }
     default:
-      assert(false && "unexpected typ");
+      assert(false && "unexpected type");
   }
 }
 
