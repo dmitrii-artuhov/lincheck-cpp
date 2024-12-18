@@ -211,6 +211,7 @@ void StrategyScheduler::minimize(
 }
 
 void StrategyScheduler::minimizeSameInterleaving(Scheduler::Histories& nonlinear_history) {
+  // TODO: get rid of this lambdas
   SingleTaskRemovedCallback onSingleTaskRemoved = [](
     StrategyScheduler *this_,
     const Scheduler::Histories& nonlinear_history,
@@ -234,6 +235,7 @@ void StrategyScheduler::minimizeSameInterleaving(Scheduler::Histories& nonlinear
 }
 
 void StrategyScheduler::minimizeWithStrategy(Scheduler::Histories& nonlinear_history) {
+  // TODO: get rid of this lambdas
   SingleTaskRemovedCallback onSingleTaskRemoved = [](
     StrategyScheduler* this_,
     const Scheduler::Histories& nonlinear_history,
