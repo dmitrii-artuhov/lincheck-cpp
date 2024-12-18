@@ -274,19 +274,6 @@ struct StrategyScheduler : public SchedulerWithReplay {
   // history is a history with all events, where each element in the vector is a
   // Resume operation on the corresponding task
   Scheduler::Result Run() override {
-    // for (size_t i = 0; i < max_rounds; ++i) {
-    //   log() << "run round: " << i << "\n";
-    //   debug(stderr, "run round: %d\n", i);
-    //   auto seq_history = runRound();
-    //   if (seq_history.has_value()) {
-    //     return seq_history;
-    //   }
-    //   log() << "===============================================\n\n";
-    //   log().flush();
-    //   strategy.StartNextRound();
-    // }
-
-    // return std::nullopt;
     for (size_t i = 0; i < max_rounds; ++i) {
       log() << "run round: " << i << "\n";
       debug(stderr, "run round: %d\n", i);
