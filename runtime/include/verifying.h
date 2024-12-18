@@ -75,7 +75,7 @@ std::unique_ptr<Strategy<Verifier>> MakeStrategy(Opts &opts,
           opts.threads, std::move(l), opts.forbid_all_same);
     }
     default:
-      assert(false && "unexpected typ");
+      assert(false && "unexpected type");
   }
 }
 
@@ -115,6 +115,9 @@ std::unique_ptr<Scheduler> MakeScheduler(ModelChecker &checker, Opts &opts,
           opts.tasks, opts.rounds, opts.threads, opts.switches, std::move(l),
           checker, pretty_printer);
       return scheduler;
+    }
+    default: {
+      assert(false && "Unknown strategy type specified");
     }
   }
 }
