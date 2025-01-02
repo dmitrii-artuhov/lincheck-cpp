@@ -10,46 +10,45 @@
 // Although it's impossible to predict the exact number of switches(since it's
 // equivalent to the halt problem), k should be good approximation
 template <typename TargetObj, StrategyVerifier Verifier>
-struct PctStrategy : Strategy<Verifier> {
+struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
   // forbid_all_same indicates whether it is allowed to have all same tasks(same
   // methods) in any moment of execution. Useful for blocking structures, for
   // instance, you don't want to run mutex.lock in each thread
   explicit PctStrategy(size_t threads_count,
-                       const std::vector<TaskBuilder>& constructors,
+                       std::vector<TaskBuilder> constructors,
                        bool forbid_all_same)
       : threads_count(threads_count),
         current_depth(1),
         current_schedule_length(0),
-        constructors(constructors),
-        threads(),
         forbid_all_same(forbid_all_same) {
+    this->constructors = std::move(constructors);
     this->round_schedule.resize(threads_count, -1);
 
     std::random_device dev;
     rng = std::mt19937(dev());
-    constructors_distribution =
+    this->constructors_distribution =
         std::uniform_int_distribution<std::mt19937::result_type>(
-            0, constructors.size() - 1);
+            0, this->constructors.size() - 1);
 
     // We have information about potential number of resumes
     // but because of the implementation, it's only available in the task.
     // In fact, it doesn't depend on the task, it only depends on the
     // constructor
     size_t avg_k = 0;
-
-    avg_k = avg_k / constructors.size();
+    avg_k = avg_k / this->constructors.size();
 
     PrepareForDepth(current_depth, avg_k);
 
     // Create queues.
     for (size_t i = 0; i < threads_count; ++i) {
-      threads.emplace_back();
+      this->threads.emplace_back();
     }
   }
 
   // If there aren't any non returned tasks and the amount of finished tasks
   // is equal to the max_tasks the finished task will be returned
   TaskWithMetaData Next() override {
+    auto& threads = this->threads;
     size_t max = std::numeric_limits<size_t>::min();
     size_t index_of_max = 0;
     // Have to ignore waiting threads, so can't do it faster than O(n)
@@ -70,8 +69,7 @@ struct PctStrategy : Strategy<Verifier> {
       }
     }
 
-    assert((max != std::numeric_limits<size_t>::min(),
-            "all threads are empty or parked"));
+    assert((max != std::numeric_limits<size_t>::min() && "all threads are empty or parked"));
 
     // Check whether the priority change is required
     current_schedule_length++;
@@ -83,7 +81,7 @@ struct PctStrategy : Strategy<Verifier> {
 
     if (threads[index_of_max].empty() ||
         threads[index_of_max].back()->IsReturned()) {
-      auto constructor = constructors.at(constructors_distribution(rng));
+      auto constructor = this->constructors.at(this->constructors_distribution(rng));
       if (forbid_all_same) {
         auto names = CountNames(index_of_max);
         // TODO: выглядит непонятно и так себе
@@ -92,7 +90,7 @@ struct PctStrategy : Strategy<Verifier> {
           names.insert(name);
           CreatedTaskMetaData task = {name, true, index_of_max};
           if (names.size() == 1 || !this->sched_checker.Verify(task)) {
-            constructor = constructors.at(constructors_distribution(rng));
+            constructor = this->constructors.at(this->constructors_distribution(rng));
           } else {
             break;
           }
@@ -100,7 +98,7 @@ struct PctStrategy : Strategy<Verifier> {
       }
 
       threads[index_of_max].emplace_back(
-          constructor.Build(&state, index_of_max, this->new_task_id++));
+          constructor.Build(&this->state, index_of_max, this->new_task_id++));
       return {threads[index_of_max].back(), true, index_of_max};
     }
 
@@ -111,38 +109,19 @@ struct PctStrategy : Strategy<Verifier> {
     assert(false && "unimplemented");
   }
 
-  std::optional<std::tuple<Task&, int>> GetTask(int task_id) override {
-    // TODO: can this be optimized?
-    int thread_id = 0;
-    for (auto& thread : threads) {
-      size_t tasks = thread.size();
-
-      for (size_t i = 0; i < tasks; ++i) {
-        Task& task = thread[i];
-        if (task->GetId() == task_id) {
-          std::tuple<Task&, int> result = { task, thread_id };
-          return result;
-        }
-      }
-
-      thread_id++;
-    }
-    return std::nullopt;
-  }
-
   void StartNextRound() override {
     this->new_task_id = 0;
     //    log() << "depth: " << current_depth << "\n";
     // Reconstruct target as we start from the beginning.
-    TerminateTasks();
-    for (auto& thread : threads) {
+    this->TerminateTasks();
+    for (auto& thread : this->threads) {
       // We don't have to keep references alive
       while (thread.size() > 0) {
         thread.pop_back();
       }
     }
 
-    state.Reset();
+    this->state.Reset();
     // Update statistics
     current_depth++;
     if (current_depth >= 50) {
@@ -157,65 +136,21 @@ struct PctStrategy : Strategy<Verifier> {
     log() << "k: " << new_k << "\n";
     PrepareForDepth(current_depth, new_k);
 
-    for (auto& thread : threads) {
+    for (auto& thread : this->threads) {
       thread = StableVector<Task>();
     }
   }
 
-  void ResetCurrentRound() override {
-    TerminateTasks();
-    state.Reset();
-
-    for (auto& thread : threads) {
-      size_t tasks_in_thread = thread.size();
-      for (size_t i = 0; i < tasks_in_thread; ++i) {
-        if (!thread[i]->IsRemoved()) {
-          thread[i] = thread[i]->Restart(&state);
-        }
-      }
-    }
-  }
-
-  int GetValidTasksCount() const override {
-    int non_removed_tasks = 0;
-    for (auto& thread : threads) {
-      for (size_t i = 0; i < thread.size(); ++i) {
-        auto& task = thread[i];
-        if (!task.get()->IsRemoved()) {
-          non_removed_tasks++;
-        }
-      }
-    }
-    return non_removed_tasks;
-  }
-
-  ~PctStrategy() { TerminateTasks(); }
-
-protected:
-  int GetNextTaskInThread(int thread_index) const override {
-    auto& thread = threads[thread_index];
-    int task_index = this->round_schedule[thread_index];
-
-    while (
-      task_index < static_cast<int>(thread.size()) &&
-      (
-        task_index == -1 ||
-        thread[task_index].get()->IsReturned() ||
-        thread[task_index].get()->IsRemoved()
-      )
-    ) {
-      task_index++;
-    }
-
-    return task_index;
+  ~PctStrategy() {
+    this->TerminateTasks();
   }
 
 private:
   std::unordered_set<std::string> CountNames(size_t except_thread) {
     std::unordered_set<std::string> names;
 
-    for (size_t i = 0; i < threads.size(); ++i) {
-      auto& thread = threads[i];
+    for (size_t i = 0; i < this->threads.size(); ++i) {
+      auto& thread = this->threads[i];
       if (thread.empty() || i == except_thread) {
         continue;
       }
@@ -244,37 +179,16 @@ private:
     }
   }
 
-  void TerminateTasks() {
-    // state.Reset(); // required here?
-    auto& round_schedule = this->round_schedule;
-    assert(round_schedule.size() == threads.size() && "sizes expected to be the same");
-    round_schedule.assign(round_schedule.size(), -1);
-
-    for (auto& thread : threads) {
-      for (size_t i = 0; i < thread.size(); ++i) {
-        if (!thread[i]->IsReturned()) {
-          thread[i]->Terminate();
-        }
-      }
-    }
-    this->sched_checker.Reset();
-  }
-
-  TargetObj state{};
-  std::vector<TaskBuilder> constructors;
   std::vector<size_t> k_statistics;
   size_t threads_count;
   size_t current_depth;
   size_t current_schedule_length;
   std::vector<size_t> priorities;
   std::vector<size_t> priority_change_points;
-  // RoundRobinStrategy struct is the owner of all tasks, and all
+  // Strategy struct is the owner of all tasks, and all
   // references can't be invalidated before the end of the round,
   // so we have to contains all tasks in queues(queue doesn't invalidate the
   // references)
-  std::vector<StableVector<Task>> threads;
   bool forbid_all_same;
-  std::uniform_int_distribution<std::mt19937::result_type>
-      constructors_distribution;
   std::mt19937 rng;
 };

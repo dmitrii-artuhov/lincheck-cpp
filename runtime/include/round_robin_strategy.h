@@ -26,7 +26,7 @@ struct RoundRobinStrategy : PickStrategy<TargetObj, Verifier> {
   }
 
   size_t PickSchedule() override {
-    auto &threads = PickStrategy<TargetObj>::threads;
+    auto &threads = this->threads;
     for (size_t attempt = 0; attempt < threads.size(); ++attempt) {
       auto cur = (next_task++) % threads.size();
       int task_index = this->GetNextTaskInThread(cur);
