@@ -7,6 +7,7 @@ set (SOURCE_FILES
         verifying.cpp 
         generators.cpp
         syscall_trap.cpp
+        minimization.cpp
 )
 
 add_library(runtime SHARED ${SOURCE_FILES})
