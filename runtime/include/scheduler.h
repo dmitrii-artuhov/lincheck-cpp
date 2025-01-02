@@ -2,6 +2,7 @@
 #include <limits>
 #include <map>
 #include <optional>
+#include <random>
 
 #include "lib.h"
 #include "lincheck.h"
@@ -47,6 +48,100 @@ protected:
   // when generated round is explored this vector stores indexes of tasks
   // that will be invoked next in each thread
   std::vector<int> round_schedule;
+};
+
+template<typename TargetObj>
+struct BaseStrategyWithThreads : public Strategy {
+  std::optional<std::tuple<Task&, int>> GetTask(int task_id) override {
+    // TODO: can this be optimized?
+    int thread_id = 0;
+    for (auto& thread : threads) {
+      size_t tasks = thread.size();
+
+      for (size_t i = 0; i < tasks; ++i) {
+        Task& task = thread[i];
+        if (task->GetId() == task_id) {
+          std::tuple<Task&, int> result = { task, thread_id };
+          return result;
+        }
+      }
+
+      thread_id++;
+    }
+    return std::nullopt;
+  }
+
+  void ResetCurrentRound() override {
+    TerminateTasks();
+    state.Reset();
+    for (auto& thread : threads) {
+      size_t tasks_in_thread = thread.size();
+      for (size_t i = 0; i < tasks_in_thread; ++i) {
+        if (!thread[i]->IsRemoved()) {
+          thread[i] = thread[i]->Restart(&state);
+        }
+      }
+    }
+  }
+
+  int GetValidTasksCount() const override {
+    int non_removed_tasks = 0;
+    for (auto& thread : threads) {
+      for (size_t i = 0; i < thread.size(); ++i) {
+        auto& task = thread[i];
+        if (!task.get()->IsRemoved()) {
+          non_removed_tasks++;
+        }
+      }
+    }
+    return non_removed_tasks;
+  }
+
+protected:
+  // Terminates all running tasks.
+  // We do it in a dangerous way: in random order.
+  // Actually, we assume obstruction free here.
+  // TODO: for non obstruction-free we need to take into account dependencies.
+  void TerminateTasks() {
+    auto& round_schedule = Strategy::round_schedule;
+    assert(round_schedule.size() == this->threads.size() && "sizes expected to be the same");
+    round_schedule.assign(round_schedule.size(), -1);
+
+    for (auto& thread : this->threads) {
+      for (size_t i = 0; i < thread.size(); ++i) {
+        if (!thread[i]->IsReturned()) {
+          thread[i]->Terminate();
+        }
+      }
+    }
+  }
+
+  int GetNextTaskInThread(int thread_index) const override {
+    auto& thread = threads[thread_index];
+    int task_index = round_schedule[thread_index];
+
+    while (
+      task_index < static_cast<int>(thread.size()) &&
+      (
+        task_index == -1 ||
+        thread[task_index].get()->IsReturned() ||
+        thread[task_index].get()->IsRemoved()
+      )
+    ) {
+      task_index++;
+    }
+
+    return task_index;
+  }
+
+  TargetObj state{};
+  // Strategy struct is the owner of all tasks, and all
+  // references can't be invalidated before the end of the round,
+  // so we have to contains all tasks in queues(queue doesn't invalidate the
+  // references)
+  std::vector<StableVector<Task>> threads;
+  std::vector<TaskBuilder> constructors;
+  std::uniform_int_distribution<std::mt19937::result_type> constructors_distribution;
 };
 
 struct Scheduler {
