@@ -3,14 +3,14 @@
 
 struct RoundMinimizor {
   // Minimizes number of tasks in the nonlinearized history; modifies argument `nonlinear_history`.
-  virtual void minimize(
+  virtual void Minimize(
     StrategyScheduler& sched,
     Scheduler::Histories& nonlinear_history
   ) const = 0;
 };
 
 struct GreedyRoundMinimizor : public RoundMinimizor {
-  void minimize(
+  void Minimize(
     StrategyScheduler& sched,
     Scheduler::Histories& nonlinear_history
   ) const override {
@@ -27,7 +27,7 @@ struct GreedyRoundMinimizor : public RoundMinimizor {
       if (task.get()->IsRemoved()) continue;
 
       // log() << "Try to remove task with id: " << task.get()->GetId() << "\n";
-      auto new_histories = onSingleTaskRemoved(sched, nonlinear_history, task.get());
+      auto new_histories = OnSingleTaskRemoved(sched, nonlinear_history, task.get());
 
       if (new_histories.has_value()) {
         nonlinear_history.first.swap(new_histories.value().first);
@@ -47,7 +47,7 @@ struct GreedyRoundMinimizor : public RoundMinimizor {
         
         // log() << "Try to remove tasks with ids: " << task_i.get()->GetId() << " and "
         //       << task_j.get()->GetId() << "\n";
-        auto new_histories = onTwoTasksRemoved(sched, nonlinear_history, task_i.get(), task_j.get());
+        auto new_histories = OnTwoTasksRemoved(sched, nonlinear_history, task_i.get(), task_j.get());
 
         if (new_histories.has_value()) {
           // sequential history (Invoke/Response events) must have even number of history events
@@ -65,16 +65,16 @@ struct GreedyRoundMinimizor : public RoundMinimizor {
 
     // replay minimized round one last time to put coroutines in `returned` state
     // (because multiple failed attempts to minimize new scenarios could leave tasks in invalid state)
-    sched.replayRound(StrategyScheduler::getTasksOrdering(nonlinear_history.first, {}));
+    sched.ReplayRound(StrategyScheduler::GetTasksOrdering(nonlinear_history.first, {}));
   };
 
-  virtual Scheduler::Result onSingleTaskRemoved(
+  virtual Scheduler::Result OnSingleTaskRemoved(
     StrategyScheduler& sched,
     const Scheduler::Histories& nonlinear_history,
     const Task& task
   ) const = 0;
 
-  virtual Scheduler::Result onTwoTasksRemoved(
+  virtual Scheduler::Result OnTwoTasksRemoved(
     StrategyScheduler& sched,
     const Scheduler::Histories& nonlinear_history,
     const Task& task_i,
@@ -83,23 +83,23 @@ struct GreedyRoundMinimizor : public RoundMinimizor {
 };
 
 struct SameInterleavingMinimizor : public GreedyRoundMinimizor {
-  Scheduler::Result onSingleTaskRemoved(
+  Scheduler::Result OnSingleTaskRemoved(
     StrategyScheduler& sched,
     const Scheduler::Histories& nonlinear_history,
     const Task& task
   ) const override {
-    std::vector<int> new_ordering = StrategyScheduler::getTasksOrdering(nonlinear_history.first, { task->GetId() });
-    return sched.replayRound(new_ordering);
+    std::vector<int> new_ordering = StrategyScheduler::GetTasksOrdering(nonlinear_history.first, { task->GetId() });
+    return sched.ReplayRound(new_ordering);
   }
 
-  Scheduler::Result onTwoTasksRemoved(
+  Scheduler::Result OnTwoTasksRemoved(
     StrategyScheduler& sched,
     const Scheduler::Histories& nonlinear_history,
     const Task& task_i,
     const Task& task_j
   ) const override {
-    std::vector<int> new_ordering = StrategyScheduler::getTasksOrdering(nonlinear_history.first, { task_i->GetId(), task_j->GetId() });
-    return sched.replayRound(new_ordering);
+    std::vector<int> new_ordering = StrategyScheduler::GetTasksOrdering(nonlinear_history.first, { task_i->GetId(), task_j->GetId() });
+    return sched.ReplayRound(new_ordering);
   }
 };
 
@@ -107,13 +107,13 @@ struct StrategyExplorationMinimizor : public GreedyRoundMinimizor {
   StrategyExplorationMinimizor() = delete;
   explicit StrategyExplorationMinimizor(int runs_): runs(runs_) {}
 
-  Scheduler::Result onSingleTaskRemoved(
+  Scheduler::Result OnSingleTaskRemoved(
     StrategyScheduler& sched,
     const Scheduler::Histories& nonlinear_history,
     const Task& task
   ) const override {
     task->SetRemoved(true);
-    Scheduler::Result new_histories = sched.exploreRound(runs);
+    Scheduler::Result new_histories = sched.ExploreRound(runs);
 
     if (!new_histories.has_value()) {
       task->SetRemoved(false);
@@ -122,7 +122,7 @@ struct StrategyExplorationMinimizor : public GreedyRoundMinimizor {
     return new_histories;
   }
 
-  Scheduler::Result onTwoTasksRemoved(
+  Scheduler::Result OnTwoTasksRemoved(
     StrategyScheduler& sched,
     const Scheduler::Histories& nonlinear_history,
     const Task& task_i,
@@ -130,7 +130,7 @@ struct StrategyExplorationMinimizor : public GreedyRoundMinimizor {
   ) const override {
     task_i->SetRemoved(true);
     task_j->SetRemoved(true);
-    Scheduler::Result new_histories = sched.exploreRound(runs);
+    Scheduler::Result new_histories = sched.ExploreRound(runs);
 
     if (!new_histories.has_value()) {
       task_i->SetRemoved(false);
