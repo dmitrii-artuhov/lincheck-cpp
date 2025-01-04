@@ -169,6 +169,7 @@ struct StrategyScheduler : Scheduler {
   // Resume operation on the corresponding task
   Result Run() override;
 
+  friend class GreedyRoundMinimizor;
   friend class InterleavingMinimizor;
   friend class StrategyMinimizor;
  private:
@@ -181,14 +182,9 @@ struct StrategyScheduler : Scheduler {
   // Replays current round with specified interleaving
   Result replayRound(const std::vector<int>& tasks_ordering);
 
-  std::vector<int> getTasksOrdering(const FullHistory& full_history, std::unordered_set<int> exclude_task_ids) const;
+  static std::vector<int> getTasksOrdering(const FullHistory& full_history, std::unordered_set<int> exclude_task_ids);
 
-  // Minimizes number of tasks in the nonlinearized history preserving threads interleaving.
-  // Modifies argument `nonlinear_history`.
-  void minimize(
-    Histories& nonlinear_history,
-    const RoundMinimizor& minimizor
-  );
+  void minimize(Scheduler::Histories& nonlinear_history, const RoundMinimizor& minimizor);
 
   Strategy& strategy;
 
