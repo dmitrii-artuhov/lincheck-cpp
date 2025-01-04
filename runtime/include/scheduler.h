@@ -258,9 +258,9 @@ struct StrategyScheduler : public SchedulerWithReplay {
   }
 
   // Runs different interleavings of the current round
-  Result exploreRound(int max_runs) override {
-    for (int i = 0; i < max_runs; ++i) {
-      // log() << "Run " << i + 1 << "/" << max_runs << "\n";
+  Result exploreRound(int runs) override {
+    for (int i = 0; i < runs; ++i) {
+      // log() << "Run " << i + 1 << "/" << runs << "\n";
       strategy.ResetCurrentRound();
       SeqHistory sequential_history;
       FullHistory full_history;
@@ -349,78 +349,13 @@ struct StrategyScheduler : public SchedulerWithReplay {
     return std::nullopt;
   }
 
-  std::vector<int> getTasksOrdering(
-    const FullHistory& full_history,
-    std::unordered_set<int> exclude_task_ids
-  ) const override {
-    std::vector <int> tasks_ordering;
-
-    for (auto& task : full_history) {
-      if (exclude_task_ids.contains(task.get()->GetId())) continue;
-      tasks_ordering.emplace_back(task.get()->GetId());
-    }
-
-    return tasks_ordering;
-  }
-
   // Minimizes number of tasks in the nonlinearized history preserving threads interleaving.
   // Modifies argument `nonlinear_history`.
   void minimize(
     Histories& nonlinear_history,
     const RoundMinimizor& minimizor
   ) override {
-    std::vector<std::reference_wrapper<const Task>> tasks;
-
-    for (const HistoryEvent& event : nonlinear_history.second) {
-      if (std::holds_alternative<Invoke>(event)) {
-        tasks.push_back(std::get<Invoke>(event).GetTask());
-      }
-    }
-
-    // remove single task
-    for (auto& task : tasks) {
-      if (task.get()->IsRemoved()) continue;
-
-      // log() << "Try to remove task with id: " << task.get()->GetId() << "\n";
-      auto new_histories = minimizor.onSingleTaskRemoved(this, nonlinear_history, task.get());
-
-      if (new_histories.has_value()) {
-        nonlinear_history.first.swap(new_histories.value().first);
-        nonlinear_history.second.swap(new_histories.value().second);
-        task.get()->SetRemoved(true);
-      }
-    }
-
-    // remove two tasks (for operations with semantics of add/remove)
-    for (size_t i = 0; i < tasks.size(); ++i) {
-      auto& task_i = tasks[i];
-      if (task_i.get()->IsRemoved()) continue;
-      
-      for (size_t j = i + 1; j < tasks.size(); ++j) {
-        auto& task_j = tasks[j];
-        if (task_j.get()->IsRemoved()) continue;
-        
-        // log() << "Try to remove tasks with ids: " << task_i.get()->GetId() << " and "
-        //       << task_j.get()->GetId() << "\n";
-        auto new_histories = minimizor.onTwoTasksRemoved(this, nonlinear_history, task_i.get(), task_j.get());
-
-        if (new_histories.has_value()) {
-          // sequential history (Invoke/Response events) must have even number of history events
-          assert(new_histories.value().second.size() % 2 == 0);
-
-          nonlinear_history.first.swap(new_histories.value().first);
-          nonlinear_history.second.swap(new_histories.value().second);
-          
-          task_i.get()->SetRemoved(true);
-          task_j.get()->SetRemoved(true);
-          break; // tasks (i, j) were removed, so go to the next iteration of i
-        }
-      }
-    }
-
-    // replay minimized round one last time to put coroutines in `returned` state
-    // (because multiple failed attempts to minimize new scenarios could leave tasks in invalid state)
-    replayRound(getTasksOrdering(nonlinear_history.first, {}));
+    minimizor.minimize(*this, nonlinear_history);
   }
 
   Strategy<Verifier>& strategy;

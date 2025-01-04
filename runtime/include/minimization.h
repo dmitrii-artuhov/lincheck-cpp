@@ -4,43 +4,65 @@
 #include "lib.h"
 
 struct RoundMinimizor {
-    virtual Scheduler::Result onSingleTaskRemoved(SchedulerWithReplay* sched, const Scheduler::Histories& nonlinear_history, const Task& task) const = 0;
-
-    virtual Scheduler::Result onTwoTasksRemoved(SchedulerWithReplay* sched, const Scheduler::Histories& nonlinear_history, const Task& task_i, const Task& task_j) const = 0;
+  // Minimizes number of tasks in the nonlinearized history; modifies argument `nonlinear_history`.
+  virtual void minimize(
+    SchedulerWithReplay& sched,
+    Scheduler::Histories& nonlinear_history
+  ) const = 0;
 };
 
-struct InterleavingMinimizor : public RoundMinimizor {
-    Scheduler::Result onSingleTaskRemoved(
-        SchedulerWithReplay* sched,
-        const Scheduler::Histories& nonlinear_history,
-        const Task& task
-    ) const override;
+struct GreedyRoundMinimizor : public RoundMinimizor {
+  void minimize(
+    SchedulerWithReplay& sched,
+    Scheduler::Histories& nonlinear_history
+  ) const override;
 
-    Scheduler::Result onTwoTasksRemoved(
-        SchedulerWithReplay* sched,
-        const Scheduler::Histories& nonlinear_history,
-        const Task& task_i,
-        const Task& task_j
-    ) const override;
+  virtual Scheduler::Result onSingleTaskRemoved(
+    SchedulerWithReplay& sched,
+    const Scheduler::Histories& nonlinear_history,
+    const Task& task
+  ) const = 0;
+
+  virtual Scheduler::Result onTwoTasksRemoved(
+    SchedulerWithReplay& sched,
+    const Scheduler::Histories& nonlinear_history,
+    const Task& task_i,
+    const Task& task_j
+  ) const = 0;
 };
 
-struct StrategyMinimizor : public RoundMinimizor {
-    StrategyMinimizor() = delete;
-    explicit StrategyMinimizor(int runs_): runs(runs_) {}
+struct InterleavingMinimizor : public GreedyRoundMinimizor {
+  Scheduler::Result onSingleTaskRemoved(
+    SchedulerWithReplay& sched,
+    const Scheduler::Histories& nonlinear_history,
+    const Task& task
+  ) const override;
 
-    Scheduler::Result onSingleTaskRemoved(
-        SchedulerWithReplay* sched,
-        const Scheduler::Histories& nonlinear_history,
-        const Task& task
-    ) const override;
+  Scheduler::Result onTwoTasksRemoved(
+    SchedulerWithReplay& sched,
+    const Scheduler::Histories& nonlinear_history,
+    const Task& task_i,
+    const Task& task_j
+  ) const override;
+};
 
-    Scheduler::Result onTwoTasksRemoved(
-        SchedulerWithReplay* sched,
-        const Scheduler::Histories& nonlinear_history,
-        const Task& task_i,
-        const Task& task_j
-    ) const override;
+struct StrategyMinimizor : public GreedyRoundMinimizor {
+  StrategyMinimizor() = delete;
+  explicit StrategyMinimizor(int runs_): runs(runs_) {}
+
+  Scheduler::Result onSingleTaskRemoved(
+    SchedulerWithReplay& sched,
+    const Scheduler::Histories& nonlinear_history,
+    const Task& task
+  ) const override;
+
+  Scheduler::Result onTwoTasksRemoved(
+    SchedulerWithReplay& sched,
+    const Scheduler::Histories& nonlinear_history,
+    const Task& task_i,
+    const Task& task_j
+  ) const override;
 
 private:
-    int runs;
+  int runs;
 };

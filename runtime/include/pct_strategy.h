@@ -106,7 +106,7 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
   }
 
   std::tuple<Task&, bool, int> NextSchedule() override {
-    auto& round_schedule = Strategy::round_schedule;
+    auto& round_schedule = this->round_schedule;
     auto& threads = this->threads;
 
     size_t max = std::numeric_limits<size_t>::min();
@@ -164,7 +164,7 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
   }
 
   void ResetCurrentRound() override {
-    BaseStrategyWithThreads<TargetObj>::ResetCurrentRound();
+    this->ResetCurrentRound();
     UpdateStatistics();
   }
 
