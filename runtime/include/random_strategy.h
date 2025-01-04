@@ -48,8 +48,7 @@ struct RandomStrategy : PickStrategy<TargetObj> {
     auto &threads = PickStrategy<TargetObj>::threads;
 
     for (size_t i = 0; i < threads.size(); ++i) {
-      int task_index = this->GetNextTaskInThread(i);      
-
+      int task_index = this->GetNextTaskInThread(i);
       if (
         task_index == threads[i].size() ||
         threads[i][task_index]->IsParked()

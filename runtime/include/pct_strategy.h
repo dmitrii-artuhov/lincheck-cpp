@@ -124,7 +124,44 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj> {
   }
 
   std::tuple<Task&, bool, int> NextSchedule() override {
-    assert(false && "unimplemented");
+    auto& round_schedule = Strategy::round_schedule;
+    auto& threads = this->threads;
+
+    size_t max = std::numeric_limits<size_t>::min();
+    size_t index_of_max = 0;
+    // Have to ignore waiting threads, so can't do it faster than O(n)
+    for (size_t i = 0; i < threads.size(); ++i) {
+      int task_index = this->GetNextTaskInThread(i);
+      // Ignore waiting tasks
+      if (
+        task_index == threads[i].size() ||
+        threads[i][task_index]->IsParked()
+      ) {
+        // dual waiting if request finished, but follow up isn't
+        // skip dual tasks that already have finished the request
+        // section(follow-up will be executed in another task, so we can't
+        // resume)
+        continue;
+      }
+
+      if (max <= priorities[i]) {
+        max = priorities[i];
+        index_of_max = i;
+      }
+    }
+    // Check whether the priority change is required
+    current_schedule_length++;
+    for (size_t i = 0; i < priority_change_points.size(); ++i) {
+      if (current_schedule_length == priority_change_points[i]) {
+        priorities[index_of_max] = current_depth - i;
+      }
+    }
+
+    // Picked thread is `index_of_max`
+    int next_task_index = this->GetNextTaskInThread(index_of_max);
+    bool is_new = round_schedule[index_of_max] != next_task_index;
+    round_schedule[index_of_max] = next_task_index;
+    return { threads[index_of_max][next_task_index], is_new, index_of_max };
   }
 
   void StartNextRound() override {
@@ -138,9 +175,24 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj> {
       while (thread.size() > 0) {
         thread.pop_back();
       }
+      thread = StableVector<Task>();
     }
-
     this->state.Reset();
+
+    UpdateStatistics();
+  }
+
+  void ResetCurrentRound() override {
+    BaseStrategyWithThreads<TargetObj>::ResetCurrentRound();
+    UpdateStatistics();
+  }
+
+  ~PctStrategy() {
+    this->TerminateTasks();
+  }
+
+private:
+  void UpdateStatistics() {
     // Update statistics
     current_depth++;
     if (current_depth >= 50) {
@@ -150,21 +202,11 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj> {
     current_schedule_length = 0;
 
     // current_depth have been increased
-    size_t new_k = std::reduce(k_statistics.begin(), k_statistics.end()) /
-                   k_statistics.size();
+    size_t new_k = std::reduce(k_statistics.begin(), k_statistics.end()) / k_statistics.size();
     log() << "k: " << new_k << "\n";
     PrepareForDepth(current_depth, new_k);
-
-    for (auto& thread : this->threads) {
-      thread = StableVector<Task>();
-    }
   }
-
-  ~PctStrategy() {
-    this->TerminateTasks();
-  }
-
-private:
+  
   std::unordered_set<std::string> CountNames(size_t except_thread) {
     std::unordered_set<std::string> names;
 
