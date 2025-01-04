@@ -55,7 +55,7 @@ void GreedyRoundMinimizor::minimize(
     }
 }
 
-Scheduler::Result InterleavingMinimizor::onSingleTaskRemoved(
+Scheduler::Result SameInterleavingMinimizor::onSingleTaskRemoved(
     SchedulerWithReplay& sched,
     const Scheduler::Histories& nonlinear_history,
     const Task& task
@@ -64,7 +64,7 @@ Scheduler::Result InterleavingMinimizor::onSingleTaskRemoved(
     return sched.replayRound(new_ordering);
 }
 
-Scheduler::Result InterleavingMinimizor::onTwoTasksRemoved(
+Scheduler::Result SameInterleavingMinimizor::onTwoTasksRemoved(
     SchedulerWithReplay& sched,
     const Scheduler::Histories& nonlinear_history,
     const Task& task_i,
@@ -75,7 +75,7 @@ Scheduler::Result InterleavingMinimizor::onTwoTasksRemoved(
 }
 
 
-Scheduler::Result StrategyMinimizor::onSingleTaskRemoved(
+Scheduler::Result StrategyExplorationMinimizor::onSingleTaskRemoved(
     SchedulerWithReplay& sched,
     const Scheduler::Histories& nonlinear_history,
     const Task& task
@@ -90,7 +90,7 @@ Scheduler::Result StrategyMinimizor::onSingleTaskRemoved(
     return new_histories;
 }
 
-Scheduler::Result StrategyMinimizor::onTwoTasksRemoved(
+Scheduler::Result StrategyExplorationMinimizor::onTwoTasksRemoved(
     SchedulerWithReplay& sched,
     const Scheduler::Histories& nonlinear_history,
     const Task& task_i,

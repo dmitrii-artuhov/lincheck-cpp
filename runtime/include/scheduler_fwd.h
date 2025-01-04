@@ -22,8 +22,8 @@ struct Scheduler {
 struct SchedulerWithReplay : Scheduler {
 protected:
     friend class GreedyRoundMinimizor;
-    friend class InterleavingMinimizor;
-    friend class StrategyMinimizor;
+    friend class SameInterleavingMinimizor;
+    friend class StrategyExplorationMinimizor;
 
     virtual Result runRound() = 0;
 
@@ -38,8 +38,8 @@ protected:
         std::vector <int> tasks_ordering;
   
         for (auto& task : full_history) {
-        if (exclude_task_ids.contains(task.get()->GetId())) continue;
-        tasks_ordering.emplace_back(task.get()->GetId());
+            if (exclude_task_ids.contains(task.get()->GetId())) continue;
+            tasks_ordering.emplace_back(task.get()->GetId());
         }
 
         return tasks_ordering;
