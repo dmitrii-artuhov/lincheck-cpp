@@ -18,7 +18,7 @@ StrategyScheduler::StrategyScheduler(Strategy &sched_class,
       max_rounds(max_rounds),
       minimization_runs(minimization_runs) {}
 
-Scheduler::Result StrategyScheduler::runRound() {
+Scheduler::Result StrategyScheduler::RunRound() {
   // History of invoke and response events which is required for the checker
   SeqHistory sequential_history;
   // Full history of the current execution in the Run function
@@ -51,7 +51,7 @@ Scheduler::Result StrategyScheduler::runRound() {
   return std::nullopt;
 }
 
-StrategyScheduler::Result StrategyScheduler::exploreRound(int runs) {
+StrategyScheduler::Result StrategyScheduler::ExploreRound(int runs) {
   for (int i = 0; i < runs; ++i) {
     // log() << "Run " << i + 1 << "/" << runs << "\n";
     strategy.ResetCurrentRound();
@@ -86,7 +86,7 @@ StrategyScheduler::Result StrategyScheduler::exploreRound(int runs) {
   return std::nullopt;
 }
 
-StrategyScheduler::Result StrategyScheduler::replayRound(const std::vector<int>& tasks_ordering) {
+StrategyScheduler::Result StrategyScheduler::ReplayRound(const std::vector<int>& tasks_ordering) {
   strategy.ResetCurrentRound();
 
   // History of invoke and response events which is required for the checker
@@ -141,7 +141,7 @@ StrategyScheduler::Result StrategyScheduler::replayRound(const std::vector<int>&
   return std::nullopt;
 }
 
-std::vector<int> StrategyScheduler::getTasksOrdering(
+std::vector<int> StrategyScheduler::GetTasksOrdering(
   const FullHistory& full_history,
   const std::unordered_set<int> exclude_task_ids
 ) {
@@ -155,17 +155,17 @@ std::vector<int> StrategyScheduler::getTasksOrdering(
   return tasks_ordering;
 }
 
-void StrategyScheduler::minimize(
+void StrategyScheduler::Minimize(
   Scheduler::Histories& nonlinear_history,
   const RoundMinimizor& minimizor
 ) {
-  minimizor.minimize(*this, nonlinear_history);
+  minimizor.Minimize(*this, nonlinear_history);
 }
 
 Scheduler::Result StrategyScheduler::Run() {
   for (size_t i = 0; i < max_rounds; ++i) {
     log() << "run round: " << i << "\n";
-    auto histories = runRound();
+    auto histories = RunRound();
 
     if (histories.has_value()) {
       auto& [full_history, sequential_history] = histories.value();
@@ -174,10 +174,10 @@ Scheduler::Result StrategyScheduler::Run() {
       pretty_printer.PrettyPrint(sequential_history, log());
       
       log() << "Minimizing same interleaving...\n";
-      minimize(histories.value(), SameInterleavingMinimizor());
+      Minimize(histories.value(), SameInterleavingMinimizor());
 
       log() << "Minimizing with rescheduling (runs: " << minimization_runs << ")...\n";
-      minimize(histories.value(), StrategyExplorationMinimizor(minimization_runs));
+      Minimize(histories.value(), StrategyExplorationMinimizor(minimization_runs));
 
       return histories;
     }

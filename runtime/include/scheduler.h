@@ -174,17 +174,17 @@ struct StrategyScheduler : Scheduler {
   friend class StrategyExplorationMinimizor;
  private:
   // Runs a round with some interleaving while generating it
-  Result runRound();
+  Result RunRound();
 
   // Runs different interleavings of the current round
-  Result exploreRound(int runs);
+  Result ExploreRound(int runs);
 
   // Replays current round with specified interleaving
-  Result replayRound(const std::vector<int>& tasks_ordering);
+  Result ReplayRound(const std::vector<int>& tasks_ordering);
 
-  static std::vector<int> getTasksOrdering(const FullHistory& full_history, std::unordered_set<int> exclude_task_ids);
+  static std::vector<int> GetTasksOrdering(const FullHistory& full_history, std::unordered_set<int> exclude_task_ids);
 
-  void minimize(Scheduler::Histories& nonlinear_history, const RoundMinimizor& minimizor);
+  void Minimize(Scheduler::Histories& nonlinear_history, const RoundMinimizor& minimizor);
 
   Strategy& strategy;
 
