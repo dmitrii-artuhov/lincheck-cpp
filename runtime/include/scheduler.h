@@ -182,12 +182,13 @@ struct StrategyScheduler : public SchedulerWithReplay {
   // scheduler will end execution of the Run function
   StrategyScheduler(Strategy<Verifier>& sched_class, ModelChecker& checker,
                     PrettyPrinter& pretty_printer, size_t max_tasks,
-                    size_t max_rounds)
+                    size_t max_rounds, size_t minimization_runs)
       : strategy(sched_class),
         checker(checker),
         pretty_printer(pretty_printer),
         max_tasks(max_tasks),
-        max_rounds(max_rounds) {}
+        max_rounds(max_rounds),
+        minimization_runs(minimization_runs) {} 
 
   // Run returns full unliniarizable history if such a history is found. Full
   // history is a history with all events, where each element in the vector is a
@@ -197,8 +198,6 @@ struct StrategyScheduler : public SchedulerWithReplay {
       log() << "run round: " << i << "\n";
       debug(stderr, "run round: %d\n", i);
       auto histories = runRound();
-      // TODO: make `exploration_runs` a command-line argument
-      int exploration_runs = 10;
   
       if (histories.has_value()) {
         auto& [full_history, sequential_history] = histories.value();
@@ -209,8 +208,8 @@ struct StrategyScheduler : public SchedulerWithReplay {
         log() << "Minimizing same interleaving...\n";
         minimize(histories.value(), SameInterleavingMinimizor());
   
-        log() << "Minimizing with rescheduling (runs: " << exploration_runs << ")...\n";
-        minimize(histories.value(), StrategyExplorationMinimizor(exploration_runs));
+        log() << "Minimizing with rescheduling (runs: " << minimization_runs << ")...\n";
+        minimize(histories.value(), StrategyExplorationMinimizor(minimization_runs));
   
         return histories;
       }
@@ -363,6 +362,8 @@ struct StrategyScheduler : public SchedulerWithReplay {
   PrettyPrinter& pretty_printer;
   size_t max_tasks;
   size_t max_rounds;
+
+  size_t minimization_runs;
 };
 
 // TLAScheduler generates all executions satisfying some conditions.
