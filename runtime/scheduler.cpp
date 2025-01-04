@@ -173,10 +173,10 @@ Scheduler::Result StrategyScheduler::Run() {
       pretty_printer.PrettyPrint(sequential_history, log());
       
       log() << "Minimizing same interleaving...\n";
-      minimize(histories.value(), InterleavingMinimizor());
+      minimize(histories.value(), SameInterleavingMinimizor());
 
       log() << "Minimizing with rescheduling (runs: " << exploration_runs << ")...\n";
-      minimize(histories.value(), StrategyMinimizor(exploration_runs));
+      minimize(histories.value(), StrategyExplorationMinimizor(exploration_runs));
 
       return histories;
     }

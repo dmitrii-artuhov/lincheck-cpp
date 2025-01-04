@@ -170,8 +170,8 @@ struct StrategyScheduler : Scheduler {
   Result Run() override;
 
   friend class GreedyRoundMinimizor;
-  friend class InterleavingMinimizor;
-  friend class StrategyMinimizor;
+  friend class SameInterleavingMinimizor;
+  friend class StrategyExplorationMinimizor;
  private:
   // Runs a round with some interleaving while generating it
   Result runRound();
