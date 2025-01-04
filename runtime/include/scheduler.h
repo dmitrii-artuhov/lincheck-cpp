@@ -197,7 +197,7 @@ struct StrategyScheduler : public SchedulerWithReplay {
     for (size_t i = 0; i < max_rounds; ++i) {
       log() << "run round: " << i << "\n";
       debug(stderr, "run round: %d\n", i);
-      auto histories = runRound();
+      auto histories = RunRound();
   
       if (histories.has_value()) {
         auto& [full_history, sequential_history] = histories.value();
@@ -206,10 +206,10 @@ struct StrategyScheduler : public SchedulerWithReplay {
         pretty_printer.PrettyPrint(sequential_history, log());
         
         log() << "Minimizing same interleaving...\n";
-        minimize(histories.value(), SameInterleavingMinimizor());
+        Minimize(histories.value(), SameInterleavingMinimizor());
   
         log() << "Minimizing with rescheduling (runs: " << minimization_runs << ")...\n";
-        minimize(histories.value(), StrategyExplorationMinimizor(minimization_runs));
+        Minimize(histories.value(), StrategyExplorationMinimizor(minimization_runs));
   
         return histories;
       }
@@ -223,7 +223,7 @@ struct StrategyScheduler : public SchedulerWithReplay {
 
  private:
   // Runs a round with some interleaving while generating it
-  Result runRound() override {
+  Result RunRound() override {
     // History of invoke and response events which is required for the checker
     SeqHistory sequential_history;
     // Full history of the current execution in the Run function
@@ -257,7 +257,7 @@ struct StrategyScheduler : public SchedulerWithReplay {
   }
 
   // Runs different interleavings of the current round
-  Result exploreRound(int runs) override {
+  Result ExploreRound(int runs) override {
     for (int i = 0; i < runs; ++i) {
       // log() << "Run " << i + 1 << "/" << runs << "\n";
       strategy.ResetCurrentRound();
@@ -293,7 +293,7 @@ struct StrategyScheduler : public SchedulerWithReplay {
   }
 
   // Replays current round with specified interleaving
-  Result replayRound(const std::vector<int>& tasks_ordering) override {
+  Result ReplayRound(const std::vector<int>& tasks_ordering) override {
     strategy.ResetCurrentRound();
 
     // History of invoke and response events which is required for the checker
@@ -350,11 +350,11 @@ struct StrategyScheduler : public SchedulerWithReplay {
 
   // Minimizes number of tasks in the nonlinearized history preserving threads interleaving.
   // Modifies argument `nonlinear_history`.
-  void minimize(
+  void Minimize(
     Histories& nonlinear_history,
     const RoundMinimizor& minimizor
   ) override {
-    minimizor.minimize(*this, nonlinear_history);
+    minimizor.Minimize(*this, nonlinear_history);
   }
 
   Strategy<Verifier>& strategy;

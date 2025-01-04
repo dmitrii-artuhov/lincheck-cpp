@@ -25,13 +25,13 @@ protected:
     friend class SameInterleavingMinimizor;
     friend class StrategyExplorationMinimizor;
 
-    virtual Result runRound() = 0;
+    virtual Result RunRound() = 0;
 
-    virtual Result exploreRound(int runs) = 0;
+    virtual Result ExploreRound(int runs) = 0;
 
-    virtual Result replayRound(const std::vector<int>& tasks_ordering) = 0;
+    virtual Result ReplayRound(const std::vector<int>& tasks_ordering) = 0;
 
-    inline static std::vector<int> getTasksOrdering(
+    inline static std::vector<int> GetTasksOrdering(
         const FullHistory& full_history,
         std::unordered_set<int> exclude_task_ids
     ) {
@@ -45,7 +45,7 @@ protected:
         return tasks_ordering;
     }
 
-    virtual void minimize(
+    virtual void Minimize(
         Histories& nonlinear_history,
         const RoundMinimizor& minimizor
     ) = 0;

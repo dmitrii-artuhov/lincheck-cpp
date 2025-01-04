@@ -5,25 +5,25 @@
 
 struct RoundMinimizor {
   // Minimizes number of tasks in the nonlinearized history; modifies argument `nonlinear_history`.
-  virtual void minimize(
+  virtual void Minimize(
     SchedulerWithReplay& sched,
     Scheduler::Histories& nonlinear_history
   ) const = 0;
 };
 
 struct GreedyRoundMinimizor : public RoundMinimizor {
-  void minimize(
+  void Minimize(
     SchedulerWithReplay& sched,
     Scheduler::Histories& nonlinear_history
   ) const override;
 
-  virtual Scheduler::Result onSingleTaskRemoved(
+  virtual Scheduler::Result OnSingleTaskRemoved(
     SchedulerWithReplay& sched,
     const Scheduler::Histories& nonlinear_history,
     const Task& task
   ) const = 0;
 
-  virtual Scheduler::Result onTwoTasksRemoved(
+  virtual Scheduler::Result OnTwoTasksRemoved(
     SchedulerWithReplay& sched,
     const Scheduler::Histories& nonlinear_history,
     const Task& task_i,
@@ -32,13 +32,13 @@ struct GreedyRoundMinimizor : public RoundMinimizor {
 };
 
 struct SameInterleavingMinimizor : public GreedyRoundMinimizor {
-  Scheduler::Result onSingleTaskRemoved(
+  Scheduler::Result OnSingleTaskRemoved(
     SchedulerWithReplay& sched,
     const Scheduler::Histories& nonlinear_history,
     const Task& task
   ) const override;
 
-  Scheduler::Result onTwoTasksRemoved(
+  Scheduler::Result OnTwoTasksRemoved(
     SchedulerWithReplay& sched,
     const Scheduler::Histories& nonlinear_history,
     const Task& task_i,
@@ -50,13 +50,13 @@ struct StrategyExplorationMinimizor : public GreedyRoundMinimizor {
   StrategyExplorationMinimizor() = delete;
   explicit StrategyExplorationMinimizor(int runs_): runs(runs_) {}
 
-  Scheduler::Result onSingleTaskRemoved(
+  Scheduler::Result OnSingleTaskRemoved(
     SchedulerWithReplay& sched,
     const Scheduler::Histories& nonlinear_history,
     const Task& task
   ) const override;
 
-  Scheduler::Result onTwoTasksRemoved(
+  Scheduler::Result OnTwoTasksRemoved(
     SchedulerWithReplay& sched,
     const Scheduler::Histories& nonlinear_history,
     const Task& task_i,
