@@ -141,7 +141,7 @@ StrategyScheduler::Result StrategyScheduler::replayRound(const std::vector<int>&
 std::vector<int> StrategyScheduler::getTasksOrdering(
   const FullHistory& full_history,
   const std::unordered_set<int> exclude_task_ids
-) const {
+) {
   std::vector <int> tasks_ordering;
   
   for (auto& task : full_history) {
@@ -156,58 +156,7 @@ void StrategyScheduler::minimize(
   Scheduler::Histories& nonlinear_history,
   const RoundMinimizor& minimizor
 ) {
-  std::vector<std::reference_wrapper<const Task>> tasks;
-
-  for (const HistoryEvent& event : nonlinear_history.second) {
-    if (std::holds_alternative<Invoke>(event)) {
-      tasks.push_back(std::get<Invoke>(event).GetTask());
-    }
-  }
-
-  // remove single task
-  for (auto& task : tasks) {
-    if (task.get()->IsRemoved()) continue;
-
-    // log() << "Try to remove task with id: " << task.get()->GetId() << "\n";
-    auto new_histories = minimizor.onSingleTaskRemoved(this, nonlinear_history, task.get());
-
-    if (new_histories.has_value()) {
-      nonlinear_history.first.swap(new_histories.value().first);
-      nonlinear_history.second.swap(new_histories.value().second);
-      task.get()->SetRemoved(true);
-    }
-  }
-
-  // remove two tasks (for operations with semantics of add/remove)
-  for (size_t i = 0; i < tasks.size(); ++i) {
-    auto& task_i = tasks[i];
-    if (task_i.get()->IsRemoved()) continue;
-    
-    for (size_t j = i + 1; j < tasks.size(); ++j) {
-      auto& task_j = tasks[j];
-      if (task_j.get()->IsRemoved()) continue;
-      
-      // log() << "Try to remove tasks with ids: " << task_i.get()->GetId() << " and "
-      //       << task_j.get()->GetId() << "\n";
-      auto new_histories = minimizor.onTwoTasksRemoved(this, nonlinear_history, task_i.get(), task_j.get());
-
-      if (new_histories.has_value()) {
-        // sequential history (Invoke/Response events) must have even number of history events
-        assert(new_histories.value().second.size() % 2 == 0);
-
-        nonlinear_history.first.swap(new_histories.value().first);
-        nonlinear_history.second.swap(new_histories.value().second);
-        
-        task_i.get()->SetRemoved(true);
-        task_j.get()->SetRemoved(true);
-        break; // tasks (i, j) were removed, so go to the next iteration of i
-      }
-    }
-  }
-
-  // replay minimized round one last time to put coroutines in `returned` state
-  // (because multiple failed attempts to minimize new scenarios could leave tasks in invalid state)
-  replayRound(getTasksOrdering(nonlinear_history.first, {}));
+  minimizor.minimize(*this, nonlinear_history);
 }
 
 Scheduler::Result StrategyScheduler::Run() {
