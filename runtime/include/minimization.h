@@ -82,7 +82,7 @@ struct GreedyRoundMinimizor : public RoundMinimizor {
   ) const = 0;
 };
 
-struct InterleavingMinimizor : public GreedyRoundMinimizor {
+struct SameInterleavingMinimizor : public GreedyRoundMinimizor {
   Scheduler::Result onSingleTaskRemoved(
     StrategyScheduler& sched,
     const Scheduler::Histories& nonlinear_history,
@@ -103,9 +103,9 @@ struct InterleavingMinimizor : public GreedyRoundMinimizor {
   }
 };
 
-struct StrategyMinimizor : public GreedyRoundMinimizor {
-  StrategyMinimizor() = delete;
-  explicit StrategyMinimizor(int runs_): runs(runs_) {}
+struct StrategyExplorationMinimizor : public GreedyRoundMinimizor {
+  StrategyExplorationMinimizor() = delete;
+  explicit StrategyExplorationMinimizor(int runs_): runs(runs_) {}
 
   Scheduler::Result onSingleTaskRemoved(
     StrategyScheduler& sched,
