@@ -8,7 +8,7 @@
  * This is an interface for minimizors that decrease the number of tasks in the nonlinearized history.
  */
 struct RoundMinimizor {
-  // Minimizes number of tasks in the nonlinearized history; modifies argument `nonlinear_history`.
+  // Minimizes the number of tasks in the nonlinearized history; modifies argument `nonlinear_history`.
   virtual void Minimize(
     SchedulerWithReplay& sched,
     Scheduler::BothHistories& nonlinear_history
