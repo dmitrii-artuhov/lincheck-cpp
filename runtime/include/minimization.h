@@ -4,7 +4,7 @@
 #include "lib.h"
 
 struct RoundMinimizor {
-  // Minimizes number of tasks in the nonlinearized history; modifies argument `nonlinear_history`.
+  // Minimizes the number of tasks in the nonlinearized history; modifies argument `nonlinear_history`.
   virtual void Minimize(
     StrategyScheduler& sched,
     Scheduler::Histories& nonlinear_history

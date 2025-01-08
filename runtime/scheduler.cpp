@@ -141,6 +141,11 @@ StrategyScheduler::Result StrategyScheduler::ReplayRound(const std::vector<int>&
   return std::nullopt;
 }
 
+
+const Strategy& StrategyScheduler::GetStrategy() const {
+  return strategy;
+}
+
 std::vector<int> StrategyScheduler::GetTasksOrdering(
   const FullHistory& full_history,
   const std::unordered_set<int> exclude_task_ids
