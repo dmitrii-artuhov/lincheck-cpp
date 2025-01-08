@@ -319,7 +319,7 @@ struct StrategyScheduler : public SchedulerWithReplay {
     return std::nullopt;
   }
 
- protected:
+protected:
   // Runs a round with some interleaving while generating it
   Result RunRound() override {
     // History of invoke and response events which is required for the checker
@@ -384,7 +384,6 @@ struct StrategyScheduler : public SchedulerWithReplay {
               Response(next_task, result, thread_id));
         }
       }
-
       if (!checker.Check(sequential_history)) {
         // log() << "New nonlinearized scenario:\n";
         // pretty_printer.PrettyPrint(sequential_history, log());
