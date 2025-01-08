@@ -105,7 +105,7 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
     return {threads[index_of_max].back(), false, index_of_max};
   }
 
-  std::tuple<Task&, bool, int> NextSchedule() override {
+  TaskWithMetaData NextSchedule() override {
     auto& round_schedule = this->round_schedule;
     auto& threads = this->threads;
 
@@ -143,7 +143,7 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
     int next_task_index = this->GetNextTaskInThread(index_of_max);
     bool is_new = round_schedule[index_of_max] != next_task_index;
     round_schedule[index_of_max] = next_task_index;
-    return { threads[index_of_max][next_task_index], is_new, index_of_max };
+    return TaskWithMetaData{ threads[index_of_max][next_task_index], is_new, index_of_max };
   }
 
   void StartNextRound() override {

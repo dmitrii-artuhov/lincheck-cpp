@@ -63,14 +63,14 @@ struct PickStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
     return {threads[current_thread].back(), false, current_thread};
   }
 
-  std::tuple<Task&, bool, int> NextSchedule() override {
+  TaskWithMetaData NextSchedule() override {
     auto& round_schedule = this->round_schedule;
     size_t current_thread = PickSchedule();
     int next_task_index = this->GetNextTaskInThread(current_thread);
     bool is_new = round_schedule[current_thread] != next_task_index;
 
     round_schedule[current_thread] = next_task_index;
-    return { this->threads[current_thread][next_task_index], is_new, current_thread };
+    return TaskWithMetaData{ this->threads[current_thread][next_task_index], is_new, current_thread };
   }
 
   void StartNextRound() override {

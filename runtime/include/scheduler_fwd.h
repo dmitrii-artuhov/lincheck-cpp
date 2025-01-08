@@ -6,13 +6,14 @@
 
 #include "lincheck.h"
 
+struct Strategy;
 struct RoundMinimizor;
 
 struct Scheduler {
     using FullHistory = std::vector<std::reference_wrapper<Task>>;
     using SeqHistory = std::vector<std::variant<Invoke, Response>>;
-    using Histories = std::pair<FullHistory, SeqHistory>;
-    using Result = std::optional<Histories>;
+    using BothHistories = std::pair<FullHistory, SeqHistory>;
+    using Result = std::optional<BothHistories>;
 
     virtual Result Run() = 0;
 
@@ -31,22 +32,10 @@ protected:
 
     virtual Result ReplayRound(const std::vector<int>& tasks_ordering) = 0;
 
-    inline static std::vector<int> GetTasksOrdering(
-        const FullHistory& full_history,
-        std::unordered_set<int> exclude_task_ids
-    ) {
-        std::vector <int> tasks_ordering;
-  
-        for (auto& task : full_history) {
-            if (exclude_task_ids.contains(task.get()->GetId())) continue;
-            tasks_ordering.emplace_back(task.get()->GetId());
-        }
-
-        return tasks_ordering;
-    }
+    virtual Strategy& GetStrategy() const = 0;
 
     virtual void Minimize(
-        Histories& nonlinear_history,
+        BothHistories& nonlinear_history,
         const RoundMinimizor& minimizor
     ) = 0;
 };

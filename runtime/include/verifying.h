@@ -49,8 +49,7 @@ Opts parse_opts();
 std::vector<std::string> split(const std::string &s, char delim);
 
 template <typename TargetObj, StrategyVerifier Verifier>
-std::unique_ptr<Strategy<Verifier>> MakeStrategy(Opts &opts,
-                                                 std::vector<TaskBuilder> l) {
+std::unique_ptr<Strategy> MakeStrategy(Opts &opts, std::vector<TaskBuilder> l) {
   switch (opts.typ) {
     case RR: {
       std::cout << "round-robin\n";
@@ -84,7 +83,7 @@ std::unique_ptr<Strategy<Verifier>> MakeStrategy(Opts &opts,
 // TODO: refactor.
 template <StrategyVerifier Verifier>
 struct StrategySchedulerWrapper : StrategyScheduler<Verifier> {
-  StrategySchedulerWrapper(std::unique_ptr<Strategy<Verifier>> strategy,
+  StrategySchedulerWrapper(std::unique_ptr<Strategy> strategy,
                            ModelChecker &checker, PrettyPrinter &pretty_printer,
                            size_t max_tasks, size_t max_rounds, size_t minimization_runs)
       : strategy(std::move(strategy)),
@@ -92,7 +91,7 @@ struct StrategySchedulerWrapper : StrategyScheduler<Verifier> {
                                     max_tasks, max_rounds, minimization_runs) {};
 
  private:
-  std::unique_ptr<Strategy<Verifier>> strategy;
+  std::unique_ptr<Strategy> strategy;
 };
 
 template <typename TargetObj, StrategyVerifier Verifier>

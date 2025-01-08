@@ -65,7 +65,7 @@ struct RandomStrategy : PickStrategy<TargetObj, Verifier> {
 
     auto thread_distribution =
         std::discrete_distribution<>(pick_weights.begin(), pick_weights.end());
-    auto num = thread_distribution(PickStrategy<TargetObj, Verifier>::rng);
+    auto num = thread_distribution(this->rng);
     for (size_t i = 0; i < threads.size(); ++i) {
       int task_index = this->GetNextTaskInThread(i);
       if (

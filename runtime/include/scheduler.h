@@ -44,16 +44,30 @@ concept StrategyVerifier = requires(T a) {
 // Strategy is the general strategy interface which decides which task
 // will be the next one it can be implemented by different strategies, such as:
 // randomized/tla/fair
-template <StrategyVerifier Verifier>
+// template <StrategyVerifier Verifier>
 struct Strategy {
   virtual TaskWithMetaData Next() = 0;
 
   // Returns the same data as `Next` method. However, it does not generate the round,
   // but schedules the threads accoding to the strategy policy 
-  virtual std::tuple<Task&, bool, int> NextSchedule() = 0;
+  virtual TaskWithMetaData NextSchedule() = 0;
 
   // Returns { task, its thread id }
   virtual std::optional<std::tuple<Task&, int>> GetTask(int task_id) = 0;
+
+  // TODO: abstract this method more (returning `vector<StableVector<...>>` is not good)
+  virtual const std::vector<StableVector<Task>>& GetTasks() const = 0;
+
+  // Returns true if the task with the given id is marked as removed
+  bool IsTaskRemoved(int task_id) const {
+    return removed_tasks.contains(task_id);
+  }
+
+  // Marks or demarks task as removed
+  void SetTaskRemoved(int task_id, bool is_removed) {
+    if (is_removed) removed_tasks.insert(task_id);
+    else removed_tasks.erase(task_id);
+  }
 
   // Removes all tasks to start a new round.
   // (Note: strategy should stop all tasks that already have been started)
@@ -65,8 +79,13 @@ struct Strategy {
   // Returns the number of non-removed tasks
   virtual int GetValidTasksCount() const = 0;
 
+  // Returns the total number of tasks (including removed)
+  virtual int GetTotalTasksCount() const = 0;
+
+  // Returns the number of threads
+  virtual int GetThreadsCount() const = 0;
+
   virtual ~Strategy() = default;
-  Verifier sched_checker{};
 
 protected:
   // For current round returns first task index in thread which is greater
@@ -75,13 +94,15 @@ protected:
 
   // id of next generated task
   int new_task_id = 0;
+  // stores task ids that are removed during the round minimization
+  std::unordered_set<int> removed_tasks;
   // when generated round is explored this vector stores indexes of tasks
   // that will be invoked next in each thread
   std::vector<int> round_schedule;
 };
 
 template<typename TargetObj, StrategyVerifier Verifier>
-struct BaseStrategyWithThreads : public Strategy<Verifier> {
+struct BaseStrategyWithThreads : public Strategy {
   std::optional<std::tuple<Task&, int>> GetTask(int task_id) override {
     // TODO: can this be optimized?
     int thread_id = 0;
@@ -101,13 +122,17 @@ struct BaseStrategyWithThreads : public Strategy<Verifier> {
     return std::nullopt;
   }
 
+  const std::vector<StableVector<Task>>& GetTasks() const override {
+    return threads;
+  }
+
   void ResetCurrentRound() override {
     TerminateTasks();
     state.Reset();
     for (auto& thread : threads) {
       size_t tasks_in_thread = thread.size();
       for (size_t i = 0; i < tasks_in_thread; ++i) {
-        if (!thread[i]->IsRemoved()) {
+        if (!IsTaskRemoved(thread[i]->GetId())) {
           thread[i] = thread[i]->Restart(&state);
         }
       }
@@ -118,13 +143,25 @@ struct BaseStrategyWithThreads : public Strategy<Verifier> {
     int non_removed_tasks = 0;
     for (auto& thread : threads) {
       for (size_t i = 0; i < thread.size(); ++i) {
-        auto& task = thread[i];
-        if (!task.get()->IsRemoved()) {
+        const auto& task = thread[i].get();
+        if (!IsTaskRemoved(task->GetId())) {
           non_removed_tasks++;
         }
       }
     }
     return non_removed_tasks;
+  }
+
+  int GetTotalTasksCount() const override {
+    int total_tasks = 0;
+    for (auto& thread : threads) {
+      total_tasks += thread.size();
+    }
+    return total_tasks;
+  }
+
+  int GetThreadsCount() const override {
+    return threads.size();
   }
 
 protected:
@@ -148,14 +185,14 @@ protected:
 
   int GetNextTaskInThread(int thread_index) const override {
     auto& thread = threads[thread_index];
-    int task_index = this->round_schedule[thread_index];
+    int task_index = round_schedule[thread_index];
 
     while (
       task_index < static_cast<int>(thread.size()) &&
       (
         task_index == -1 ||
         thread[task_index].get()->IsReturned() ||
-        thread[task_index].get()->IsRemoved()
+        IsTaskRemoved(thread[task_index].get()->GetId())
       )
     ) {
       task_index++;
@@ -164,6 +201,7 @@ protected:
     return task_index;
   }
 
+  Verifier sched_checker{};
   TargetObj state{};
   // Strategy struct is the owner of all tasks, and all
   // references can't be invalidated before the end of the round,
@@ -180,7 +218,7 @@ template <StrategyVerifier Verifier>
 struct StrategyScheduler : public SchedulerWithReplay {
   // max_switches represents the maximal count of switches. After this count
   // scheduler will end execution of the Run function
-  StrategyScheduler(Strategy<Verifier>& sched_class, ModelChecker& checker,
+  StrategyScheduler(Strategy& sched_class, ModelChecker& checker,
                     PrettyPrinter& pretty_printer, size_t max_tasks,
                     size_t max_rounds, size_t minimization_runs)
       : strategy(sched_class),
@@ -221,7 +259,7 @@ struct StrategyScheduler : public SchedulerWithReplay {
     return std::nullopt;
   }
 
- private:
+protected:
   // Runs a round with some interleaving while generating it
   Result RunRound() override {
     // History of invoke and response events which is required for the checker
@@ -280,7 +318,6 @@ struct StrategyScheduler : public SchedulerWithReplay {
           sequential_history.emplace_back(Response(next_task, result, thread_id));
         }
       }
-  
   
       if (!checker.Check(sequential_history)) {
         // log() << "New nonlinearized scenario:\n";
@@ -348,16 +385,21 @@ struct StrategyScheduler : public SchedulerWithReplay {
     return std::nullopt;
   }
 
+  Strategy& GetStrategy() const override {
+    return strategy;
+  }
+
   // Minimizes number of tasks in the nonlinearized history preserving threads interleaving.
   // Modifies argument `nonlinear_history`.
   void Minimize(
-    Histories& nonlinear_history,
+    BothHistories& nonlinear_history,
     const RoundMinimizor& minimizor
   ) override {
     minimizor.Minimize(*this, nonlinear_history);
   }
 
-  Strategy<Verifier>& strategy;
+private:
+  Strategy& strategy;
   ModelChecker& checker;
   PrettyPrinter& pretty_printer;
   size_t max_tasks;

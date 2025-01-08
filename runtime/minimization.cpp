@@ -1,113 +1,113 @@
 #include "scheduler.h"
 #include "minimization.h"
 
+// round minimizor interface
+std::vector<int> RoundMinimizor::GetTasksOrdering(
+  const Scheduler::FullHistory& full_history,
+  const std::unordered_set<int> exclude_task_ids
+) {
+  std::vector <int> tasks_ordering;
+
+  for (auto& task : full_history) {
+    if (exclude_task_ids.contains(task.get()->GetId())) continue;
+    tasks_ordering.emplace_back(task.get()->GetId());
+  }
+
+  return tasks_ordering;
+}
+
+// greedy
 void GreedyRoundMinimizor::Minimize(
-    SchedulerWithReplay& sched,
-    Scheduler::Histories& nonlinear_history
+  SchedulerWithReplay& sched,
+  Scheduler::BothHistories& nonlinear_history
 ) const {
-    std::vector<std::reference_wrapper<const Task>> tasks;
+  std::vector<std::reference_wrapper<const Task>> tasks;
 
-    for (const HistoryEvent& event : nonlinear_history.second) {
-      if (std::holds_alternative<Invoke>(event)) {
-        tasks.push_back(std::get<Invoke>(event).GetTask());
-      }
+  for (const HistoryEvent& event : nonlinear_history.second) {
+    if (std::holds_alternative<Invoke>(event)) {
+      tasks.push_back(std::get<Invoke>(event).GetTask());
     }
+  }
 
-    // remove single task
-    for (auto& task : tasks) {
-      if (task.get()->IsRemoved()) continue;
+  Strategy& strategy = sched.GetStrategy();
+  // remove single task
+  for (auto& task : tasks) {
+    if (strategy.IsTaskRemoved(task.get()->GetId())) continue;
 
-      // log() << "Try to remove task with id: " << task.get()->GetId() << "\n";
-      auto new_histories = OnSingleTaskRemoved(sched, nonlinear_history, task.get());
+    // log() << "Try to remove task with id: " << task.get()->GetId() << "\n";
+    auto new_histories = OnTasksRemoved(sched, nonlinear_history, { task.get()->GetId() });
+
+    if (new_histories.has_value()) {
+      nonlinear_history.first.swap(new_histories.value().first);
+      nonlinear_history.second.swap(new_histories.value().second);
+      strategy.SetTaskRemoved(task.get()->GetId(), true);
+    }
+  }
+
+  // remove two tasks (for operations with semantics of add/remove)
+  for (size_t i = 0; i < tasks.size(); ++i) {
+    auto& task_i = tasks[i].get();
+    int task_i_id = task_i->GetId();
+    if (strategy.IsTaskRemoved(task_i_id)) continue;
+
+    for (size_t j = i + 1; j < tasks.size(); ++j) {
+      auto& task_j = tasks[j].get();
+      int task_j_id = task_j->GetId();
+      if (strategy.IsTaskRemoved(task_j_id)) continue;
+
+      // log() << "Try to remove tasks with ids: " << task_i.get()->GetId() << " and "
+      //       << task_j.get()->GetId() << "\n";
+      auto new_histories = OnTasksRemoved(sched, nonlinear_history, { task_i_id, task_j_id }); 
 
       if (new_histories.has_value()) {
+        // sequential history (Invoke/Response events) must have even number of history events
+        assert(new_histories.value().second.size() % 2 == 0);
+
         nonlinear_history.first.swap(new_histories.value().first);
         nonlinear_history.second.swap(new_histories.value().second);
-        task.get()->SetRemoved(true);
+
+        strategy.SetTaskRemoved(task_i_id, true);
+        strategy.SetTaskRemoved(task_j_id, true);
+        break; // tasks (i, j) were removed, so go to the next iteration of i
       }
     }
+  }
 
-    // remove two tasks (for operations with semantics of add/remove)
-    for (size_t i = 0; i < tasks.size(); ++i) {
-      auto& task_i = tasks[i];
-      if (task_i.get()->IsRemoved()) continue;
-      
-      for (size_t j = i + 1; j < tasks.size(); ++j) {
-        auto& task_j = tasks[j];
-        if (task_j.get()->IsRemoved()) continue;
-        
-        // log() << "Try to remove tasks with ids: " << task_i.get()->GetId() << " and "
-        //       << task_j.get()->GetId() << "\n";
-        auto new_histories = OnTwoTasksRemoved(sched, nonlinear_history, task_i.get(), task_j.get());
+  // replay minimized round one last time to put coroutines in `returned` state
+  // (because multiple failed attempts to minimize new scenarios could leave tasks in invalid state)
+  sched.ReplayRound(RoundMinimizor::GetTasksOrdering(nonlinear_history.first, {}));
+}
 
-        if (new_histories.has_value()) {
-          // sequential history (Invoke/Response events) must have even number of history events
-          assert(new_histories.value().second.size() % 2 == 0);
 
-          nonlinear_history.first.swap(new_histories.value().first);
-          nonlinear_history.second.swap(new_histories.value().second);
+// same interleaving
+Scheduler::Result SameInterleavingMinimizor::OnTasksRemoved(
+  SchedulerWithReplay& sched,
+  const Scheduler::BothHistories& nonlinear_history,
+  const std::unordered_set<int>& task_ids
+) const {
+  std::vector<int> new_ordering = RoundMinimizor::GetTasksOrdering(nonlinear_history.first, task_ids);
+  return sched.ReplayRound(new_ordering);
+}
 
-          task_i.get()->SetRemoved(true);
-          task_j.get()->SetRemoved(true);
-          break; // tasks (i, j) were removed, so go to the next iteration of i
-        }
-      }
+// strategy exploration
+StrategyExplorationMinimizor::StrategyExplorationMinimizor(int runs_): runs(runs_) {}
+
+Scheduler::Result StrategyExplorationMinimizor::OnTasksRemoved(
+  SchedulerWithReplay& sched,
+  const Scheduler::BothHistories& nonlinear_history,
+  const std::unordered_set<int>& task_ids
+) const {
+  auto mark_tasks_as_removed = [&](bool is_removed) {
+    for (const auto& task_id : task_ids) {
+      sched.GetStrategy().SetTaskRemoved(task_id, is_removed);
     }
+  };
 
-    // replay minimized round one last time to put coroutines in `returned` state
-    // (because multiple failed attempts to minimize new scenarios could leave tasks in invalid state)
-    sched.ReplayRound(SchedulerWithReplay::GetTasksOrdering(nonlinear_history.first, {}));
-}
+  mark_tasks_as_removed(true);
+  Scheduler::Result new_histories = sched.ExploreRound(runs);
+  if (!new_histories.has_value()) {
+    mark_tasks_as_removed(false);
+  }
 
-Scheduler::Result SameInterleavingMinimizor::OnSingleTaskRemoved(
-    SchedulerWithReplay& sched,
-    const Scheduler::Histories& nonlinear_history,
-    const Task& task
-) const {
-    std::vector<int> new_ordering = SchedulerWithReplay::GetTasksOrdering(nonlinear_history.first, { task->GetId() });
-    return sched.ReplayRound(new_ordering);
-}
-
-Scheduler::Result SameInterleavingMinimizor::OnTwoTasksRemoved(
-    SchedulerWithReplay& sched,
-    const Scheduler::Histories& nonlinear_history,
-    const Task& task_i,
-    const Task& task_j
-) const {
-    std::vector<int> new_ordering = SchedulerWithReplay::GetTasksOrdering(nonlinear_history.first, { task_i->GetId(), task_j->GetId() });
-    return sched.ReplayRound(new_ordering);
-}
-
-
-Scheduler::Result StrategyExplorationMinimizor::OnSingleTaskRemoved(
-    SchedulerWithReplay& sched,
-    const Scheduler::Histories& nonlinear_history,
-    const Task& task
-) const {
-    task->SetRemoved(true);
-    Scheduler::Result new_histories = sched.ExploreRound(runs);
-
-    if (!new_histories.has_value()) {
-        task->SetRemoved(false);
-    }
-
-    return new_histories;
-}
-
-Scheduler::Result StrategyExplorationMinimizor::OnTwoTasksRemoved(
-    SchedulerWithReplay& sched,
-    const Scheduler::Histories& nonlinear_history,
-    const Task& task_i,
-    const Task& task_j
-) const {
-    task_i->SetRemoved(true);
-    task_j->SetRemoved(true);
-    Scheduler::Result new_histories = sched.ExploreRound(runs);
-
-    if (!new_histories.has_value()) {
-        task_i->SetRemoved(false);
-        task_j->SetRemoved(false);
-    }
-
-    return new_histories;
+  return new_histories;
 }
