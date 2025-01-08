@@ -23,8 +23,11 @@ struct Strategy {
   // but schedules the threads accoding to the strategy policy 
   virtual std::tuple<Task&, bool, int> NextSchedule() = 0;
 
-  // Returns { task, its thread id }
+  // Returns { task, its thread id } (TODO: make it `const` method)
   virtual std::optional<std::tuple<Task&, int>> GetTask(int task_id) = 0;
+  
+  // TODO: abstract this method more (vector<StableVector<...>> is not good)
+  virtual const std::vector<StableVector<Task>>& GetTasks() const = 0;
 
   // Removes all tasks to start a new round.
   // (Note: strategy should stop all tasks that already have been started)
@@ -35,6 +38,7 @@ struct Strategy {
 
   // Returns the number of non-removed tasks
   virtual int GetValidTasksCount() const = 0;
+
 
   virtual ~Strategy() = default;
 
@@ -69,6 +73,10 @@ struct BaseStrategyWithThreads : public Strategy {
       thread_id++;
     }
     return std::nullopt;
+  }
+
+  const std::vector<StableVector<Task>>& GetTasks() const override {
+    return threads;
   }
 
   void ResetCurrentRound() override {
@@ -171,10 +179,6 @@ struct StrategyScheduler : Scheduler {
   // Resume operation on the corresponding task
   Result Run() override;
 
-  friend class GreedyRoundMinimizor;
-  friend class SameInterleavingMinimizor;
-  friend class StrategyExplorationMinimizor;
- private:
   // Runs a round with some interleaving while generating it
   Result RunRound();
 
@@ -184,8 +188,11 @@ struct StrategyScheduler : Scheduler {
   // Replays current round with specified interleaving
   Result ReplayRound(const std::vector<int>& tasks_ordering);
 
+  const Strategy& GetStrategy() const;
+
   static std::vector<int> GetTasksOrdering(const FullHistory& full_history, std::unordered_set<int> exclude_task_ids);
 
+ private:
   void Minimize(Scheduler::Histories& nonlinear_history, const RoundMinimizor& minimizor);
 
   // Result replayRound(FullHistory tasks_order);
