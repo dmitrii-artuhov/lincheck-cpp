@@ -8,6 +8,7 @@ set (SOURCE_FILES
         generators.cpp
         syscall_trap.cpp
         minimization.cpp
+        minimization_smart.cpp
 )
 
 add_library(runtime SHARED ${SOURCE_FILES})

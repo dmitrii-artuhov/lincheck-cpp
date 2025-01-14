@@ -25,6 +25,7 @@ protected:
     friend class GreedyRoundMinimizor;
     friend class SameInterleavingMinimizor;
     friend class StrategyExplorationMinimizor;
+    friend class SmartMinimizor;
 
     virtual Result RunRound() = 0;
 
