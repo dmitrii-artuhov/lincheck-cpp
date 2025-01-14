@@ -14,6 +14,10 @@ struct SmartMinimizor : public RoundMinimizor {
   explicit SmartMinimizor(int minimization_runs_): minimization_runs(minimization_runs_) {
     std::random_device dev;
     rng = std::mt19937(dev());
+
+    mutations.emplace_back(std::make_unique<DropRandomTaskMutation>(), 0.5);
+    mutations.emplace_back(std::make_unique<DropRandomTaskMutation>(), 0.5);
+    mutations.emplace_back(std::make_unique<DropRandomTaskMutation>(), 0.5);
   }
 
   void Minimize(
@@ -107,13 +111,13 @@ private:
   };
 
   struct Mutation {
-    virtual void Apply(std::unordered_map<int, std::unordered_set<int>>& threads, const std::mt19937& rng) const = 0;
+    virtual void Apply(std::unordered_map<int, std::unordered_set<int>>& threads, std::mt19937& rng) const = 0;
 
     virtual ~Mutation() = default;
   };
 
   struct DropRandomTaskMutation : public Mutation {
-    void Apply(std::unordered_map<int, std::unordered_set<int>>& threads, const std::mt19937& rng) const override {
+    void Apply(std::unordered_map<int, std::unordered_set<int>>& threads, std::mt19937& rng) const override {
       if (threads.empty()) return;
 
       // pick a thread from which to drop task
@@ -160,7 +164,7 @@ private:
 
         // 3. new offspring successfully generated
         if (histories.has_value()) {
-          result.emplace_back(strategy, histories.value().first);
+          result.emplace_back(strategy, histories.value());
           break;
         }
       }
@@ -221,12 +225,8 @@ private:
   const int offsprings_per_generation = 5;
   const int attempts = 10; // attemps to generate each offspring with nonlinear history
   const int exploration_runs = 10;
-  const std::vector<std::pair<std::unique_ptr<Mutation>, float /* probability of applying the mutation */>> mutations = {
-    {  std::make_unique<DropRandomTaskMutation>(), 0.5 },
-    {  std::make_unique<DropRandomTaskMutation>(), 0.5 },
-    {  std::make_unique<DropRandomTaskMutation>(), 0.5 },
-  };
-  std::mt19937 rng;
+  std::vector<std::pair<std::unique_ptr<Mutation>, float /* probability of applying the mutation */>> mutations;
+  mutable std::mt19937 rng;
   mutable std::uniform_real_distribution<double> dist{0.0, 1.0};
   mutable std::set<Solution, SolutionSorter> population;
 };
