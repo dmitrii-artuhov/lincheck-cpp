@@ -26,7 +26,7 @@ struct Strategy {
   // Returns { task, its thread id } (TODO: make it `const` method)
   virtual std::optional<std::tuple<Task&, int>> GetTask(int task_id) = 0;
   
-  // TODO: abstract this method more (vector<StableVector<...>> is not good)
+  // TODO: abstract this method more (returning `vector<StableVector<...>>` is not good)
   virtual const std::vector<StableVector<Task>>& GetTasks() const = 0;
 
   // Removes all tasks to start a new round.
