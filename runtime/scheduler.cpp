@@ -179,11 +179,11 @@ Scheduler::Result StrategyScheduler::Run() {
       log() << "Full nonlinear scenario: \n";
       pretty_printer.PrettyPrint(sequential_history, log());
       
-      // log() << "Minimizing same interleaving...\n";
-      // Minimize(histories.value(), SameInterleavingMinimizor());
+      log() << "Minimizing same interleaving...\n";
+      Minimize(histories.value(), SameInterleavingMinimizor());
 
-      // log() << "Minimizing with rescheduling (runs: " << minimization_runs << ")...\n";
-      // Minimize(histories.value(), StrategyExplorationMinimizor(minimization_runs));
+      log() << "Minimizing with rescheduling (runs: " << minimization_runs << ")...\n";
+      Minimize(histories.value(), StrategyExplorationMinimizor(minimization_runs));
 
       log() << "Minimizing with smart minimization (runs: " << minimization_runs << ")...\n";
       Minimize(histories.value(), SmartMinimizor(minimization_runs, pretty_printer));
