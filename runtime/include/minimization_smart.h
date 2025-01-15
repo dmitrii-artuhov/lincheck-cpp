@@ -193,7 +193,7 @@ private:
           break;
         }
         else {
-          log() << "Linearized (Failed to generate offspring, attempt " << attempts - left_attempts << ")\n";
+          log() << "All linearized (failed to generate offspring, attempt " << attempts - left_attempts << ")\n";
         }
       }
     }
