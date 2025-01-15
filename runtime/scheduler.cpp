@@ -186,7 +186,7 @@ Scheduler::Result StrategyScheduler::Run() {
       // Minimize(histories.value(), StrategyExplorationMinimizor(minimization_runs));
 
       log() << "Minimizing with smart minimization (runs: " << minimization_runs << ")...\n";
-      Minimize(histories.value(), SmartMinimizor(minimization_runs));
+      Minimize(histories.value(), SmartMinimizor(minimization_runs, pretty_printer));
 
       return histories;
 
