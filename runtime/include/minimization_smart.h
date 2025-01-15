@@ -4,14 +4,17 @@
 #include <set>
 #include <unordered_map>
 #include <random>
+#include <string>
 
+#include "pretty_print.h"
 #include "minimization.h"
 #include "scheduler.h"
 #include "lib.h"
 
 struct SmartMinimizor : public RoundMinimizor {
   SmartMinimizor() = delete;
-  explicit SmartMinimizor(int minimization_runs_): minimization_runs(minimization_runs_) {
+  explicit SmartMinimizor(int minimization_runs_, PrettyPrinter& pretty_printer_):
+    minimization_runs(minimization_runs_), pretty_printer(pretty_printer_) {
     std::random_device dev;
     rng = std::mt19937(dev());
 
@@ -33,9 +36,11 @@ struct SmartMinimizor : public RoundMinimizor {
       const Solution& p2 = *(population.size() < 2 ? population.begin() : std::next(population.begin()));
 
       std::vector<Solution> offsprings = GenerateOffsprings(sched, p1, p2); // includes mutations
+      log() << "Offsprings generated: " << offsprings.size() << "\n";
       for (auto& s : offsprings) {
         population.insert(s);
       }
+      log() << "Population size: " << population.size() << "\n";
 
       while (population.size() > max_population_size) {
         population.erase(std::prev(population.end()));
@@ -44,13 +49,17 @@ struct SmartMinimizor : public RoundMinimizor {
 
     // final answer
     assert(!population.empty()); // at least the 1st solution should be there
+    log() << "Population fitnesses:\n";
+    for (const auto& solution : population) {
+      log() << solution.GetFitness() << "\n";
+    }
     const Solution& best_solution = *population.begin();
     
     // put tasks in a valid state according to the found best solution
     RemoveInvalidTasks(sched.GetStrategy(), best_solution.tasks);
     
     // replay the round with found nonlinearized interleaving, this put the round in correct final state and builds a `Histories` object
-    auto replayed_result = sched.ReplayRound(StrategyScheduler::GetTasksOrdering(best_solution.nonlinear_history, {}));
+    auto replayed_result = sched.ReplayRound(StrategyScheduler::GetTasksOrdering(best_solution.nonlinear_history.first, {}));
 
     // override nonlinear history with the best solution
     assert(replayed_result.has_value());
@@ -58,19 +67,14 @@ struct SmartMinimizor : public RoundMinimizor {
   }
 
 private:
-  struct Solution {
-    std::unordered_map<int, std::unordered_set<int>> tasks; // ThreadId -> { ValidTaskId1, ValidTaskId2, ... }
-    Scheduler::FullHistory nonlinear_history;
-    // Fitness is a value in range [0.0, 1.0], the bigger it is, the better is the Solution.
-    float fitness = 0.0;
-    
+  struct Solution {    
     explicit Solution(const Strategy& strategy, const Scheduler::Histories& histories) {
       int total_threads = 0;
       int total_tasks = 0;
       int valid_tasks = 0;
 
       // copy nonlinear history
-      nonlinear_history = histories.first;
+      nonlinear_history = histories;
 
       // save valid task ids per thread
       const auto& threads = strategy.GetTasks();
@@ -88,9 +92,10 @@ private:
         }
       }
 
+      log() << "Create solution: valid_tasks=" << valid_tasks << ", total_tasks=" << total_tasks << ", threads=" << tasks.size() << ", total_threads=" << total_threads << "\n";
       // cache the fitness value of the solution
       float tasks_fitness = 1.0 - (valid_tasks * 1.0) / (total_tasks * 1.0); // the less tasks left, the closer tasks fitness is to 1.0
-      float threads_fitness = 1.0 - (tasks.size() * 1.0) / (total_threads * 1.0); // the less threads left, the closer threads fitness is to 1.0
+      float threads_fitness = eps + 1.0 - (tasks.size() * 1.0) / (total_threads * 1.0); // the less threads left, the closer threads fitness is to 1.0
 
       assert(tasks_fitness >= 0.0 && tasks_fitness <= 1.0);
       assert(threads_fitness >= 0.0 && threads_fitness <= 1.0);
@@ -101,6 +106,13 @@ private:
     float GetFitness() const {
       return fitness;
     }
+
+    std::unordered_map<int, std::unordered_set<int>> tasks; // ThreadId -> { ValidTaskId1, ValidTaskId2, ... }
+    Scheduler::Histories nonlinear_history;
+    // Fitness is a value in range [0.0, 1.0], the bigger it is, the better is the Solution.
+  private:
+    float eps = 0.0001;
+    float fitness = 0.0;
   };
 
   struct SolutionSorter {
@@ -124,7 +136,8 @@ private:
       int thread_index = std::uniform_int_distribution<int>(0, threads.size() - 1)(rng);
       auto it = std::next(threads.begin(), thread_index);
       auto& tasks = it->second;
-      assert(!tasks.empty());
+
+      if (tasks.empty()) return;
 
       // remove task with position `task_index` from picked thread
       int task_index = std::uniform_int_distribution<int>(0, tasks.size() - 1)(rng);
@@ -139,6 +152,11 @@ private:
     const Solution& p2
   ) const {
     assert(attempts > 0);
+    log() << "Parents:\np1:\n";
+    pretty_printer.PrettyPrint(p1.nonlinear_history.second, log());
+    log() << "p2:\n";
+    pretty_printer.PrettyPrint(p2.nonlinear_history.second, log());
+    
     const Strategy& strategy = sched.GetStrategy();
     std::vector <Solution> result;
 
@@ -147,6 +165,7 @@ private:
       while (left_attempts--) {
         // cross product
         auto new_threads = CrossProduct(strategy, &p1, &p2);
+        LogThreads(new_threads, "New threads after cross product");
 
         // mutations
         for (const auto& [mutation, probability] : mutations) {
@@ -154,6 +173,7 @@ private:
             mutation->Apply(new_threads, rng);
           }
         }
+        LogThreads(new_threads, "New threads after mutations");
 
         // check for nonlinearizability
         // 1. mark only valid tasks in round as non-removed
@@ -164,8 +184,16 @@ private:
 
         // 3. new offspring successfully generated
         if (histories.has_value()) {
-          result.emplace_back(strategy, histories.value());
+          Solution offspring(strategy, histories.value());
+
+          log() << "New offspring:\n";
+          pretty_printer.PrettyPrint(offspring.nonlinear_history.second, log());
+
+          result.push_back(offspring);
           break;
+        }
+        else {
+          log() << "Linearized (Failed to generate offspring, attempt " << attempts - left_attempts << ")\n";
         }
       }
     }
@@ -219,6 +247,17 @@ private:
     return new_threads;
   }
 
+  void LogThreads(std::unordered_map<int, std::unordered_set<int>>& new_threads, const std::string& msg) const {
+    log() << msg << "\n";
+    for (const auto& [thread_id, task_ids] : new_threads) {
+      log() << "Thread " << thread_id << ": { ";
+      for (const auto& task_id : task_ids) {
+        log() << task_id << " ";
+      }
+      log() << "}\n";
+    }
+  }
+
   const int minimization_runs;
   // TODO: make this constructor params
   const int max_population_size = 100;
@@ -226,7 +265,8 @@ private:
   const int attempts = 10; // attemps to generate each offspring with nonlinear history
   const int exploration_runs = 10;
   std::vector<std::pair<std::unique_ptr<Mutation>, float /* probability of applying the mutation */>> mutations;
+  PrettyPrinter& pretty_printer;
   mutable std::mt19937 rng;
   mutable std::uniform_real_distribution<double> dist{0.0, 1.0};
-  mutable std::set<Solution, SolutionSorter> population;
+  mutable std::multiset<Solution, SolutionSorter> population;
 };
