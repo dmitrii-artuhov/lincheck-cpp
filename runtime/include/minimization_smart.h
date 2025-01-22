@@ -18,11 +18,6 @@ struct SmartMinimizor : public RoundMinimizor {
     pretty_printer(pretty_printer_) {
     std::random_device dev;
     rng = std::mt19937(dev());
-
-    // int mutations_count = 10;
-    // for (int i = 0; i < mutations_count; ++i) {
-    //   mutations.emplace_back(std::make_unique<DropRandomTaskMutation>(), 0.5);
-    // }
   }
 
   void Minimize(
