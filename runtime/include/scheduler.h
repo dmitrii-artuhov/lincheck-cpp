@@ -142,6 +142,7 @@ struct BaseStrategyWithThreads : public Strategy {
   }
 
   void ResetCurrentRound() override {
+    // log() << "Terminating tasks\n";
     TerminateTasks();
     //state.Reset();
     for (auto& thread : threads) {
