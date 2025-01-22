@@ -14,13 +14,15 @@
 struct SmartMinimizor : public RoundMinimizor {
   SmartMinimizor() = delete;
   explicit SmartMinimizor(int minimization_runs_, PrettyPrinter& pretty_printer_):
-    minimization_runs(minimization_runs_), pretty_printer(pretty_printer_) {
+    minimization_runs(minimization_runs_),
+    pretty_printer(pretty_printer_) {
     std::random_device dev;
     rng = std::mt19937(dev());
 
-    mutations.emplace_back(std::make_unique<DropRandomTaskMutation>(), 0.5);
-    mutations.emplace_back(std::make_unique<DropRandomTaskMutation>(), 0.5);
-    mutations.emplace_back(std::make_unique<DropRandomTaskMutation>(), 0.5);
+    // int mutations_count = 10;
+    // for (int i = 0; i < mutations_count; ++i) {
+    //   mutations.emplace_back(std::make_unique<DropRandomTaskMutation>(), 0.5);
+    // }
   }
 
   void Minimize(
@@ -28,10 +30,12 @@ struct SmartMinimizor : public RoundMinimizor {
     Scheduler::Histories& nonlinear_history
   ) const override {
     // reset
+    total_tasks = sched.GetStrategy().GetTotalTasksCount();
     population.clear();
-    population.insert(Solution(sched.GetStrategy(), nonlinear_history));
+    population.insert(Solution(sched.GetStrategy(), nonlinear_history, total_tasks));
 
     for (int r = 0; r < minimization_runs; ++r) {
+      // TODO: select with probability (allow to select worse parents as well)
       const Solution& p1 = *population.begin();
       const Solution& p2 = *(population.size() < 2 ? population.begin() : std::next(population.begin()));
 
@@ -68,10 +72,12 @@ struct SmartMinimizor : public RoundMinimizor {
 
 private:
   struct Solution {    
-    explicit Solution(const Strategy& strategy, const Scheduler::Histories& histories) {
-      int total_threads = 0;
-      int total_tasks = 0;
-      int valid_tasks = 0;
+    explicit Solution(
+      const Strategy& strategy,
+      const Scheduler::Histories& histories,
+      int total_tasks
+    ) {
+      int total_threads = strategy.GetThreadsCount();
 
       // copy nonlinear history
       nonlinear_history = histories;
@@ -79,10 +85,7 @@ private:
       // save valid task ids per thread
       const auto& threads = strategy.GetTasks();
       for (int i = 0; i < threads.size(); ++i) {
-        total_threads++;
-
         for (int j = 0; j < threads[i].size(); ++j) {
-          total_tasks++;
           const auto& task = threads[i][j].get();
 
           if (!task->IsRemoved()) {
@@ -100,11 +103,16 @@ private:
       assert(tasks_fitness >= 0.0 && tasks_fitness <= 1.0);
       assert(threads_fitness >= 0.0 && threads_fitness <= 1.0);
 
-      fitness = tasks_fitness * threads_fitness;
+      fitness = tasks_fitness * threads_fitness; // in [0.0, 1.0]: the bigger, the better
     }
 
     float GetFitness() const {
       return fitness;
+    }
+
+
+    int GetValidTasks() const {
+      return valid_tasks;
     }
 
     std::unordered_map<int, std::unordered_set<int>> tasks; // ThreadId -> { ValidTaskId1, ValidTaskId2, ... }
@@ -113,6 +121,7 @@ private:
   private:
     float eps = 0.0001;
     float fitness = 0.0;
+    int valid_tasks = 0;
   };
 
   struct SolutionSorter {
@@ -122,29 +131,24 @@ private:
     }
   };
 
-  struct Mutation {
-    virtual void Apply(std::unordered_map<int, std::unordered_set<int>>& threads, std::mt19937& rng) const = 0;
+  void DropRandomTask(std::unordered_map<int, std::unordered_set<int>>& threads) const {
+    if (threads.empty()) return;
 
-    virtual ~Mutation() = default;
-  };
+    // pick a thread from which to drop task
+    int thread_index = std::uniform_int_distribution<int>(0, threads.size() - 1)(rng);
+    auto it = std::next(threads.begin(), thread_index);
+    auto& tasks = it->second;
 
-  struct DropRandomTaskMutation : public Mutation {
-    void Apply(std::unordered_map<int, std::unordered_set<int>>& threads, std::mt19937& rng) const override {
-      if (threads.empty()) return;
+    if (
+      tasks.empty() ||
+      tasks.size() == 1 && threads.size() == 2 // removing task from selected thread will result in single thread left
+    ) return;
 
-      // pick a thread from which to drop task
-      int thread_index = std::uniform_int_distribution<int>(0, threads.size() - 1)(rng);
-      auto it = std::next(threads.begin(), thread_index);
-      auto& tasks = it->second;
-
-      if (tasks.empty()) return;
-
-      // remove task with position `task_index` from picked thread
-      int task_index = std::uniform_int_distribution<int>(0, tasks.size() - 1)(rng);
-      auto task_it = std::next(tasks.begin(), task_index);
-      tasks.erase(task_it);
-    }
-  };
+    // remove task with position `task_index` from picked thread
+    int task_index = std::uniform_int_distribution<int>(0, tasks.size() - 1)(rng);
+    auto task_it = std::next(tasks.begin(), task_index);
+    tasks.erase(task_it);
+  }
 
   std::vector<Solution> GenerateOffsprings(
     StrategyScheduler& sched,
@@ -168,23 +172,32 @@ private:
         LogThreads(new_threads, "New threads after cross product");
 
         // mutations
-        for (const auto& [mutation, probability] : mutations) {
-          if (dist(rng) < probability) {
-            mutation->Apply(new_threads, rng);
+        int applied_mutations = 0;
+        for (int m = 1; m <= mutations_count; ++m) {
+          // TODO: should we allow for only-cross product when > 1 mutations left?
+          // when a single mutation left, we want sometimes to only have cross products without mutations
+          if (mutations_count > 1 || dist(rng) < 0.95) {
+            applied_mutations++;
+            DropRandomTask(new_threads);
           }
         }
+        log() << "Applied mutations: " << applied_mutations << " / " << mutations_count << "\n";
         LogThreads(new_threads, "New threads after mutations");
 
         // check for nonlinearizability
         // 1. mark only valid tasks in round as non-removed
         RemoveInvalidTasks(strategy, new_threads);
 
+        // log() << "Marked threads as removed. Start exploring (exploration runs: " << exploration_runs << ")\n";
+
         // 2. explore round in order to find non-linearizable history
-        auto histories = sched.ExploreRound(minimization_runs);
+        auto histories = sched.ExploreRound(exploration_runs);
+
+        // log() << "Explored round\n";
 
         // 3. new offspring successfully generated
         if (histories.has_value()) {
-          Solution offspring(strategy, histories.value());
+          Solution offspring(strategy, histories.value(), total_tasks);
 
           log() << "New offspring:\n";
           pretty_printer.PrettyPrint(offspring.nonlinear_history.second, log());
@@ -197,6 +210,13 @@ private:
         }
       }
     }
+
+    if (result.size() * 2 < offsprings_per_generation && mutations_count > 1) {
+      // update the mutations count
+      mutations_count--;
+      log() << "Recalculate the mutations count: " << mutations_count << "\n";
+    }
+
     return result;
   }
 
@@ -260,13 +280,15 @@ private:
 
   const int minimization_runs;
   // TODO: make this constructor params
-  const int max_population_size = 100;
+  const int max_population_size = 2;
   const int offsprings_per_generation = 5;
   const int attempts = 10; // attemps to generate each offspring with nonlinear history
   const int exploration_runs = 10;
-  std::vector<std::pair<std::unique_ptr<Mutation>, float /* probability of applying the mutation */>> mutations;
-  PrettyPrinter& pretty_printer;
+  // std::vector<std::pair<std::unique_ptr<Mutation>, float /* probability of applying the mutation */>> mutations;
+  mutable int total_tasks;
+  mutable int mutations_count = 10;
+  mutable std::multiset<Solution, SolutionSorter> population;
   mutable std::mt19937 rng;
   mutable std::uniform_real_distribution<double> dist{0.0, 1.0};
-  mutable std::multiset<Solution, SolutionSorter> population;
+  PrettyPrinter& pretty_printer;
 };

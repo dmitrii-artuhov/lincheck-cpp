@@ -39,6 +39,11 @@ struct Strategy {
   // Returns the number of non-removed tasks
   virtual int GetValidTasksCount() const = 0;
 
+  // Returns the total number of tasks (including removed)
+  virtual int GetTotalTasksCount() const = 0;
+
+  // Returns the number of threads
+  virtual int GetThreadsCount() const = 0;
 
   virtual ~Strategy() = default;
 
@@ -80,8 +85,11 @@ struct BaseStrategyWithThreads : public Strategy {
   }
 
   void ResetCurrentRound() override {
+    // log() << "Terminating tasks\n";
     TerminateTasks();
+    // log() << "Resetting state\n";
     state.Reset();
+    // log() << "Restarting tasks\n";
     for (auto& thread : threads) {
       size_t tasks_in_thread = thread.size();
       for (size_t i = 0; i < tasks_in_thread; ++i) {
@@ -103,6 +111,18 @@ struct BaseStrategyWithThreads : public Strategy {
       }
     }
     return non_removed_tasks;
+  }
+
+  int GetTotalTasksCount() const override {
+    int total_tasks = 0;
+    for (auto& thread : threads) {
+      total_tasks += thread.size();
+    }
+    return total_tasks;
+  }
+
+  int GetThreadsCount() const override {
+    return threads.size();
   }
 
 protected:
