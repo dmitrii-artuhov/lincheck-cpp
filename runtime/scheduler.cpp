@@ -52,6 +52,9 @@ Scheduler::Result StrategyScheduler::RunRound() {
   return std::nullopt;
 }
 
+// TODO: Sometimes this method hangs on call to Resume() method
+//       same applies to the RunRound method which hangs sometimes, probably on the same call.
+//       Should check what cauases that.
 StrategyScheduler::Result StrategyScheduler::ExploreRound(int runs) {
   for (int i = 0; i < runs; ++i) {
     // log() << "Run " << i + 1 << "/" << runs << "\n";
@@ -67,16 +70,19 @@ StrategyScheduler::Result StrategyScheduler::ExploreRound(int runs) {
       }
       full_history.emplace_back(next_task);
 
+      // log() << "Rusume task: is_new=" << is_new << ", thread=" << thread_id << ", task_id=" << next_task->GetId() << " (removed: " << next_task->IsRemoved() << ", returned: " << next_task->IsReturned() << ")" << "\n";
       next_task->Resume();
       if (next_task->IsReturned()) {
+        // log() << "Returned task (" << next_task->IsReturned() << "): thread=" << thread_id << ", task_id=" << next_task->GetId() << "\n";
         tasks_to_run--;
 
         auto result = next_task->GetRetVal();
+        // log() << "Returned value: " << result << "\n";
         sequential_history.emplace_back(Response(next_task, result, thread_id));
       }
     }
 
-
+    // log() << "Checking round for linearizability...\n";
     if (!checker.Check(sequential_history)) {
       // log() << "New nonlinearized scenario:\n";
       // pretty_printer.PrettyPrint(sequential_history, log());
@@ -179,14 +185,24 @@ Scheduler::Result StrategyScheduler::Run() {
       log() << "Full nonlinear scenario: \n";
       pretty_printer.PrettyPrint(sequential_history, log());
       
-      log() << "Minimizing same interleaving...\n";
-      Minimize(histories.value(), SameInterleavingMinimizor());
+      // log() << "Minimizing same interleaving...\n";
+      // Minimize(histories.value(), SameInterleavingMinimizor());
+      // log() << "Same interleaving minimizor:\n";
+      // pretty_printer.PrettyPrint(histories.value().second, log());
 
-      log() << "Minimizing with rescheduling (runs: " << minimization_runs << ")...\n";
-      Minimize(histories.value(), StrategyExplorationMinimizor(minimization_runs));
+      // ==============================
+
+      // log() << "Minimizing with rescheduling (runs: " << minimization_runs << ")...\n";
+      // Minimize(histories.value(), StrategyExplorationMinimizor(minimization_runs));
+      // auto cached_history = histories.value().second;
 
       log() << "Minimizing with smart minimization (runs: " << minimization_runs << ")...\n";
       Minimize(histories.value(), SmartMinimizor(minimization_runs, pretty_printer));
+
+      // ==============================
+
+      // log() << "Greedy minimizor:\n";
+      // pretty_printer.PrettyPrint(cached_history, log());
 
       return histories;
     }
