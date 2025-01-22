@@ -174,8 +174,8 @@ private:
         // mutations
         int applied_mutations = 0;
         for (int m = 1; m <= mutations_count; ++m) {
-          // TODO: should we allow for only-cross product when > 1 mutations left?
-          // when a single mutation left, we want sometimes to only have cross products without mutations
+          // TODO: should we allow cross-product only even when `mutation_count > 1`?
+          // when a single mutation left, we want sometimes to only have cross product without mutating
           if (mutations_count > 1 || dist(rng) < 0.95) {
             applied_mutations++;
             DropRandomTask(new_threads);
