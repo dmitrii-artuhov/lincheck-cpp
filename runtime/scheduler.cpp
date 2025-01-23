@@ -283,6 +283,7 @@ Scheduler::Result StrategyScheduler::Run() {
         log().flush();
         strategy.StartNextRound();
       }
+      strategy.StartNextRound();
     }
 
     // Dump to file the results of the benchmark
