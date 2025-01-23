@@ -1,23 +1,28 @@
 #include <numeric>
+#include <fstream>
+#include <iostream>
 
 #include "include/scheduler.h"
 #include "include/logger.h"
 #include "include/pretty_print.h"
 #include "include/minimization.h"
 #include "include/minimization_smart.h"
+#include "include/timer.h"
 
 StrategyScheduler::StrategyScheduler(Strategy &sched_class,
                                      ModelChecker &checker,
                                      PrettyPrinter &pretty_printer,
                                      size_t max_tasks,
                                      size_t max_rounds,
-                                     size_t minimization_runs)
+                                     size_t minimization_runs,
+                                     size_t benchmark_rounds)
     : strategy(sched_class),
       checker(checker),
       pretty_printer(pretty_printer),
       max_tasks(max_tasks),
       max_rounds(max_rounds),
-      minimization_runs(minimization_runs) {}
+      minimization_runs(minimization_runs),
+      benchmark_rounds(benchmark_rounds) {}
 
 Scheduler::Result StrategyScheduler::RunRound() {
   // History of invoke and response events which is required for the checker
@@ -174,31 +179,215 @@ void StrategyScheduler::Minimize(
   minimizor.Minimize(*this, nonlinear_history);
 }
 
-Scheduler::Result StrategyScheduler::Run() {
-  for (size_t i = 0; i < max_rounds; ++i) {
-    log() << "run round: " << i << "\n";
-    auto histories = RunRound();
-
-    if (histories.has_value()) {
-      auto& [full_history, sequential_history] = histories.value();
-
-      log() << "Full nonlinear scenario: \n";
-      pretty_printer.PrettyPrint(sequential_history, log());
-      
-      log() << "Minimizing same interleaving...\n";
-      Minimize(histories.value(), SameInterleavingMinimizor());
-
-      log() << "Minimizing with rescheduling (runs: " << minimization_runs << ")...\n";
-      Minimize(histories.value(), StrategyExplorationMinimizor(minimization_runs));
-
-      log() << "Minimizing with smart minimizor (run: " << minimization_runs << ")...\n";
-      Minimize(histories.value(), SmartMinimizor(minimization_runs, pretty_printer));
-
-      return histories;
+void StrategyScheduler::ResetCurrentRound() {
+  strategy.ResetCurrentRound();
+  auto& threads = strategy.GetTasks();
+  for (auto& thread : threads) {
+    for (int i = 0; i < thread.size(); ++i) {
+      thread[i]->SetRemoved(false);
     }
-    log() << "===============================================\n\n";
-    log().flush();
-    strategy.StartNextRound();
+  }
+}
+
+Scheduler::Result StrategyScheduler::Run() {
+  if (benchmark_rounds > 0) {
+    Timer timer;
+
+    for (size_t i = 0; i < benchmark_rounds; ++i) {
+      while (true) {
+        log() << "run round: " << i << "\n";
+        auto histories = RunRound();
+
+        if (histories.has_value()) {
+          BenchmarkData data;
+
+          auto& [full_history, sequential_history] = histories.value();
+          int total_tasks = data.total_tasks = strategy.GetTotalTasksCount();
+          int64_t t = 0;
+
+          // Sequential minimization
+          log() << "Minimizing: Sequential minimization\n";
+          auto hist_copy = histories.value();
+          ResetCurrentRound();
+          timer.Start();
+          Minimize(hist_copy, SameInterleavingMinimizor());
+          data.sequential_minimization_ms = t = timer.Stop();
+          data.sequential_minimization_result = strategy.GetValidTasksCount();
+          log() << "Elapsed time: " << t << " ms, tasks: " << strategy.GetValidTasksCount() << "/" << total_tasks << "\n";
+          pretty_printer.PrettyPrint(hist_copy.second, log());
+
+          // Exploration minimization
+          log() << "Minimizing: Exploration minimization (runs: " << minimization_runs << ")\n";
+          hist_copy = histories.value();
+          ResetCurrentRound();
+          timer.Start();
+          Minimize(hist_copy, StrategyExplorationMinimizor(minimization_runs));
+          data.exploration_minimization_ms = t = timer.Stop();
+          data.exploration_minimization_result = strategy.GetValidTasksCount();
+          log() << "Elapsed time: " << t << " ms, tasks: " << strategy.GetValidTasksCount() << "/" << total_tasks << "\n";
+          pretty_printer.PrettyPrint(hist_copy.second, log());
+
+          // Greedy minimization
+          log() << "Minimizing: Greedy minimization (runs: " << minimization_runs << ")\n";
+          hist_copy = histories.value();
+          ResetCurrentRound();
+          timer.Start();
+          Minimize(hist_copy, SameInterleavingMinimizor());
+          Minimize(hist_copy, StrategyExplorationMinimizor(minimization_runs));
+          data.greedy_minimization_ms = t = timer.Stop();
+          data.greedy_minimization_result = strategy.GetValidTasksCount();
+          log() << "Elapsed time: " << t << " ms, tasks: " << strategy.GetValidTasksCount() << "/" << total_tasks << "\n";
+          pretty_printer.PrettyPrint(hist_copy.second, log());
+
+          // Double greedy minimization
+          log() << "Minimizing: Double greedy minimization (runs: " << minimization_runs << ")\n";
+          hist_copy = histories.value();
+          ResetCurrentRound();
+          timer.Start();
+          Minimize(hist_copy, SameInterleavingMinimizor());
+          Minimize(hist_copy, StrategyExplorationMinimizor(minimization_runs));
+          Minimize(hist_copy, StrategyExplorationMinimizor(minimization_runs));
+          data.double_greedy_minimization_ms = t = timer.Stop();
+          data.double_greedy_minimization_result = strategy.GetValidTasksCount();
+          log() << "Elapsed time: " << t << " ms, tasks: " << strategy.GetValidTasksCount() << "/" << total_tasks << "\n";
+          pretty_printer.PrettyPrint(hist_copy.second, log());
+
+          // Smart minimization
+          log() << "Minimizing: Smart minimization (runs: " << minimization_runs << ")\n";
+          hist_copy = histories.value();
+          ResetCurrentRound();
+          timer.Start();
+          Minimize(hist_copy, SmartMinimizor(minimization_runs, pretty_printer));
+          data.smart_minimization_ms = t = timer.Stop();
+          data.smart_minimization_result = strategy.GetValidTasksCount();
+          log() << "Elapsed time: " << t << " ms, tasks: " << strategy.GetValidTasksCount() << "/" << total_tasks << "\n";
+          pretty_printer.PrettyPrint(hist_copy.second, log());
+
+          // Combined 3 minimization
+          log() << "Minimizing: Combined 3 minimization (runs: " << minimization_runs << ")\n";
+          hist_copy = histories.value();
+          ResetCurrentRound();
+          timer.Start();
+          Minimize(hist_copy, SameInterleavingMinimizor());
+          Minimize(hist_copy, StrategyExplorationMinimizor(minimization_runs));
+          Minimize(hist_copy, SmartMinimizor(minimization_runs, pretty_printer));
+          data.combined_3_minimization_ms = t = timer.Stop();
+          data.combined_3_minimization_result = strategy.GetValidTasksCount();
+          log() << "Elapsed time: " << t << " ms, tasks: " << strategy.GetValidTasksCount() << "/" << total_tasks << "\n";
+          pretty_printer.PrettyPrint(hist_copy.second, log());
+
+          benchmark_runs.push_back(data);
+          break;
+        }
+        log() << "===============================================\n\n";
+        log().flush();
+        strategy.StartNextRound();
+      }
+    }
+
+    // Dump to file the results of the benchmark
+    std::ofstream file("benchmarks.txt");
+    
+    // Total tasks
+    file << "Total ";
+    for (const auto& data : benchmark_runs) {
+      file << data.total_tasks << " ";
+    }
+    file << "\n";
+
+    // Sequential minimization
+    file << "Sequential\n";
+    for (const auto& data : benchmark_runs) {
+      file << data.sequential_minimization_ms << " ";
+    }
+    file << "\n";
+    for (const auto& data : benchmark_runs) {
+      file << data.sequential_minimization_result << " ";
+    }
+    file << "\n";
+
+    // Exploration minimization
+    file << "Exploration\n";
+    for (const auto& data : benchmark_runs) {
+      file << data.exploration_minimization_ms << " ";
+    }
+    file << "\n";
+    for (const auto& data : benchmark_runs) {
+      file << data.exploration_minimization_result << " ";
+    }
+    file << "\n";
+
+    // Greedy minimization
+    file << "Greedy\n";
+    for (const auto& data : benchmark_runs) {
+      file << data.greedy_minimization_ms << " ";
+    }
+    file << "\n";
+    for (const auto& data : benchmark_runs) {
+      file << data.greedy_minimization_result << " ";
+    }
+    file << "\n";
+
+    // Double greedy minimization
+    file << "Double greedy\n";
+    for (const auto& data : benchmark_runs) {
+      file << data.double_greedy_minimization_ms << " ";
+    }
+    file << "\n";
+    for (const auto& data : benchmark_runs) {
+      file << data.double_greedy_minimization_result << " ";
+    }
+    file << "\n";
+
+    // Smart minimization
+    file << "Smart\n";
+    for (const auto& data : benchmark_runs) {
+      file << data.smart_minimization_ms << " ";
+    }
+    file << "\n";
+    for (const auto& data : benchmark_runs) {
+      file << data.smart_minimization_result << " ";
+    }
+    file << "\n";
+
+    // Combined 3 minimization
+    file << "Combined 3\n";
+    for (const auto& data : benchmark_runs) {
+      file << data.combined_3_minimization_ms << " ";
+    }
+    file << "\n";
+    for (const auto& data : benchmark_runs) {
+      file << data.combined_3_minimization_result << " ";
+    }
+    file << "\n";
+    file.close();
+  }
+  else {
+    for (size_t i = 0; i < max_rounds; ++i) {
+      log() << "run round: " << i << "\n";
+      auto histories = RunRound();
+
+      if (histories.has_value()) {
+        auto& [full_history, sequential_history] = histories.value();
+
+        log() << "Full nonlinear scenario: \n";
+        pretty_printer.PrettyPrint(sequential_history, log());
+        
+        log() << "Minimizing same interleaving...\n";
+        Minimize(histories.value(), SameInterleavingMinimizor());
+
+        log() << "Minimizing with rescheduling (runs: " << minimization_runs << ")...\n";
+        Minimize(histories.value(), StrategyExplorationMinimizor(minimization_runs));
+
+        log() << "Minimizing with smart minimizor (run: " << minimization_runs << ")...\n";
+        Minimize(histories.value(), SmartMinimizor(minimization_runs, pretty_printer));
+
+        return histories;
+      }
+      log() << "===============================================\n\n";
+      log().flush();
+      strategy.StartNextRound();
+    }
   }
 
   return std::nullopt;

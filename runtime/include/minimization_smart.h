@@ -35,11 +35,11 @@ struct SmartMinimizor : public RoundMinimizor {
       const Solution& p2 = *(population.size() < 2 ? population.begin() : std::next(population.begin()));
 
       std::vector<Solution> offsprings = GenerateOffsprings(sched, p1, p2); // includes mutations
-      log() << "Offsprings generated: " << offsprings.size() << "\n";
+      // log() << "Offsprings generated: " << offsprings.size() << "\n";
       for (auto& s : offsprings) {
         population.insert(s);
       }
-      log() << "Population size: " << population.size() << "\n";
+      // log() << "Population size: " << population.size() << "\n";
 
       while (population.size() > max_population_size) {
         population.erase(std::prev(population.end()));
@@ -48,10 +48,10 @@ struct SmartMinimizor : public RoundMinimizor {
 
     // final answer
     assert(!population.empty()); // at least the 1st solution should be there
-    log() << "Population fitnesses:\n";
-    for (const auto& solution : population) {
-      log() << solution.GetFitness() << "\n";
-    }
+    // log() << "Population fitnesses:\n";
+    // for (const auto& solution : population) {
+    //   log() << solution.GetFitness() << "\n";
+    // }
     const Solution& best_solution = *population.begin();
     
     // put tasks in a valid state according to the found best solution
@@ -90,7 +90,7 @@ private:
         }
       }
 
-      log() << "Create solution: valid_tasks=" << valid_tasks << ", total_tasks=" << total_tasks << ", threads=" << tasks.size() << ", total_threads=" << total_threads << "\n";
+      // log() << "Create solution: valid_tasks=" << valid_tasks << ", total_tasks=" << total_tasks << ", threads=" << tasks.size() << ", total_threads=" << total_threads << "\n";
       // cache the fitness value of the solution
       float tasks_fitness = 1.0 - (valid_tasks * 1.0) / (total_tasks * 1.0); // the less tasks left, the closer tasks fitness is to 1.0
       float threads_fitness = eps + 1.0 - (tasks.size() * 1.0) / (total_threads * 1.0); // the less threads left, the closer threads fitness is to 1.0
@@ -151,10 +151,10 @@ private:
     const Solution& p2
   ) const {
     assert(attempts > 0);
-    log() << "Parents:\np1:\n";
-    pretty_printer.PrettyPrint(p1.nonlinear_history.second, log());
-    log() << "p2:\n";
-    pretty_printer.PrettyPrint(p2.nonlinear_history.second, log());
+    // log() << "Parents:\np1:\n";
+    // pretty_printer.PrettyPrint(p1.nonlinear_history.second, log());
+    // log() << "p2:\n";
+    // pretty_printer.PrettyPrint(p2.nonlinear_history.second, log());
     
     const Strategy& strategy = sched.GetStrategy();
     std::vector <Solution> result;
@@ -164,7 +164,7 @@ private:
       while (left_attempts--) {
         // cross product
         auto new_threads = CrossProduct(strategy, &p1, &p2);
-        LogThreads(new_threads, "New threads after cross product");
+        // LogThreads(new_threads, "New threads after cross product");
 
         // mutations
         int applied_mutations = 0;
@@ -176,8 +176,8 @@ private:
             DropRandomTask(new_threads);
           }
         }
-        log() << "Applied mutations: " << applied_mutations << " / " << mutations_count << "\n";
-        LogThreads(new_threads, "New threads after mutations");
+        // log() << "Applied mutations: " << applied_mutations << " / " << mutations_count << "\n";
+        // LogThreads(new_threads, "New threads after mutations");
 
         // check for nonlinearizability
         // 1. mark only valid tasks in round as non-removed
@@ -194,14 +194,14 @@ private:
         if (histories.has_value()) {
           Solution offspring(strategy, histories.value(), total_tasks);
 
-          log() << "New offspring:\n";
-          pretty_printer.PrettyPrint(offspring.nonlinear_history.second, log());
+          // log() << "New offspring:\n";
+          // pretty_printer.PrettyPrint(offspring.nonlinear_history.second, log());
 
           result.push_back(offspring);
           break;
         }
         else {
-          log() << "All linearized (failed to generate offspring, attempt " << attempts - left_attempts << ")\n";
+          // log() << "All linearized (failed to generate offspring, attempt " << attempts - left_attempts << ")\n";
         }
       }
     }
@@ -209,7 +209,7 @@ private:
     if (result.size() * 2 < offsprings_per_generation && mutations_count > 1) {
       // update the mutations count
       mutations_count--;
-      log() << "Recalculate the mutations count: " << mutations_count << "\n";
+      // log() << "Recalculate the mutations count: " << mutations_count << "\n";
     }
 
     return result;
