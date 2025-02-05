@@ -34,6 +34,7 @@ struct Opts {
   size_t switches;
   size_t rounds;
   size_t minimization_runs;
+  size_t benchmark_rounds;
   bool verbose;
   StrategyType typ;
   std::vector<int> thread_weights;
@@ -79,10 +80,11 @@ std::unique_ptr<Strategy> MakeStrategy(Opts &opts, std::vector<TaskBuilder> l) {
 struct StrategySchedulerWrapper : StrategyScheduler {
   StrategySchedulerWrapper(std::unique_ptr<Strategy> strategy,
                            ModelChecker &checker, PrettyPrinter &pretty_printer,
-                           size_t max_tasks, size_t max_rounds, size_t minimization_runs)
+                           size_t max_tasks, size_t max_rounds,
+                           size_t minimization_runs, size_t benchmark_rounds)
       : strategy(std::move(strategy)),
         StrategyScheduler(*strategy.get(), checker, pretty_printer, max_tasks,
-                          max_rounds, minimization_runs) {};
+                          max_rounds, minimization_runs, benchmark_rounds) {};
 
  private:
   std::unique_ptr<Strategy> strategy;
@@ -99,8 +101,9 @@ std::unique_ptr<Scheduler> MakeScheduler(ModelChecker &checker, Opts &opts,
     case RND: {
       auto strategy = MakeStrategy<TargetObj>(opts, std::move(l));
       auto scheduler = std::make_unique<StrategySchedulerWrapper>(
-          std::move(strategy), checker, pretty_printer, opts.tasks,
-          opts.rounds, opts.minimization_runs);
+        std::move(strategy), checker, pretty_printer, opts.tasks,
+        opts.rounds, opts.minimization_runs, opts.benchmark_rounds
+      );
       return scheduler;
     }
     case TLA: {
@@ -125,6 +128,7 @@ int Run(int argc, char *argv[]) {
   std::cout << "switches = " << opts.switches << "\n";
   std::cout << "rounds   = " << opts.rounds << "\n";
   std::cout << "minimization runs   = " << opts.minimization_runs << "\n";
+  std::cout << "benchmarking runs   = " << opts.benchmark_rounds << "\n";
   std::cout << "targets  = " << task_builders.size() << "\n";
 
   PrettyPrinter pretty_printer{opts.threads};

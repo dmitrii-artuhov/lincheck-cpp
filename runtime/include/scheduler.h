@@ -12,6 +12,28 @@
 
 struct RoundMinimizor;
 
+struct BenchmarkData {
+  int total_tasks;
+  
+  int sequential_minimization_result;
+  int64_t sequential_minimization_ms;
+  
+  int exploration_minimization_result;
+  int64_t exploration_minimization_ms;
+
+  int greedy_minimization_result;
+  int64_t greedy_minimization_ms;
+  
+  int double_greedy_minimization_result;
+  int64_t double_greedy_minimization_ms;
+
+  int smart_minimization_result;
+  int64_t smart_minimization_ms;
+  
+  int combined_3_minimization_result;
+  int64_t combined_3_minimization_ms;
+};
+
 // Strategy is the general strategy interface which decides which task
 // will be the next one it can be implemented by different strategies, such as:
 // randomized/tla/fair
@@ -190,7 +212,7 @@ struct StrategyScheduler : Scheduler {
   // scheduler will end execution of the Run function
   StrategyScheduler(Strategy& sched_class, ModelChecker& checker,
                     PrettyPrinter& pretty_printer, size_t max_tasks,
-                    size_t max_rounds, size_t minimization_runs);
+                    size_t max_rounds, size_t minimization_runs, size_t benchmark_rounds);
 
   // Run returns full unliniarizable history if such a history is found. Full
   // history is a history with all events, where each element in the vector is a
@@ -213,17 +235,18 @@ struct StrategyScheduler : Scheduler {
  private:
   void Minimize(Scheduler::Histories& nonlinear_history, const RoundMinimizor& minimizor);
 
+  void ResetCurrentRound();
+
   Strategy& strategy;
-
   ModelChecker& checker;
-
   PrettyPrinter& pretty_printer;
-
   size_t max_tasks;
-
   size_t max_rounds;
-
   size_t minimization_runs;
+  size_t benchmark_rounds;
+
+  // benchmarks
+  std::vector<BenchmarkData> benchmark_runs;
 };
 
 // TLAScheduler generates all executions satisfying some conditions.
