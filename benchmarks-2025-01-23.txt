@@ -1,4 +1,4 @@
- ./build-cmake/verifying/targets/nonlinear_queue --verbose=1 --benchmark_rounds=5 --tasks=40 --threads=2 --strategy=random --minimization_runs=15
+./build-cmake/verifying/targets/nonlinear_queue --verbose=1 --benchmark_rounds=5 --tasks=40 --threads=2 --strategy=random --minimization_runs=15
 Total 41 41 41 41 41 
 Sequential
 867 1089 2295 1826 1121 

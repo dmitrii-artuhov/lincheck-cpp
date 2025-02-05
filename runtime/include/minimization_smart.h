@@ -66,7 +66,7 @@ struct SmartMinimizor : public RoundMinimizor {
   }
 
 private:
-  struct Solution {    
+  struct Solution {
     explicit Solution(
       const Strategy& strategy,
       const Scheduler::Histories& histories,
@@ -276,10 +276,11 @@ private:
   const int minimization_runs;
   // TODO: make this constructor params
   const int max_population_size = 2;
-  const int offsprings_per_generation = 5;
+  const int offsprings_per_generation = 5; // max number of offsprings per generation
   const int attempts = 10; // attemps to generate each offspring with nonlinear history
   const int exploration_runs = 10;
-  // std::vector<std::pair<std::unique_ptr<Mutation>, float /* probability of applying the mutation */>> mutations;
+
+  // TODO: a lot of mutables because `Minimize()` is const. Think of refactoring it later
   mutable int total_tasks;
   mutable int mutations_count = 10;
   mutable std::multiset<Solution, SolutionSorter> population;
