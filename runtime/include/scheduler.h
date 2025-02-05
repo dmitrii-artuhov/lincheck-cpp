@@ -85,11 +85,8 @@ struct BaseStrategyWithThreads : public Strategy {
   }
 
   void ResetCurrentRound() override {
-    // log() << "Terminating tasks\n";
     TerminateTasks();
-    // log() << "Resetting state\n";
     state.Reset();
-    // log() << "Restarting tasks\n";
     for (auto& thread : threads) {
       size_t tasks_in_thread = thread.size();
       for (size_t i = 0; i < tasks_in_thread; ++i) {
@@ -180,8 +177,6 @@ struct Scheduler {
 
   virtual Result Run() = 0;
 
-  // virtual Result minimizeHistory(Result nonlinear_history) = 0;
-
   virtual ~Scheduler() = default;
 };
 
@@ -214,10 +209,6 @@ struct StrategyScheduler : Scheduler {
 
  private:
   void Minimize(Scheduler::Histories& nonlinear_history, const RoundMinimizor& minimizor);
-
-  // Result replayRound(FullHistory tasks_order);
-
-  // Result minimizeHistory(Result nonlinear_history);
 
   Strategy& strategy;
 
