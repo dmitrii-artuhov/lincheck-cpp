@@ -70,19 +70,15 @@ StrategyScheduler::Result StrategyScheduler::ExploreRound(int runs) {
       }
       full_history.emplace_back(next_task);
 
-      // log() << "Rusume task: is_new=" << is_new << ", thread=" << thread_id << ", task_id=" << next_task->GetId() << " (removed: " << next_task->IsRemoved() << ", returned: " << next_task->IsReturned() << ")" << "\n";
       next_task->Resume();
       if (next_task->IsReturned()) {
-        // log() << "Returned task (" << next_task->IsReturned() << "): thread=" << thread_id << ", task_id=" << next_task->GetId() << "\n";
         tasks_to_run--;
 
         auto result = next_task->GetRetVal();
-        // log() << "Returned value: " << result << "\n";
         sequential_history.emplace_back(Response(next_task, result, thread_id));
       }
     }
 
-    // log() << "Checking round for linearizability...\n";
     if (!checker.Check(sequential_history)) {
       // log() << "New nonlinearized scenario:\n";
       // pretty_printer.PrettyPrint(sequential_history, log());
@@ -195,11 +191,6 @@ Scheduler::Result StrategyScheduler::Run() {
       Minimize(histories.value(), SmartMinimizor(minimization_runs, pretty_printer));
 
       return histories;
-
-      // log() << "Replaying round for test\n";
-      // std::vector <int> tasks_ordering = getTasksOrdering(full_history);
-      // auto res = replayRound(tasks_ordering);
-      // return histories;
     }
     log() << "===============================================\n\n";
     log().flush();
