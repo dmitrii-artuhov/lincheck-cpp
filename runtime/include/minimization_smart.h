@@ -29,17 +29,17 @@ struct SmartMinimizor : public RoundMinimizor {
     population.clear();
     population.insert(Solution(sched.GetStrategy(), nonlinear_history, total_tasks));
 
+    // TODO: when the mutations count is 1, we could add a count which will increase,
+    //       when it reaches the `max_nonsuccessful_runs` then we make a fast exit (cannot minimize anymore)
     for (int r = 0; r < minimization_runs; ++r) {
       // TODO: select with probability (allow to select worse parents as well)
       const Solution& p1 = *population.begin();
       const Solution& p2 = *(population.size() < 2 ? population.begin() : std::next(population.begin()));
 
       std::vector<Solution> offsprings = GenerateOffsprings(sched, p1, p2); // includes mutations
-      log() << "Offsprings generated: " << offsprings.size() << "\n";
       for (auto& s : offsprings) {
         population.insert(s);
       }
-      log() << "Population size: " << population.size() << "\n";
 
       while (population.size() > max_population_size) {
         population.erase(std::prev(population.end()));
@@ -48,10 +48,6 @@ struct SmartMinimizor : public RoundMinimizor {
 
     // final answer
     assert(!population.empty()); // at least the 1st solution should be there
-    log() << "Population fitnesses:\n";
-    for (const auto& solution : population) {
-      log() << solution.GetFitness() << "\n";
-    }
     const Solution& best_solution = *population.begin();
     
     // put tasks in a valid state according to the found best solution
@@ -66,7 +62,7 @@ struct SmartMinimizor : public RoundMinimizor {
   }
 
 private:
-  struct Solution {    
+  struct Solution {
     explicit Solution(
       const Strategy& strategy,
       const Scheduler::Histories& histories,
@@ -90,7 +86,6 @@ private:
         }
       }
 
-      log() << "Create solution: valid_tasks=" << valid_tasks << ", total_tasks=" << total_tasks << ", threads=" << tasks.size() << ", total_threads=" << total_threads << "\n";
       // cache the fitness value of the solution
       float tasks_fitness = 1.0 - (valid_tasks * 1.0) / (total_tasks * 1.0); // the less tasks left, the closer tasks fitness is to 1.0
       float threads_fitness = eps + 1.0 - (tasks.size() * 1.0) / (total_threads * 1.0); // the less threads left, the closer threads fitness is to 1.0
@@ -151,10 +146,6 @@ private:
     const Solution& p2
   ) const {
     assert(attempts > 0);
-    log() << "Parents:\np1:\n";
-    pretty_printer.PrettyPrint(p1.nonlinear_history.second, log());
-    log() << "p2:\n";
-    pretty_printer.PrettyPrint(p2.nonlinear_history.second, log());
     
     const Strategy& strategy = sched.GetStrategy();
     std::vector <Solution> result;
@@ -164,7 +155,6 @@ private:
       while (left_attempts--) {
         // cross product
         auto new_threads = CrossProduct(strategy, &p1, &p2);
-        LogThreads(new_threads, "New threads after cross product");
 
         // mutations
         int applied_mutations = 0;
@@ -176,32 +166,19 @@ private:
             DropRandomTask(new_threads);
           }
         }
-        log() << "Applied mutations: " << applied_mutations << " / " << mutations_count << "\n";
-        LogThreads(new_threads, "New threads after mutations");
 
         // check for nonlinearizability
         // 1. mark only valid tasks in round as non-removed
         RemoveInvalidTasks(strategy, new_threads);
 
-        // log() << "Marked threads as removed. Start exploring (exploration runs: " << exploration_runs << ")\n";
-
         // 2. explore round in order to find non-linearizable history
         auto histories = sched.ExploreRound(exploration_runs);
-
-        // log() << "Explored round\n";
 
         // 3. new offspring successfully generated
         if (histories.has_value()) {
           Solution offspring(strategy, histories.value(), total_tasks);
-
-          log() << "New offspring:\n";
-          pretty_printer.PrettyPrint(offspring.nonlinear_history.second, log());
-
           result.push_back(offspring);
           break;
-        }
-        else {
-          log() << "All linearized (failed to generate offspring, attempt " << attempts - left_attempts << ")\n";
         }
       }
     }
@@ -209,7 +186,6 @@ private:
     if (result.size() * 2 < offsprings_per_generation && mutations_count > 1) {
       // update the mutations count
       mutations_count--;
-      log() << "Recalculate the mutations count: " << mutations_count << "\n";
     }
 
     return result;
@@ -262,23 +238,12 @@ private:
     return new_threads;
   }
 
-  void LogThreads(std::unordered_map<int, std::unordered_set<int>>& new_threads, const std::string& msg) const {
-    log() << msg << "\n";
-    for (const auto& [thread_id, task_ids] : new_threads) {
-      log() << "Thread " << thread_id << ": { ";
-      for (const auto& task_id : task_ids) {
-        log() << task_id << " ";
-      }
-      log() << "}\n";
-    }
-  }
-
   const int minimization_runs;
   // TODO: make this constructor params
   const int max_population_size = 2;
   const int offsprings_per_generation = 5;
   const int attempts = 10; // attemps to generate each offspring with nonlinear history
-  const int exploration_runs = 10;
+  const int exploration_runs = 10; // TODO: for other minimizors, the `minimization_runs` relates to this. Should refactor this
   // std::vector<std::pair<std::unique_ptr<Mutation>, float /* probability of applying the mutation */>> mutations;
   mutable int total_tasks;
   mutable int mutations_count = 10;
