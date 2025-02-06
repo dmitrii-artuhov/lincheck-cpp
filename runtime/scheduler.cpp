@@ -52,9 +52,6 @@ Scheduler::Result StrategyScheduler::RunRound() {
   return std::nullopt;
 }
 
-// TODO: Sometimes this method hangs on call to Resume() method
-//       same applies to the RunRound method which hangs sometimes, probably on the same call.
-//       Should check what cauases that.
 StrategyScheduler::Result StrategyScheduler::ExploreRound(int runs) {
   for (int i = 0; i < runs; ++i) {
     // log() << "Run " << i + 1 << "/" << runs << "\n";
