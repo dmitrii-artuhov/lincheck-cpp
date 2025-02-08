@@ -161,7 +161,7 @@ std::vector<int> StrategyScheduler::GetTasksOrdering(
 }
 
 void StrategyScheduler::Minimize(
-  Scheduler::Histories& nonlinear_history,
+  Scheduler::BothHistories& nonlinear_history,
   const RoundMinimizor& minimizor
 ) {
   minimizor.Minimize(*this, nonlinear_history);
