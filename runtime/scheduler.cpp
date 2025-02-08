@@ -4,6 +4,7 @@
 #include "include/logger.h"
 #include "include/pretty_print.h"
 #include "include/minimization.h"
+#include "include/minimization_smart.h"
 
 StrategyScheduler::StrategyScheduler(Strategy &sched_class,
                                      ModelChecker &checker,
@@ -75,7 +76,6 @@ StrategyScheduler::Result StrategyScheduler::ExploreRound(int runs) {
       }
     }
 
-
     if (!checker.Check(sequential_history)) {
       // log() << "New nonlinearized scenario:\n";
       // pretty_printer.PrettyPrint(sequential_history, log());
@@ -141,22 +141,13 @@ StrategyScheduler::Result StrategyScheduler::ReplayRound(const std::vector<int>&
   return std::nullopt;
 }
 
-std::vector<int> StrategyScheduler::GetTasksOrdering(
-  const FullHistory& full_history,
-  const std::unordered_set<int> exclude_task_ids
-) {
-  std::vector <int> tasks_ordering;
-  
-  for (auto& task : full_history) {
-    if (exclude_task_ids.contains(task.get()->GetId())) continue;
-    tasks_ordering.emplace_back(task.get()->GetId());
-  }
 
-  return tasks_ordering;
+Strategy& StrategyScheduler::GetStrategy() const {
+  return strategy;
 }
 
 void StrategyScheduler::Minimize(
-  Scheduler::Histories& nonlinear_history,
+  Scheduler::BothHistories& nonlinear_history,
   const RoundMinimizor& minimizor
 ) {
   minimizor.Minimize(*this, nonlinear_history);
@@ -178,6 +169,9 @@ Scheduler::Result StrategyScheduler::Run() {
 
       log() << "Minimizing with rescheduling (runs: " << minimization_runs << ")...\n";
       Minimize(histories.value(), StrategyExplorationMinimizor(minimization_runs));
+
+      log() << "Minimizing with smart minimizor (runs: " << minimization_runs << ")...\n";
+      Minimize(histories.value(), SmartMinimizor(minimization_runs, pretty_printer));
 
       return histories;
     }

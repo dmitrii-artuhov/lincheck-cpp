@@ -19,12 +19,27 @@ struct Strategy {
   // Returns { next task, the flag which tells is the task new, thread number }.
   virtual std::tuple<Task&, bool, int> Next() = 0;
 
-  // Returns the same data as `Next` method. However, it does not generate the round,
-  // but schedules the threads accoding to the strategy policy 
+  // Returns the same data as `Next` method. However, it does not generate the round
+  // by inserting new tasks in it, but schedules the threads accoding to the strategy policy
+  // with previously genereated and saved round (used for round replaying functionality)
   virtual std::tuple<Task&, bool, int> NextSchedule() = 0;
 
-  // Returns { task, its thread id }
+  // Returns { task, its thread id } (TODO: make it `const` method)
   virtual std::optional<std::tuple<Task&, int>> GetTask(int task_id) = 0;
+  
+  // TODO: abstract this method more (returning `vector<StableVector<...>>` is not good)
+  virtual const std::vector<StableVector<Task>>& GetTasks() const = 0;
+
+  // Returns true if the task with the given id is marked as removed
+  bool IsTaskRemoved(int task_id) const {
+    return removed_tasks.contains(task_id);
+  }
+
+  // Marks or demarks task as removed
+  void SetTaskRemoved(int task_id, bool is_removed) {
+    if (is_removed) removed_tasks.insert(task_id);
+    else removed_tasks.erase(task_id);
+  }
 
   // Removes all tasks to start a new round.
   // (Note: strategy should stop all tasks that already have been started)
@@ -36,6 +51,12 @@ struct Strategy {
   // Returns the number of non-removed tasks
   virtual int GetValidTasksCount() const = 0;
 
+  // Returns the total number of tasks (including removed)
+  virtual int GetTotalTasksCount() const = 0;
+
+  // Returns the number of threads
+  virtual int GetThreadsCount() const = 0;
+
   virtual ~Strategy() = default;
 
 protected:
@@ -45,6 +66,8 @@ protected:
 
   // id of next generated task
   int new_task_id = 0;
+  // stores task ids that are removed during the round minimization
+  std::unordered_set<int> removed_tasks;
   // when generated round is explored this vector stores indexes of tasks
   // that will be invoked next in each thread
   std::vector<int> round_schedule;
@@ -71,13 +94,17 @@ struct BaseStrategyWithThreads : public Strategy {
     return std::nullopt;
   }
 
+  const std::vector<StableVector<Task>>& GetTasks() const override {
+    return threads;
+  }
+
   void ResetCurrentRound() override {
     TerminateTasks();
     state.Reset();
     for (auto& thread : threads) {
       size_t tasks_in_thread = thread.size();
       for (size_t i = 0; i < tasks_in_thread; ++i) {
-        if (!thread[i]->IsRemoved()) {
+        if (!IsTaskRemoved(thread[i]->GetId())) {
           thread[i] = thread[i]->Restart(&state);
         }
       }
@@ -88,13 +115,25 @@ struct BaseStrategyWithThreads : public Strategy {
     int non_removed_tasks = 0;
     for (auto& thread : threads) {
       for (size_t i = 0; i < thread.size(); ++i) {
-        auto& task = thread[i];
-        if (!task.get()->IsRemoved()) {
+        const auto& task = thread[i].get();
+        if (!IsTaskRemoved(task->GetId())) {
           non_removed_tasks++;
         }
       }
     }
     return non_removed_tasks;
+  }
+
+  int GetTotalTasksCount() const override {
+    int total_tasks = 0;
+    for (auto& thread : threads) {
+      total_tasks += thread.size();
+    }
+    return total_tasks;
+  }
+
+  int GetThreadsCount() const override {
+    return threads.size();
   }
 
 protected:
@@ -125,7 +164,7 @@ protected:
       (
         task_index == -1 ||
         thread[task_index].get()->IsReturned() ||
-        thread[task_index].get()->IsRemoved()
+        IsTaskRemoved(thread[task_index].get()->GetId())
       )
     ) {
       task_index++;
@@ -147,8 +186,8 @@ protected:
 struct Scheduler {
   using FullHistory = std::vector<std::reference_wrapper<Task>>;
   using SeqHistory = std::vector<std::variant<Invoke, Response>>;
-  using Histories = std::pair<FullHistory, SeqHistory>;
-  using Result = std::optional<Histories>;
+  using BothHistories = std::pair<FullHistory, SeqHistory>;
+  using Result = std::optional<BothHistories>;
 
   virtual Result Run() = 0;
 
@@ -169,10 +208,6 @@ struct StrategyScheduler : Scheduler {
   // Resume operation on the corresponding task
   Result Run() override;
 
-  friend class GreedyRoundMinimizor;
-  friend class SameInterleavingMinimizor;
-  friend class StrategyExplorationMinimizor;
- private:
   // Runs a round with some interleaving while generating it
   Result RunRound();
 
@@ -182,9 +217,10 @@ struct StrategyScheduler : Scheduler {
   // Replays current round with specified interleaving
   Result ReplayRound(const std::vector<int>& tasks_ordering);
 
-  static std::vector<int> GetTasksOrdering(const FullHistory& full_history, std::unordered_set<int> exclude_task_ids);
+  Strategy& GetStrategy() const;
 
-  void Minimize(Scheduler::Histories& nonlinear_history, const RoundMinimizor& minimizor);
+ private:
+  void Minimize(Scheduler::BothHistories& nonlinear_history, const RoundMinimizor& minimizor);
 
   Strategy& strategy;
 
