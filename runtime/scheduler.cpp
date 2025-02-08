@@ -143,7 +143,6 @@ StrategyScheduler::Result StrategyScheduler::ReplayRound(const std::vector<int>&
   return std::nullopt;
 }
 
-
 Strategy& StrategyScheduler::GetStrategy() const {
   return strategy;
 }
