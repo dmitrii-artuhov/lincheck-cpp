@@ -11,12 +11,14 @@ StrategyScheduler::StrategyScheduler(Strategy &sched_class,
                                      PrettyPrinter &pretty_printer,
                                      size_t max_tasks,
                                      size_t max_rounds,
+                                     size_t exploration_runs,
                                      size_t minimization_runs)
     : strategy(sched_class),
       checker(checker),
       pretty_printer(pretty_printer),
       max_tasks(max_tasks),
       max_rounds(max_rounds),
+      exploration_runs(exploration_runs),
       minimization_runs(minimization_runs) {}
 
 Scheduler::Result StrategyScheduler::RunRound() {
@@ -167,11 +169,13 @@ Scheduler::Result StrategyScheduler::Run() {
       log() << "Minimizing same interleaving...\n";
       Minimize(histories.value(), SameInterleavingMinimizor());
 
-      log() << "Minimizing with rescheduling (runs: " << minimization_runs << ")...\n";
-      Minimize(histories.value(), StrategyExplorationMinimizor(minimization_runs));
+      log() << "Minimizing with rescheduling (exploration runs: " << exploration_runs << ")...\n";
+      Minimize(histories.value(), StrategyExplorationMinimizor(exploration_runs));
 
-      log() << "Minimizing with smart minimizor (runs: " << minimization_runs << ")...\n";
-      Minimize(histories.value(), SmartMinimizor(minimization_runs, pretty_printer));
+      log() << "Minimizing with smart minimizor (exploration runs: "
+            << exploration_runs << ", minimization runs: "
+            << minimization_runs << ")...\n";
+      Minimize(histories.value(), SmartMinimizor(exploration_runs, minimization_runs, pretty_printer));
 
       return histories;
     }

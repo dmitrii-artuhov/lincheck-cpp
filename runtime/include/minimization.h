@@ -25,7 +25,7 @@ struct RoundMinimizor {
 
 /**
  * This is a base class for minimizors that try to remove tasks from the nonlinearized history 
- * greedily,using the callback `OnTasksRemoved` with passed tasks.
+ * greedily, using the callback `OnTasksRemoved` with passed tasks.
  */
 struct GreedyRoundMinimizor : public RoundMinimizor {
   /**

@@ -201,7 +201,8 @@ struct StrategyScheduler : Scheduler {
   // scheduler will end execution of the Run function
   StrategyScheduler(Strategy& sched_class, ModelChecker& checker,
                     PrettyPrinter& pretty_printer, size_t max_tasks,
-                    size_t max_rounds, size_t minimization_runs);
+                    size_t max_rounds, size_t exploration_runs,
+                    size_t minimization_runs);
 
   // Run returns full unliniarizable history if such a history is found. Full
   // history is a history with all events, where each element in the vector is a
@@ -223,15 +224,11 @@ struct StrategyScheduler : Scheduler {
   void Minimize(Scheduler::BothHistories& nonlinear_history, const RoundMinimizor& minimizor);
 
   Strategy& strategy;
-
   ModelChecker& checker;
-
   PrettyPrinter& pretty_printer;
-
   size_t max_tasks;
-
   size_t max_rounds;
-
+  size_t exploration_runs;
   size_t minimization_runs;
 };
 

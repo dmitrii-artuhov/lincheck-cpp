@@ -27,7 +27,15 @@
  */
 struct SmartMinimizor : public RoundMinimizor {
   SmartMinimizor() = delete;
-  explicit SmartMinimizor(int minimization_runs_, PrettyPrinter& pretty_printer_);
+  explicit SmartMinimizor(
+    int exploration_runs,
+    int minimization_runs,
+    PrettyPrinter& pretty_printer,
+    // algorithm params
+    int max_offsprings_per_generation = 5,
+    int offsprings_generation_attemps = 10,
+    int initial_mutations_count = 10
+  );
 
   void Minimize(
     StrategyScheduler& sched,
@@ -97,15 +105,13 @@ private:
     const Solution* p2
   ) const;
 
+  const int exploration_runs;
   const int minimization_runs;
-  // TODO: make this constructor params
-  const int max_population_size = 2;
-  const int offsprings_per_generation = 5;
-  const int attempts = 10; // attemps to generate each offspring with nonlinear history
-  const int exploration_runs = 10; // TODO: for other minimizors, the `minimization_runs` relates to this. Should refactor this
-  // std::vector<std::pair<std::unique_ptr<Mutation>, float /* probability of applying the mutation */>> mutations;
+  const int max_offsprings_per_generation; // max number of offsprings per generation
+  const int offsprings_generation_attemps; // attemps to generate each offspring with nonlinear history
+  const int max_population_size = 2; // TODO: right now I only take best and second-best solutions from population, so other values for `max_population_size` make no sense. This should be somewhat fixed...
+  mutable int mutations_count;
   mutable int total_tasks;
-  mutable int mutations_count = 10;
   mutable std::multiset<Solution, SolutionSorter> population;
   mutable std::mt19937 rng;
   mutable std::uniform_real_distribution<double> dist{0.0, 1.0};

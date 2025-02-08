@@ -2,9 +2,20 @@
 
 
 // smart minimizor
-SmartMinimizor::SmartMinimizor(int minimization_runs_, PrettyPrinter& pretty_printer_):
-  minimization_runs(minimization_runs_),
-  pretty_printer(pretty_printer_) {
+SmartMinimizor::SmartMinimizor(
+  int exploration_runs,
+  int minimization_runs,
+  PrettyPrinter& pretty_printer,
+  int max_offsprings_per_generation,
+  int offsprings_generation_attemps,
+  int initial_mutations_count
+):
+  exploration_runs(exploration_runs),
+  minimization_runs(minimization_runs),
+  pretty_printer(pretty_printer),
+  max_offsprings_per_generation(max_offsprings_per_generation),
+  offsprings_generation_attemps(offsprings_generation_attemps),
+  mutations_count(initial_mutations_count) {
   std::random_device dev;
   rng = std::mt19937(dev());
 }
@@ -77,13 +88,13 @@ std::vector<SmartMinimizor::Solution> SmartMinimizor::GenerateOffsprings(
   const Solution& p1,
   const Solution& p2
 ) const {
-  assert(attempts > 0);
+  assert(offsprings_generation_attemps > 0);
   
   Strategy& strategy = sched.GetStrategy();
   std::vector<Solution> offsprings;
 
-  for (int offspring = 1; offspring <= offsprings_per_generation; ++offspring) {
-    int left_attempts = attempts;
+  for (int offspring = 1; offspring <= max_offsprings_per_generation; ++offspring) {
+    int left_attempts = offsprings_generation_attemps;
     while (left_attempts--) {
       // cross product
       auto new_threads = CrossProduct(strategy, &p1, &p2);
@@ -118,7 +129,7 @@ std::vector<SmartMinimizor::Solution> SmartMinimizor::GenerateOffsprings(
 
   // This is an optimization which decreases the number of permitted mutations over time
   // when many unsuccessfull attempts to generate offspring are made.
-  if (offsprings.size() * 2 < offsprings_per_generation && mutations_count > 1) {
+  if (offsprings.size() * 2 < max_offsprings_per_generation && mutations_count > 1) {
     // update the mutations count
     mutations_count--;
   }
