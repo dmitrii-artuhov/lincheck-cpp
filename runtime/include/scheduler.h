@@ -19,8 +19,9 @@ struct Strategy {
   // Returns { next task, the flag which tells is the task new, thread number }.
   virtual std::tuple<Task&, bool, int> Next() = 0;
 
-  // Returns the same data as `Next` method. However, it does not generate the round,
-  // but schedules the threads accoding to the strategy policy 
+  // Returns the same data as `Next` method. However, it does not generate the round
+  // by inserting new tasks in it, but schedules the threads accoding to the strategy policy
+  // with previously genereated and saved round. 
   virtual std::tuple<Task&, bool, int> NextSchedule() = 0;
 
   // Returns { task, its thread id } (TODO: make it `const` method)
@@ -172,8 +173,8 @@ protected:
 struct Scheduler {
   using FullHistory = std::vector<std::reference_wrapper<Task>>;
   using SeqHistory = std::vector<std::variant<Invoke, Response>>;
-  using Histories = std::pair<FullHistory, SeqHistory>;
-  using Result = std::optional<Histories>;
+  using BothHistories = std::pair<FullHistory, SeqHistory>;
+  using Result = std::optional<BothHistories>;
 
   virtual Result Run() = 0;
 
@@ -208,7 +209,7 @@ struct StrategyScheduler : Scheduler {
   static std::vector<int> GetTasksOrdering(const FullHistory& full_history, std::unordered_set<int> exclude_task_ids);
 
  private:
-  void Minimize(Scheduler::Histories& nonlinear_history, const RoundMinimizor& minimizor);
+  void Minimize(Scheduler::BothHistories& nonlinear_history, const RoundMinimizor& minimizor);
 
   Strategy& strategy;
 
