@@ -90,7 +90,6 @@ std::vector<SmartMinimizor::Solution> SmartMinimizor::GenerateOffsprings(
   const Solution& p2
 ) const {
   assert(offsprings_generation_attemps > 0);
-
   Strategy& strategy = sched.GetStrategy();
   std::vector<Solution> offsprings;
 
