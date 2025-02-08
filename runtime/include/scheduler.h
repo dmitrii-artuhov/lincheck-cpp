@@ -51,7 +51,7 @@ struct Strategy {
 
   // Returns the same data as `Next` method. However, it does not generate the round
   // by inserting new tasks in it, but schedules the threads accoding to the strategy policy
-  // with previously genereated and saved round. 
+  // with previously genereated and saved round (used for round replaying functionality)
   virtual TaskWithMetaData NextSchedule() = 0;
 
   // Returns { task, its thread id } (TODO: make it `const` method)

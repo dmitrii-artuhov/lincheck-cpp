@@ -111,7 +111,7 @@ struct CoroBase : public std::enable_shared_from_this<CoroBase> {
   template <typename Target, typename... Args>
   friend class Coro;
 
-  // Id.
+  // Task id.
   int id;
   // Return value.
   int ret{};
