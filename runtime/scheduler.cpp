@@ -142,22 +142,8 @@ StrategyScheduler::Result StrategyScheduler::ReplayRound(const std::vector<int>&
 }
 
 
-const Strategy& StrategyScheduler::GetStrategy() const {
+Strategy& StrategyScheduler::GetStrategy() const {
   return strategy;
-}
-
-std::vector<int> StrategyScheduler::GetTasksOrdering(
-  const FullHistory& full_history,
-  const std::unordered_set<int> exclude_task_ids
-) {
-  std::vector <int> tasks_ordering;
-  
-  for (auto& task : full_history) {
-    if (exclude_task_ids.contains(task.get()->GetId())) continue;
-    tasks_ordering.emplace_back(task.get()->GetId());
-  }
-
-  return tasks_ordering;
 }
 
 void StrategyScheduler::Minimize(

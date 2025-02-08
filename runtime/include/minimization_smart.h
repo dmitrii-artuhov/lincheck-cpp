@@ -73,7 +73,7 @@ private:
 
   // Marks tasks as removed if they do not appear in `valid_threads`.
   void RemoveInvalidTasks(
-    const Strategy& strategy,
+    Strategy& strategy,
     const std::unordered_map<int, std::unordered_set<int>>& valid_threads
   ) const;
 

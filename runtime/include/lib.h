@@ -60,9 +60,6 @@ struct CoroBase : public std::enable_shared_from_this<CoroBase> {
   // Returns task id.
   int GetId() const;
 
-  // Returns task state during history minimization.
-  bool IsRemoved() const;
-
   // Returns return value of the coroutine.
   virtual int GetRetVal() const;
 
@@ -85,9 +82,6 @@ struct CoroBase : public std::enable_shared_from_this<CoroBase> {
   // Sets the token.
   void SetToken(std::shared_ptr<Token>);
 
-  // Sets IsRemoved state.
-  void SetRemoved(bool is_removed);
-
   // Checks if the coroutine is parked.
   bool IsParked() const;
 
@@ -102,10 +96,8 @@ struct CoroBase : public std::enable_shared_from_this<CoroBase> {
   template <typename Target, typename... Args>
   friend class Coro;
 
-  // Id.
+  // Task id.
   int id;
-  // Is task removed during history minimization.
-  bool is_removed{};
   // Return value.
   int ret{};
   // Is coroutine returned.
