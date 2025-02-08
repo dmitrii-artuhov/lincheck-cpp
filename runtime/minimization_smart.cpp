@@ -137,7 +137,6 @@ std::vector<SmartMinimizor::Solution> SmartMinimizor::GenerateOffsprings(
   return offsprings;
 }
 
-
 void SmartMinimizor::RemoveInvalidTasks(
   Strategy& strategy,
   const std::unordered_map<int, std::unordered_set<int>>& valid_threads
