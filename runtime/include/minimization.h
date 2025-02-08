@@ -13,6 +13,14 @@ struct RoundMinimizor {
     StrategyScheduler& sched,
     Scheduler::BothHistories& nonlinear_history
   ) const = 0;
+
+  /**
+   * Returns ids of tasks taken from `full_history`, excluding those ids, that are specified in `exclude_task_ids`.
+   */
+  static std::vector<int> GetTasksOrdering(
+    const Scheduler::FullHistory& full_history,
+    std::unordered_set<int> exclude_task_ids
+  );
 };
 
 /**
