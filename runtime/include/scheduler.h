@@ -49,8 +49,9 @@ concept StrategyVerifier = requires(T a) {
 struct Strategy {
   virtual TaskWithMetaData Next() = 0;
 
-  // Returns the same data as `Next` method. However, it does not generate the round,
-  // but schedules the threads accoding to the strategy policy 
+  // Returns the same data as `Next` method. However, it does not generate the round
+  // by inserting new tasks in it, but schedules the threads accoding to the strategy policy
+  // with previously genereated and saved round. 
   virtual TaskWithMetaData NextSchedule() = 0;
 
   // Returns { task, its thread id } (TODO: make it `const` method)
