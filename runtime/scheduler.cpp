@@ -167,9 +167,13 @@ Scheduler::Result StrategyScheduler::Run() {
       
       log() << "Minimizing same interleaving...\n";
       Minimize(histories.value(), SameInterleavingMinimizor());
+      log() << "Minimized to:\n";
+      pretty_printer.PrettyPrint(sequential_history, log());
 
       log() << "Minimizing with rescheduling (exploration runs: " << exploration_runs << ")...\n";
       Minimize(histories.value(), StrategyExplorationMinimizor(exploration_runs));
+      log() << "Minimized to:\n";
+      pretty_printer.PrettyPrint(sequential_history, log());
 
       log() << "Minimizing with smart minimizor (exploration runs: "
             << exploration_runs << ", minimization runs: "
