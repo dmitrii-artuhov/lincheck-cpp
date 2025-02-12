@@ -1,5 +1,7 @@
 #pragma once
 
+#include <unordered_set>
+
 #include "scheduler.h"
 #include "lib.h"
 
@@ -48,13 +50,13 @@ protected:
    * pairs of tasks `(i, j)`, where `i < j`.
    * @param sched the scheduler that will replay the round with some tasks marked as removed.
    * @param nonlinear_history the nonlinearized history that is being minimized.
-   * @param tasks the tasks that the minimizor tries to remove.
+   * @param task_ids the task ids that the minimizor tries to remove.
    * @return the new nonlinearized history if the tasks were successfully removed, `std::nullopt` otherwise.
    */
   virtual Scheduler::Result OnTasksRemoved(
     StrategyScheduler& sched,
     const Scheduler::BothHistories& nonlinear_history,
-    const std::vector<Task>& tasks
+    const std::unordered_set<int>& task_ids
   ) const = 0;
 };
 
@@ -70,7 +72,7 @@ protected:
   virtual Scheduler::Result OnTasksRemoved(
     StrategyScheduler& sched,
     const Scheduler::BothHistories& nonlinear_history,
-    const std::vector<Task>& tasks
+    const std::unordered_set<int>& task_ids
   ) const override;
 };
 
@@ -91,7 +93,7 @@ protected:
   virtual Scheduler::Result OnTasksRemoved(
     StrategyScheduler& sched,
     const Scheduler::BothHistories& nonlinear_history,
-    const std::vector<Task>& tasks
+    const std::unordered_set<int>& task_ids
   ) const override;
 
 private:

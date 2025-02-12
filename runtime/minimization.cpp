@@ -35,7 +35,7 @@ void GreedyRoundMinimizor::Minimize(
     if (strategy.IsTaskRemoved(task.get()->GetId())) continue;
 
     // log() << "Try to remove task with id: " << task.get()->GetId() << "\n";
-    auto new_histories = OnTasksRemoved(sched, nonlinear_history, { task.get() });
+    auto new_histories = OnTasksRemoved(sched, nonlinear_history, { task.get()->GetId() });
 
     if (new_histories.has_value()) {
       nonlinear_history.first.swap(new_histories.value().first);
@@ -57,7 +57,7 @@ void GreedyRoundMinimizor::Minimize(
       
       // log() << "Try to remove tasks with ids: " << task_i.get()->GetId() << " and "
       //       << task_j.get()->GetId() << "\n";
-      auto new_histories = OnTasksRemoved(sched, nonlinear_history, { task_i, task_j }); 
+      auto new_histories = OnTasksRemoved(sched, nonlinear_history, { task_i_id, task_j_id }); 
 
       if (new_histories.has_value()) {
         // sequential history (Invoke/Response events) must have even number of history events
@@ -83,12 +83,8 @@ void GreedyRoundMinimizor::Minimize(
 Scheduler::Result SameInterleavingMinimizor::OnTasksRemoved(
   StrategyScheduler& sched,
   const Scheduler::BothHistories& nonlinear_history,
-  const std::vector<Task>& tasks
+  const std::unordered_set<int>& task_ids
 ) const {
-  std::unordered_set<int> task_ids;
-  for (const auto& task : tasks) {
-    task_ids.insert(task->GetId());
-  }
   std::vector<int> new_ordering = RoundMinimizor::GetTasksOrdering(nonlinear_history.first, task_ids);
   return sched.ReplayRound(new_ordering);
 }
@@ -99,11 +95,11 @@ StrategyExplorationMinimizor::StrategyExplorationMinimizor(int runs_): runs(runs
 Scheduler::Result StrategyExplorationMinimizor::OnTasksRemoved(
   StrategyScheduler& sched,
   const Scheduler::BothHistories& nonlinear_history,
-  const std::vector<Task>& tasks
+  const std::unordered_set<int>& task_ids
 ) const {
   auto mark_tasks_as_removed = [&](bool is_removed) {
-    for (const auto& task : tasks) {
-      sched.GetStrategy().SetTaskRemoved(task->GetId(), is_removed);
+    for (const auto& task_id : task_ids) {
+      sched.GetStrategy().SetTaskRemoved(task_id, is_removed);
     }
   };
 
