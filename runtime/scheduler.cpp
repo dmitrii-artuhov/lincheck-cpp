@@ -279,76 +279,117 @@ Scheduler::Result StrategyScheduler::Run() {
     std::ofstream file(filename);
 
     // Total tasks
+    float sum = 0.0;
+    int size = benchmarks.size();
+
     file << "Total ";
     for (const auto& data : benchmarks) {
+      sum += data.total_tasks;
       file << data.total_tasks << " ";
     }
+    file << ": " << sum / size;
     file << "\n";
 
     // Sequential minimization
     file << "Sequential\n";
+    sum = 0;
     for (const auto& data : benchmarks) {
+      sum += data.sequential_minimization_ms;
       file << data.sequential_minimization_ms << " ";
     }
+    file << ": " << sum / size;
     file << "\n";
+    sum = 0;
     for (const auto& data : benchmarks) {
+      sum += data.sequential_minimization_result;
       file << data.sequential_minimization_result << " ";
     }
+    file << ": " << sum / size;
     file << "\n";
 
     // Exploration minimization
     file << "Exploration\n";
+    sum = 0;
     for (const auto& data : benchmarks) {
+      sum += data.exploration_minimization_ms;
       file << data.exploration_minimization_ms << " ";
     }
+    file << ": " << sum / size;
     file << "\n";
+    sum = 0;
     for (const auto& data : benchmarks) {
+      sum += data.exploration_minimization_result;
       file << data.exploration_minimization_result << " ";
     }
+    file << ": " << sum / size;
     file << "\n";
 
     // Greedy minimization
     file << "Greedy\n";
+    sum = 0;
     for (const auto& data : benchmarks) {
+      sum += data.greedy_minimization_ms;
       file << data.greedy_minimization_ms << " ";
     }
+    file << ": " << sum / size;
     file << "\n";
+    sum = 0;
     for (const auto& data : benchmarks) {
+      sum += data.greedy_minimization_result;
       file << data.greedy_minimization_result << " ";
     }
+    file << ": " << sum / size;
     file << "\n";
 
     // Double greedy minimization
     file << "Double greedy\n";
+    sum = 0;
     for (const auto& data : benchmarks) {
+      sum += data.double_greedy_minimization_ms;
       file << data.double_greedy_minimization_ms << " ";
     }
+    file << ": " << sum / size;
     file << "\n";
+    sum = 0;
     for (const auto& data : benchmarks) {
+      sum += data.double_greedy_minimization_result;
       file << data.double_greedy_minimization_result << " ";
     }
+    file << ": " << sum / size;
     file << "\n";
 
     // Smart minimization
     file << "Smart\n";
+    sum = 0;
     for (const auto& data : benchmarks) {
+      sum += data.smart_minimization_ms;
       file << data.smart_minimization_ms << " ";
     }
+    file << ": " << sum / size;
     file << "\n";
+    sum = 0;
     for (const auto& data : benchmarks) {
+      sum += data.smart_minimization_result;
       file << data.smart_minimization_result << " ";
     }
+    file << ": " << sum / size;
     file << "\n";
 
     // Combined 3 minimization
     file << "Combined 3\n";
+    sum = 0;
     for (const auto& data : benchmarks) {
+      sum += data.combined_3_minimization_ms;
       file << data.combined_3_minimization_ms << " ";
     }
+    file << ": " << sum / size;
     file << "\n";
+    sum = 0;
     for (const auto& data : benchmarks) {
+      sum += data.combined_3_minimization_result;
       file << data.combined_3_minimization_result << " ";
     }
+    file << ": " << sum / size;
     file << "\n";
     file.close();
   }
