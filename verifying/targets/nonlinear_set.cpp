@@ -62,7 +62,7 @@ private:
 auto generateInt(size_t unused_param) {
     // very small range of values, because to find nonlinearizable
     // scenario we need 4 operations with the same argument
-    return ltest::generators::makeSingleArg(rand() % 3 + 1);
+    return ltest::generators::makeSingleArg(1);
 }
 
 // Targets.

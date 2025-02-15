@@ -77,8 +77,10 @@ public:
         Node* currentTail = nullptr;
         Node* currentNext = nullptr;
         int value = 0;
-
-        while (true) {
+        
+        // MISTAKE
+        int time = 0;
+        while (time++ < 3 /* true */) {
             currentHead = head.load();
             currentTail = tail.load();
             currentNext = currentHead->next.load();
