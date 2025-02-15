@@ -4,7 +4,7 @@
 
 namespace spec {
 
-template <typename InsertArgTuple = std::tuple<int>, std::size_t ValueIndex = 0>
+template <typename ArgTuple = std::tuple<int>, std::size_t ValueIndex = 0>
 struct Set {
   std::set<int> st{};
   int Insert(int v) {
@@ -20,12 +20,12 @@ struct Set {
   using method_t = std::function<int(Set *l, void *args)>;
   static auto GetMethods() {
     method_t insert_func = [](Set *l, void *args) -> int {
-      auto real_args = reinterpret_cast<InsertArgTuple *>(args);
+      auto real_args = reinterpret_cast<ArgTuple *>(args);
       return l->Insert(std::get<ValueIndex>(*real_args));
     };
 
     method_t erase_func = [](Set *l, void *args) -> int {
-        auto real_args = reinterpret_cast<InsertArgTuple *>(args);
+        auto real_args = reinterpret_cast<ArgTuple *>(args);
         return l->Erase(std::get<ValueIndex>(*real_args));
     };
 
