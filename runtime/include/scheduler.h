@@ -9,6 +9,7 @@
 #include "logger.h"
 #include "pretty_print.h"
 #include "stable_vector.h"
+#include "benchmarks.h"
 
 struct RoundMinimizor;
 
@@ -202,7 +203,7 @@ struct StrategyScheduler : Scheduler {
   StrategyScheduler(Strategy& sched_class, ModelChecker& checker,
                     PrettyPrinter& pretty_printer, size_t max_tasks,
                     size_t max_rounds, size_t exploration_runs,
-                    size_t minimization_runs);
+                    size_t minimization_runs, size_t benchmark_runs);
 
   // Run returns full unliniarizable history if such a history is found. Full
   // history is a history with all events, where each element in the vector is a
@@ -223,6 +224,17 @@ struct StrategyScheduler : Scheduler {
  private:
   void Minimize(Scheduler::BothHistories& nonlinear_history, const RoundMinimizor& minimizor);
 
+  // Benchmarks
+  void ResetRoundForBenchmark() {
+    strategy.ResetCurrentRound();
+    auto& threads = strategy.GetTasks();
+    for (auto& thread : threads) {
+      for (int i = 0; i < thread.size(); ++i) {
+        strategy.SetTaskRemoved(thread[i]->GetId(), false);
+      }
+    }
+  }
+
   Strategy& strategy;
   ModelChecker& checker;
   PrettyPrinter& pretty_printer;
@@ -230,6 +242,10 @@ struct StrategyScheduler : Scheduler {
   size_t max_rounds;
   size_t exploration_runs;
   size_t minimization_runs;
+
+  // benchmarks
+  std::vector<BenchmarkData> benchmarks;
+  size_t benchmark_runs;
 };
 
 // TLAScheduler generates all executions satisfying some conditions.
