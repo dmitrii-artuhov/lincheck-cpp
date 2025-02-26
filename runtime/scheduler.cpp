@@ -96,6 +96,7 @@ StrategyScheduler::Result StrategyScheduler::ReplayRound(const std::vector<int>&
   SeqHistory sequential_history;
   // TODO: `IsRunning` field might be added to `Task` instead
   std::unordered_set<int> started_tasks;
+  std::unordered_set<int> finished_tasks;
   std::unordered_map<int, int> resumes_count; // task id -> number of appearences in `tasks_ordering`
 
   for (int next_task_id : tasks_ordering) {
@@ -112,29 +113,37 @@ StrategyScheduler::Result StrategyScheduler::ReplayRound(const std::vector<int>&
     }
 
     auto [next_task, thread_id] = task_info.value();
+    if (next_task->IsReturned()) {
+      // we could witness the task that still has resumes (`resumes_count[next_task_id] > 0`),
+      // but is already returned, so we just skip it, because its `Response` was already added
+      assert(finished_tasks.contains(next_task_id));
+      continue;
+    }
+
     if (is_new) {
       sequential_history.emplace_back(Invoke(next_task, thread_id));
     }
     full_history.emplace_back(next_task);
 
-    if (next_task->IsReturned()) continue;
 
     // if this is the last time this task appears in `tasks_ordering`, then complete it fully.
+    resumes_count[next_task_id]--;
     if (resumes_count[next_task_id] == 0) {
       next_task->Terminate();
     }
     else {
-      resumes_count[next_task_id]--;
       next_task->Resume();
     }
 
     if (next_task->IsReturned()) {
       auto result = next_task->GetRetVal();
       sequential_history.emplace_back(Response(next_task, result, thread_id));
+      finished_tasks.insert(next_task_id);
     }
   }
 
   // pretty_printer.PrettyPrint(sequential_history, log());
+  assert(started_tasks.size() == finished_tasks.size());
 
   if (!checker.Check(sequential_history)) {
     return std::make_pair(full_history, sequential_history);

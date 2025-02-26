@@ -7,6 +7,9 @@ set (SOURCE_TARGET_LIST
     mutex_queue.cpp
     race_register.cpp
     nonlinear_queue.cpp
+    nonlinear_set.cpp
+    nonlinear_ms_queue.cpp
+    nonlinear_treiber_stack.cpp
 )
 
 # https://discourse.cmake.org/t/how-to-add-a-dependency-on-a-compiler-plugin/3077/4
