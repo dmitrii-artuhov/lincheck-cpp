@@ -2,10 +2,9 @@
 
 #include "../specs/stack.h"
 
-const size_t capacity = 100;
 
 struct TreiberStack {
-    TreiberStack(): nodes(capacity), head(-1), free_list(0) {
+    TreiberStack(): nodes(N), head(-1), free_list(0) {
         Reset();
     }
 
@@ -66,6 +65,11 @@ private:
         std::atomic<int> next;
     };
 
+    // To avoid implementation of memory reclamation strategies,
+    // all nodes are stored in a fixed sized vector,
+    // big enough to store reasonable number of nodes.
+    // The memory is cleared by the vector destructor between rounds.
+    const int N = 100;
     std::vector<Node> nodes;
     std::atomic<int> head;
     std::atomic<int> free_list;
@@ -77,14 +81,14 @@ private:
 auto generateInt(size_t thread_num) {
     return ltest::generators::makeSingleArg(rand() % 10 + 1);
 }
-  
-// Targets.
-target_method(generateInt, void, TreiberStack, Push, int);
-
-target_method(ltest::generators::genEmpty, int, TreiberStack, Pop);
 
 // Specify target structure and it's sequential specification.
 using spec_t =
     ltest::Spec<TreiberStack, spec::Stack<>, spec::StackHash<>, spec::StackEquals<>>;
 
 LTEST_ENTRYPOINT(spec_t);
+  
+// Targets.
+target_method(generateInt, void, TreiberStack, Push, int);
+
+target_method(ltest::generators::genEmpty, int, TreiberStack, Pop);

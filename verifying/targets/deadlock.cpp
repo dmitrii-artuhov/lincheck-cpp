@@ -63,8 +63,8 @@ auto generateArgs(size_t thread_num) {
   return std::tuple_cat(token, _int);
 }
 
-target_method(generateArgs, void, Test, Lock, std::shared_ptr<Token>, int);
-
 using spec_t = ltest::Spec<Test, Test>;
 
 LTEST_ENTRYPOINT(spec_t);
+
+target_method(generateArgs, void, Test, Lock, std::shared_ptr<Token>, int);

@@ -43,13 +43,13 @@ auto generateInt(size_t unused_param) {
   return ltest::generators::makeSingleArg(rand() % 10 + 1);
 }
 
-// Targets.
-target_method(generateInt, void, Queue, Push, int);
-
-target_method(ltest::generators::genEmpty, int, Queue, Pop);
-
 // Specify target structure and it's sequential specification.
 using spec_t =
     ltest::Spec<Queue, spec::Queue<>, spec::QueueHash<>, spec::QueueEquals<>>;
 
 LTEST_ENTRYPOINT(spec_t);
+
+// Targets.
+target_method(generateInt, void, Queue, Push, int);
+
+target_method(ltest::generators::genEmpty, int, Queue, Pop);

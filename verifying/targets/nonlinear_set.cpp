@@ -3,9 +3,9 @@
 
 #include "../specs/set.h"
 
-const int N = 100;
 
 struct SlotsSet {
+public:
     SlotsSet() {
         Reset();
     }
@@ -55,23 +55,39 @@ struct SlotsSet {
     }
     
 private:
+    static inline const int N = 100;
     std::atomic<int> slots[N];
 };
 
 // Arguments generator.
 auto generateInt(size_t unused_param) {
-    // very small range of values, because to find nonlinearizable
+    // single value in arguments, because to find nonlinearizable
     // scenario we need 4 operations with the same argument
+    // (which is pretty hard to find)
+    /*
+        *--------------------*--------------------*
+        |         T0         |         T1         |
+        *--------------------*--------------------*
+        | [1] Insert(1)      |                    |
+        |                    | [2] Insert(1)      |
+        | <-- 1              |                    |
+        | [3] Erase(1)       |                    |
+        | <-- 1              |                    |
+        |                    | <-- 1              |
+        |                    | [4] Insert(1)      |
+        |                    | <-- 1              |
+        *--------------------*--------------------*
+    */
     return ltest::generators::makeSingleArg(1);
 }
-
-// Targets.
-target_method(generateInt, int, SlotsSet, Insert, int);
-
-target_method(generateInt, int, SlotsSet, Erase, int);
 
 // Specify target structure and it's sequential specification.
 using spec_t =
     ltest::Spec<SlotsSet, spec::Set<>, spec::SetHash<>, spec::SetEquals<>>;
 
 LTEST_ENTRYPOINT(spec_t);
+
+// Targets.
+target_method(generateInt, int, SlotsSet, Insert, int);
+
+target_method(generateInt, int, SlotsSet, Erase, int);
