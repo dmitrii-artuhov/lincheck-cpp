@@ -105,11 +105,11 @@ class MPMCBoundedQueue {
 // POP
 // 1 == tail + 1? 1 == 1
 
-target_method(generateInt, int, MPMCBoundedQueue, Push, int);
-
-target_method(ltest::generators::genEmpty, int, MPMCBoundedQueue, Pop);
-
 using spec_t = ltest::Spec<MPMCBoundedQueue, spec::Queue, spec::QueueHash,
                            spec::QueueEquals>;
 
 LTEST_ENTRYPOINT(spec_t);
+
+target_method(generateInt, int, MPMCBoundedQueue, Push, int);
+
+target_method(ltest::generators::genEmpty, int, MPMCBoundedQueue, Pop);

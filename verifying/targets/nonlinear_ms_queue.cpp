@@ -3,7 +3,6 @@
 #include "../specs/queue.h"
 
 
-const int N = 100;
 
 struct MSQueue {
 private:
@@ -13,9 +12,15 @@ private:
 
         Node(int val = 0) : value(val), next(nullptr) {}
     };
+    
 
+    // To avoid implementation of memory reclamation strategies,
+    // all nodes are stored in a fixed sized vector,
+    // big enough to store reasonable number of nodes.
+    // The memory is cleared by the vector destructor between rounds.
+    const int N = 100;
     // Fixed-size vector to store nodes
-    std::vector<Node> nodePool;
+    std::vector<Node> nodes;
 
     // Dummy node (member of the class)
     Node dummyNode;
@@ -30,16 +35,16 @@ private:
     // Helper function to get the next available node from the pool
     non_atomic Node* allocateNode(int value) {
         int currentIndex = index.fetch_add(1); // Atomically increment the index
-        assert(currentIndex < nodePool.size() && "Node pool exhausted");
+        assert(currentIndex < nodes.size() && "Node pool exhausted");
 
-        Node* node = &nodePool[currentIndex];
+        Node* node = &nodes[currentIndex];
         node->value = value;
         node->next.store(nullptr);
         return node;
     }
 
 public:
-    MSQueue(): nodePool(N), index(0) {
+    MSQueue(): nodes(N), index(0) {
         head.store(&dummyNode);
         tail.store(&dummyNode);
     }
@@ -124,14 +129,14 @@ public:
 auto generateInt(size_t unused) {
     return ltest::generators::makeSingleArg(rand() % 10 + 1);
 }
-  
-// Targets.
-target_method(generateInt, void, MSQueue, Push, int);
-
-target_method(ltest::generators::genEmpty, int, MSQueue, Pop);
 
 // Specify target structure and it's sequential specification.
 using spec_t =
     ltest::Spec<MSQueue, spec::Queue<>, spec::QueueHash<>, spec::QueueEquals<>>;
 
 LTEST_ENTRYPOINT(spec_t);
+  
+// Targets.
+target_method(generateInt, void, MSQueue, Push, int);
+
+target_method(ltest::generators::genEmpty, int, MSQueue, Pop);
