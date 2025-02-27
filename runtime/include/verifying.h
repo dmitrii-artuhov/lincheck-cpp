@@ -91,8 +91,8 @@ struct StrategySchedulerWrapper : StrategyScheduler<Verifier> {
                            size_t exploration_runs, size_t minimization_runs)
       : strategy(std::move(strategy)),
         StrategyScheduler<Verifier>(*strategy.get(), checker, pretty_printer,
-                                    max_tasks, max_rounds, minimize, exploration_runs,
-                                    minimization_runs) {};
+                                    max_tasks, max_rounds, minimize,
+                                    exploration_runs, minimization_runs) {};
 
  private:
   std::unique_ptr<Strategy> strategy;

@@ -182,9 +182,8 @@ struct BaseStrategyWithThreads : public Strategy {
 
     for (auto& thread : this->threads) {
       for (size_t i = 0; i < thread.size(); ++i) {
-        if (
-          !thread[i]->IsReturned() && // do not call on finished tasks
-          !thread[i]->IsBlocked() // is task is blocked (== futex is locked)
+        if (!thread[i]->IsReturned() &&  // do not call on finished tasks
+            !thread[i]->IsBlocked()  // is task is blocked (== futex is locked)
         ) {
           thread[i]->Terminate();
         }

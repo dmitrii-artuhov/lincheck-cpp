@@ -88,7 +88,7 @@ Opts parse_opts() {
   opts.switches = FLAGS_switches;
   opts.rounds = FLAGS_rounds;
   opts.forbid_all_same = FLAGS_forbid_all_same;
-  opts.minimize = FLAGS_minimize;
+  opts.minimize = FLAGS_minimize; // minimization for scenarios with locks is not supported
   opts.exploration_runs = FLAGS_exploration_runs;
   opts.minimization_runs = FLAGS_minimization_runs;
   opts.verbose = FLAGS_verbose;
