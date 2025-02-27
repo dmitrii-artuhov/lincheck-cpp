@@ -22,7 +22,7 @@ struct RandomStrategy : PickStrategy<TargetObj, Verifier> {
     auto &threads = PickStrategy<TargetObj, Verifier>::threads;
     for (size_t i = 0; i < threads.size(); ++i) {
       if (!threads[i].empty() &&
-          (threads[i].back()->IsParked() || threads[i].back()->IsBlocked())) {
+      (threads[i].back()->IsParked() || threads[i].back()->IsBlocked())) {
         continue;
       }
       pick_weights.push_back(weights[i]);
