@@ -43,16 +43,64 @@ jobs:
       - name: Build
         run: |
           cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=Debug
-          cmake --build build --target verifying/targets/nonlinear_queue verifying/blocking/nonlinear_mutex verifying/blocking/simple_mutex
+          cmake --build build --target verifying/targets/nonlinear_queue verifying/targets/nonlinear_ms_queue verifying/targets/nonlinear_treiber_stack verifying/targets/nonlinear_set verifying/blocking/nonlinear_mutex verifying/blocking/simple_mutex
+      - name: Run nonlinear_queue with random strategy
+        run: |
+          ./build/verifying/targets/nonlinear_queue --tasks 4 --rounds 100000 --strategy random --switches 1 || error_code=$?
+          if [ "${error_code}" -ne 1 ]; then 
+            exit 1
+          fi
       - name: Run nonlinear_queue with pct strategy
         run: |
           ./build/verifying/targets/nonlinear_queue --strategy pct --tasks 10 --rounds 240 || error_code=$?
           if [ "${error_code}" -ne 1 ]; then 
             exit 1
           fi
-      - name: Run nonlinear_queue with random strategy
+      - name: Run nonlinear_queue with random strategy (minimization)
         run: |
-          ./build/verifying/targets/nonlinear_queue --tasks 4 --rounds 100000 --strategy random --switches 1 || error_code=$?
+          ./build/verifying/targets/nonlinear_queue --tasks 40 --rounds 100000 --strategy random --minimization 1 || error_code=$?
+          if [ "${error_code}" -ne 1 ]; then 
+            exit 1
+          fi
+      - name: Run nonlinear_ms_queue with random strategy (minimization)
+        run: |
+          ./build/verifying/targets/nonlinear_ms_queue --tasks 40 --rounds 100000 --strategy random --minimization 1 || error_code=$?
+          if [ "${error_code}" -ne 1 ]; then 
+            exit 1
+          fi
+      - name: Run nonlinear_treiber_stack with random strategy (minimization)
+        run: |
+          ./build/verifying/targets/nonlinear_treiber_stack --tasks 40 --rounds 100000 --strategy random --minimization 1 || error_code=$?
+          if [ "${error_code}" -ne 1 ]; then 
+            exit 1
+          fi
+      - name: Run nonlinear_set with random strategy (minimization)
+        run: |
+          ./build/verifying/targets/nonlinear_set --tasks 40 --rounds 200000 --strategy random --minimization 1 || error_code=$?
+          if [ "${error_code}" -ne 1 ]; then 
+            exit 1
+          fi
+      - name: Run nonlinear_queue with pct strategy (minimization)
+        run: |
+          ./build/verifying/targets/nonlinear_queue --tasks 40 --rounds 100000 --strategy pct --minimization 1 || error_code=$?
+          if [ "${error_code}" -ne 1 ]; then 
+            exit 1
+          fi
+      - name: Run nonlinear_ms_queue with pct strategy (minimization)
+        run: |
+          ./build/verifying/targets/nonlinear_ms_queue --tasks 40 --rounds 100000 --strategy pct --minimization 1 || error_code=$?
+          if [ "${error_code}" -ne 1 ]; then 
+            exit 1
+          fi
+      - name: Run nonlinear_treiber_stack with pct strategy (minimization)
+        run: |
+          ./build/verifying/targets/nonlinear_treiber_stack --tasks 40 --rounds 100000 --strategy pct --minimization 1 || error_code=$?
+          if [ "${error_code}" -ne 1 ]; then 
+            exit 1
+          fi
+      - name: Run nonlinear_set with pct strategy (minimization)
+        run: |
+          ./build/verifying/targets/nonlinear_set --tasks 40 --rounds 200000 --strategy pct --minimization 1 || error_code=$?
           if [ "${error_code}" -ne 1 ]; then 
             exit 1
           fi
