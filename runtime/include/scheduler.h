@@ -221,13 +221,14 @@ struct StrategyScheduler : public SchedulerWithReplay {
   // scheduler will end execution of the Run function
   StrategyScheduler(Strategy& sched_class, ModelChecker& checker,
                     PrettyPrinter& pretty_printer, size_t max_tasks,
-                    size_t max_rounds, size_t exploration_runs,
+                    size_t max_rounds, bool minimize, size_t exploration_runs,
                     size_t minimization_runs)
       : strategy(sched_class),
         checker(checker),
         pretty_printer(pretty_printer),
         max_tasks(max_tasks),
         max_rounds(max_rounds),
+        should_minimize_history(minimize),
         exploration_runs(exploration_runs),
         minimization_runs(minimization_runs) {}
 
@@ -243,27 +244,29 @@ struct StrategyScheduler : public SchedulerWithReplay {
       if (histories.has_value()) {
         auto& [full_history, sequential_history] = histories.value();
 
-        log() << "Full nonlinear scenario: \n";
-        pretty_printer.PrettyPrint(sequential_history, log());
+        if (should_minimize_history) {
+          log() << "Full nonlinear scenario: \n";
+          pretty_printer.PrettyPrint(sequential_history, log());
 
-        log() << "Minimizing same interleaving...\n";
-        Minimize(histories.value(), SameInterleavingMinimizor());
-        log() << "Minimized to:\n";
-        pretty_printer.PrettyPrint(sequential_history, log());
+          log() << "Minimizing same interleaving...\n";
+          Minimize(histories.value(), SameInterleavingMinimizor());
+          log() << "Minimized to:\n";
+          pretty_printer.PrettyPrint(sequential_history, log());
 
-        log() << "Minimizing with rescheduling (exploration runs: "
-              << exploration_runs << ")...\n";
-        Minimize(histories.value(),
-                 StrategyExplorationMinimizor(exploration_runs));
-        log() << "Minimized to:\n";
-        pretty_printer.PrettyPrint(sequential_history, log());
+          log() << "Minimizing with rescheduling (exploration runs: "
+                << exploration_runs << ")...\n";
+          Minimize(histories.value(),
+                   StrategyExplorationMinimizor(exploration_runs));
+          log() << "Minimized to:\n";
+          pretty_printer.PrettyPrint(sequential_history, log());
 
-        log() << "Minimizing with smart minimizor (exploration runs: "
-              << exploration_runs
-              << ", minimization runs: " << minimization_runs << ")...\n";
-        Minimize(histories.value(),
-                 SmartMinimizor(exploration_runs, minimization_runs,
-                                pretty_printer));
+          log() << "Minimizing with smart minimizor (exploration runs: "
+                << exploration_runs
+                << ", minimization runs: " << minimization_runs << ")...\n";
+          Minimize(histories.value(),
+                   SmartMinimizor(exploration_runs, minimization_runs,
+                                  pretty_printer));
+        }
 
         return histories;
       }
@@ -422,6 +425,7 @@ struct StrategyScheduler : public SchedulerWithReplay {
   PrettyPrinter& pretty_printer;
   size_t max_tasks;
   size_t max_rounds;
+  bool should_minimize_history;
   size_t exploration_runs;
   size_t minimization_runs;
 };

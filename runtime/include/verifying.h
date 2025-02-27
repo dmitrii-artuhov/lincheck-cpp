@@ -37,6 +37,7 @@ struct Opts {
   size_t tasks;
   size_t switches;
   size_t rounds;
+  bool minimize;
   size_t exploration_runs;
   size_t minimization_runs;
   bool verbose;
@@ -86,11 +87,11 @@ template <StrategyVerifier Verifier>
 struct StrategySchedulerWrapper : StrategyScheduler<Verifier> {
   StrategySchedulerWrapper(std::unique_ptr<Strategy> strategy,
                            ModelChecker &checker, PrettyPrinter &pretty_printer,
-                           size_t max_tasks, size_t max_rounds,
+                           size_t max_tasks, size_t max_rounds, bool minimize,
                            size_t exploration_runs, size_t minimization_runs)
       : strategy(std::move(strategy)),
         StrategyScheduler<Verifier>(*strategy.get(), checker, pretty_printer,
-                                    max_tasks, max_rounds, exploration_runs,
+                                    max_tasks, max_rounds, minimize, exploration_runs,
                                     minimization_runs) {};
 
  private:
@@ -109,7 +110,7 @@ std::unique_ptr<Scheduler> MakeScheduler(ModelChecker &checker, Opts &opts,
       auto strategy = MakeStrategy<TargetObj, Verifier>(opts, std::move(l));
       auto scheduler = std::make_unique<StrategySchedulerWrapper<Verifier>>(
           std::move(strategy), checker, pretty_printer, opts.tasks, opts.rounds,
-          opts.exploration_runs, opts.minimization_runs);
+          opts.minimize, opts.exploration_runs, opts.minimization_runs);
       return scheduler;
     }
     case TLA: {
@@ -150,8 +151,11 @@ int Run(int argc, char *argv[]) {
   std::cout << "tasks    = " << opts.tasks << "\n";
   std::cout << "switches = " << opts.switches << "\n";
   std::cout << "rounds   = " << opts.rounds << "\n";
-  std::cout << "exploration runs = " << opts.exploration_runs << "\n";
-  std::cout << "minimization runs = " << opts.minimization_runs << "\n";
+  std::cout << "minimize = " << opts.minimize << "\n";
+  if (opts.minimize) {
+    std::cout << "exploration runs = " << opts.exploration_runs << "\n";
+    std::cout << "minimization runs = " << opts.minimization_runs << "\n";
+  }
   std::cout << "targets  = " << task_builders.size() << "\n";
 
   PrettyPrinter pretty_printer{opts.threads};
