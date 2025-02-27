@@ -91,6 +91,11 @@ struct Strategy {
   // Returns the number of threads
   virtual int GetThreadsCount() const = 0;
 
+  // Called when the finished task must be reported to the verifier
+  // (Strategy is a pure interface, the templated subclass BaseStrategyWithThreads knows
+  // about the Verifier and will delegate to that)
+  virtual void OnVerifierTaskFinish(TaskWithMetaData task) = 0;
+
   virtual ~Strategy() = default;
 
  protected:
@@ -168,6 +173,10 @@ struct BaseStrategyWithThreads : public Strategy {
 
   int GetThreadsCount() const override { return threads.size(); }
 
+  void OnVerifierTaskFinish(TaskWithMetaData task) override {
+    sched_checker.OnFinished(task);
+  }
+
  protected:
   // Terminates all running tasks.
   // We do it in a dangerous way: in random order.
@@ -183,7 +192,7 @@ struct BaseStrategyWithThreads : public Strategy {
     for (auto& thread : this->threads) {
       for (size_t i = 0; i < thread.size(); ++i) {
         if (!thread[i]->IsReturned() &&  // do not call on finished tasks
-            !thread[i]->IsBlocked()  // is task is blocked (== futex is locked)
+            !thread[i]->IsBlocked()      // this task is blocked (== futex is locked)
         ) {
           thread[i]->Terminate();
         }
@@ -292,7 +301,10 @@ struct StrategyScheduler : public SchedulerWithReplay {
     FullHistory full_history;
 
     for (size_t finished_tasks = 0; finished_tasks < max_tasks;) {
-      auto [next_task, is_new, thread_id] = strategy.Next();
+      debug(stderr, "Tasks finished: %d\n", finished_tasks);
+
+      auto t = strategy.Next();
+      auto& [next_task, is_new, thread_id] = t;
 
       // fill the sequential history
       if (is_new) {
@@ -303,6 +315,7 @@ struct StrategyScheduler : public SchedulerWithReplay {
       next_task->Resume();
       if (next_task->IsReturned()) {
         finished_tasks++;
+        strategy.OnVerifierTaskFinish(t);
 
         auto result = next_task->GetRetVal();
         sequential_history.emplace_back(Response(next_task, result, thread_id));
