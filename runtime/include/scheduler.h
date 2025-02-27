@@ -193,11 +193,15 @@ struct BaseStrategyWithThreads : public Strategy {
 
     for (auto& thread : this->threads) {
       for (size_t i = 0; i < thread.size(); ++i) {
+        auto& t = thread[i];
         if (
-          !thread[i]->IsReturned() &&  // do not call on finished tasks
-          (i == thread.size() - 1 || !thread[i]->IsBlocked()) // this task is the last one in scenario (could be mutex.lock) or something went wrong...
+          !t->IsReturned() &&  // do not call on finished tasks
+          (
+            !t->IsBlocked() ||
+            (i == thread.size() - 1 && t->IsBlocked()) // this task is the last one in scenario (could be mutex.lock) or something went wrong...
+          )
         ) {
-          thread[i]->Terminate();
+          t->Terminate();
         }
       }
     }
