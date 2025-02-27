@@ -184,6 +184,9 @@ struct BaseStrategyWithThreads : public Strategy {
   // TODO: for non obstruction-free we need to take into account dependencies.
   // NOTE(dartiukhov): scenarios with mutexes do not support minimization
   void TerminateTasks() {
+    // state.Reset();
+
+
     auto& round_schedule = this->round_schedule;
     assert(round_schedule.size() == this->threads.size() &&
            "sizes expected to be the same");
@@ -193,17 +196,17 @@ struct BaseStrategyWithThreads : public Strategy {
       for (size_t i = 0; i < thread.size(); ++i) {
         auto& t = thread[i];
         if (
-          !t->IsReturned()  // do not call on finished tasks
+          !t->IsReturned() && !t->IsBlocked() // do not call on finished tasks
           // && (
           //   !t->IsBlocked() ||
           //   (i == thread.size() - 1 && t->IsBlocked()) // this task is the last one in scenario (could be mutex.lock) or something went wrong...
           // )
         ) {
+          //std::cout << "Terminating task: " << t->GetId() << ", name=" << t->GetName() << ", blocked=" << t->IsBlocked() << std::endl;
           t->Terminate();
         }
       }
     }
-
     this->sched_checker.Reset();
     state.Reset();
   }
