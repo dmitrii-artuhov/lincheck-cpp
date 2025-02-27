@@ -23,7 +23,7 @@ jobs:
           cmake --build build --target lin_check_test
       - name: Run lin check test
         run: ./build/test/runtime/lin_check_test
-  verifying-test (Debug):
+  verifying-test-debug:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -68,7 +68,7 @@ jobs:
           if [ "${error_code}" -ne 1 ]; then 
             exit 1
           fi
-  verifying-test (Release):
+  verifying-test-release:
     runs-on: ubuntu-latest
     defaults:
       run:
