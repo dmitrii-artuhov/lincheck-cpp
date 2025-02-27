@@ -173,6 +173,7 @@ struct BaseStrategyWithThreads : public Strategy {
   // We do it in a dangerous way: in random order.
   // Actually, we assume obstruction free here.
   // TODO: for non obstruction-free we need to take into account dependencies.
+  // NOTE(dartiukhov): scenarios with mutexes do not support minimization
   void TerminateTasks() {
     auto& round_schedule = this->round_schedule;
     assert(round_schedule.size() == this->threads.size() &&
@@ -181,11 +182,16 @@ struct BaseStrategyWithThreads : public Strategy {
 
     for (auto& thread : this->threads) {
       for (size_t i = 0; i < thread.size(); ++i) {
-        if (!thread[i]->IsReturned()) {
+        if (
+          !thread[i]->IsReturned() && // do not call on finished tasks
+          !thread[i]->IsBlocked() // is task is blocked (== futex is locked)
+        ) {
           thread[i]->Terminate();
         }
       }
     }
+
+    this->sched_checker.Reset();
   }
 
   int GetNextTaskInThread(int thread_index) const override {
