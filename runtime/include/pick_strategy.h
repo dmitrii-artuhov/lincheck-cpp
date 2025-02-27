@@ -88,7 +88,7 @@ struct PickStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
     }
 
     // Reinitial target as we start from the beginning.
-    this->state.Reset();
+    //this->state.Reset();
   }
 
   ~PickStrategy() { this->TerminateTasks(); }

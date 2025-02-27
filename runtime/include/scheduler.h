@@ -139,7 +139,7 @@ struct BaseStrategyWithThreads : public Strategy {
 
   void ResetCurrentRound() override {
     TerminateTasks();
-    state.Reset();
+    //state.Reset();
     for (auto& thread : threads) {
       size_t tasks_in_thread = thread.size();
       for (size_t i = 0; i < tasks_in_thread; ++i) {
@@ -184,8 +184,6 @@ struct BaseStrategyWithThreads : public Strategy {
   // TODO: for non obstruction-free we need to take into account dependencies.
   // NOTE(dartiukhov): scenarios with mutexes do not support minimization
   void TerminateTasks() {
-    state.Reset();
-
     auto& round_schedule = this->round_schedule;
     assert(round_schedule.size() == this->threads.size() &&
            "sizes expected to be the same");
@@ -195,11 +193,11 @@ struct BaseStrategyWithThreads : public Strategy {
       for (size_t i = 0; i < thread.size(); ++i) {
         auto& t = thread[i];
         if (
-          !t->IsReturned() &&  // do not call on finished tasks
-          (
-            !t->IsBlocked() ||
-            (i == thread.size() - 1 && t->IsBlocked()) // this task is the last one in scenario (could be mutex.lock) or something went wrong...
-          )
+          !t->IsReturned()  // do not call on finished tasks
+          // && (
+          //   !t->IsBlocked() ||
+          //   (i == thread.size() - 1 && t->IsBlocked()) // this task is the last one in scenario (could be mutex.lock) or something went wrong...
+          // )
         ) {
           t->Terminate();
         }
@@ -207,6 +205,7 @@ struct BaseStrategyWithThreads : public Strategy {
     }
 
     this->sched_checker.Reset();
+    state.Reset();
   }
 
   int GetNextTaskInThread(int thread_index) const override {
@@ -527,7 +526,7 @@ struct TLAScheduler : Scheduler {
     // Firstly, terminate all running tasks.
     TerminateTasks();
     // In histories we store references, so there's no need to update it.
-    state.Reset();
+    //state.Reset();
     for (size_t step = 0; step < step_end; ++step) {
       auto& frame = frames[step];
       auto task = frame.task;

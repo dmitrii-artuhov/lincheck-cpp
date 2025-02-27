@@ -160,7 +160,7 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
       }
       thread = StableVector<Task>();
     }
-    this->state.Reset();
+    //this->state.Reset();
 
     UpdateStatistics();
   }
