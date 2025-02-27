@@ -166,7 +166,7 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
   }
 
   void ResetCurrentRound() override {
-    this->ResetCurrentRound();
+    BaseStrategyWithThreads<TargetObj, Verifier>::ResetCurrentRound();
     UpdateStatistics();
   }
 
