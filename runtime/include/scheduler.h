@@ -190,6 +190,8 @@ struct BaseStrategyWithThreads : public Strategy {
   // Actually, we assume obstruction free here.
   // TODO: for locks we need to figure out how to properly terminate: see https://github.com/ITMO-PTDC-Team/LTest/issues/13
   void TerminateTasks() {
+    state.Reset();
+
     auto& round_schedule = this->round_schedule;
     assert(round_schedule.size() == this->threads.size() &&
            "sizes expected to be the same");
