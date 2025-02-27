@@ -52,10 +52,8 @@ struct RandomStrategy : PickStrategy<TargetObj, Verifier> {
 
     for (size_t i = 0; i < threads.size(); ++i) {
       int task_index = this->GetNextTaskInThread(i);
-      if (
-        task_index == threads[i].size() ||
-        threads[i][task_index]->IsParked()
-      ) {
+      if (task_index == threads[i].size() ||
+          threads[i][task_index]->IsParked()) {
         continue;
       }
       pick_weights.push_back(weights[i]);
@@ -68,10 +66,8 @@ struct RandomStrategy : PickStrategy<TargetObj, Verifier> {
     auto num = thread_distribution(this->rng);
     for (size_t i = 0; i < threads.size(); ++i) {
       int task_index = this->GetNextTaskInThread(i);
-      if (
-        task_index == threads[i].size() ||
-        threads[i][task_index]->IsParked()
-      ) {
+      if (task_index == threads[i].size() ||
+          threads[i][task_index]->IsParked()) {
         continue;
       }
       if (num == 0) {

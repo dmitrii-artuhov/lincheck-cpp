@@ -13,15 +13,15 @@ struct PickStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
 
   explicit PickStrategy(size_t threads_count,
                         std::vector<TaskBuilder> constructors)
-      : next_task(0),
-        threads_count(threads_count) {
+      : next_task(0), threads_count(threads_count) {
     this->constructors = std::move(constructors);
     this->round_schedule.resize(threads_count, -1);
 
     std::random_device dev;
     rng = std::mt19937(dev());
-    this->constructors_distribution = std::uniform_int_distribution<std::mt19937::result_type>(
-        0, this->constructors.size() - 1);
+    this->constructors_distribution =
+        std::uniform_int_distribution<std::mt19937::result_type>(
+            0, this->constructors.size() - 1);
 
     // Create queues.
     for (size_t i = 0; i < threads_count; ++i) {
@@ -55,8 +55,10 @@ struct PickStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
         assert(false && "Oops, possible deadlock or incorrect verifier\n");
       }
       threads[current_thread].emplace_back(
-          this->constructors[verified_constructor].Build(&this->state, current_thread, this->new_task_id++));
-      TaskWithMetaData task{threads[current_thread].back(), true, current_thread};
+          this->constructors[verified_constructor].Build(
+              &this->state, current_thread, this->new_task_id++));
+      TaskWithMetaData task{threads[current_thread].back(), true,
+                            current_thread};
       return task;
     }
 
@@ -70,7 +72,8 @@ struct PickStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
     bool is_new = round_schedule[current_thread] != next_task_index;
 
     round_schedule[current_thread] = next_task_index;
-    return TaskWithMetaData{ this->threads[current_thread][next_task_index], is_new, current_thread };
+    return TaskWithMetaData{this->threads[current_thread][next_task_index],
+                            is_new, current_thread};
   }
 
   void StartNextRound() override {
@@ -88,11 +91,9 @@ struct PickStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
     this->state.Reset();
   }
 
-  ~PickStrategy() {
-    this->TerminateTasks();
-  }
+  ~PickStrategy() { this->TerminateTasks(); }
 
-protected:
+ protected:
   size_t next_task = 0;
   size_t threads_count;
   std::mt19937 rng;

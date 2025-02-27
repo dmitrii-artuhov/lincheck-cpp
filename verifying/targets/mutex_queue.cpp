@@ -67,4 +67,3 @@ target_method(generateArgs, void, Queue, Push, std::shared_ptr<Token>, int);
 
 target_method(ltest::generators::genToken, int, Queue, Pop,
               std::shared_ptr<Token>);
-

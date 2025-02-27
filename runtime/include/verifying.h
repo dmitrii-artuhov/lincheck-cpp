@@ -90,8 +90,8 @@ struct StrategySchedulerWrapper : StrategyScheduler<Verifier> {
                            size_t exploration_runs, size_t minimization_runs)
       : strategy(std::move(strategy)),
         StrategyScheduler<Verifier>(*strategy.get(), checker, pretty_printer,
-                                    max_tasks, max_rounds,
-                                    exploration_runs, minimization_runs) {};
+                                    max_tasks, max_rounds, exploration_runs,
+                                    minimization_runs) {};
 
  private:
   std::unique_ptr<Strategy> strategy;
@@ -108,8 +108,8 @@ std::unique_ptr<Scheduler> MakeScheduler(ModelChecker &checker, Opts &opts,
     case RND: {
       auto strategy = MakeStrategy<TargetObj, Verifier>(opts, std::move(l));
       auto scheduler = std::make_unique<StrategySchedulerWrapper<Verifier>>(
-          std::move(strategy), checker, pretty_printer, opts.tasks,
-          opts.rounds, opts.exploration_runs, opts.minimization_runs);
+          std::move(strategy), checker, pretty_printer, opts.tasks, opts.rounds,
+          opts.exploration_runs, opts.minimization_runs);
       return scheduler;
     }
     case TLA: {

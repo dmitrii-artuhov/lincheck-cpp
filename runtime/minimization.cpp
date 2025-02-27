@@ -1,12 +1,12 @@
-#include "scheduler.h"
 #include "minimization.h"
+
+#include "scheduler.h"
 
 // round minimizor interface
 std::vector<int> RoundMinimizor::GetTasksOrdering(
-  const Scheduler::FullHistory& full_history,
-  const std::unordered_set<int> exclude_task_ids
-) {
-  std::vector <int> tasks_ordering;
+    const Scheduler::FullHistory& full_history,
+    const std::unordered_set<int> exclude_task_ids) {
+  std::vector<int> tasks_ordering;
 
   for (auto& task : full_history) {
     if (exclude_task_ids.contains(task.get()->GetId())) continue;
@@ -18,9 +18,8 @@ std::vector<int> RoundMinimizor::GetTasksOrdering(
 
 // greedy
 void GreedyRoundMinimizor::Minimize(
-  SchedulerWithReplay& sched,
-  Scheduler::BothHistories& nonlinear_history
-) const {
+    SchedulerWithReplay& sched,
+    Scheduler::BothHistories& nonlinear_history) const {
   std::vector<std::reference_wrapper<const Task>> tasks;
 
   for (const HistoryEvent& event : nonlinear_history.second) {
@@ -35,7 +34,8 @@ void GreedyRoundMinimizor::Minimize(
     if (strategy.IsTaskRemoved(task.get()->GetId())) continue;
 
     // log() << "Try to remove task with id: " << task.get()->GetId() << "\n";
-    auto new_histories = OnTasksRemoved(sched, nonlinear_history, { task.get()->GetId() });
+    auto new_histories =
+        OnTasksRemoved(sched, nonlinear_history, {task.get()->GetId()});
 
     if (new_histories.has_value()) {
       nonlinear_history.first.swap(new_histories.value().first);
@@ -55,12 +55,15 @@ void GreedyRoundMinimizor::Minimize(
       int task_j_id = task_j->GetId();
       if (strategy.IsTaskRemoved(task_j_id)) continue;
 
-      // log() << "Try to remove tasks with ids: " << task_i.get()->GetId() << " and "
+      // log() << "Try to remove tasks with ids: " << task_i.get()->GetId() << "
+      // and "
       //       << task_j.get()->GetId() << "\n";
-      auto new_histories = OnTasksRemoved(sched, nonlinear_history, { task_i_id, task_j_id }); 
+      auto new_histories =
+          OnTasksRemoved(sched, nonlinear_history, {task_i_id, task_j_id});
 
       if (new_histories.has_value()) {
-        // sequential history (Invoke/Response events) must have even number of history events
+        // sequential history (Invoke/Response events) must have even number of
+        // history events
         assert(new_histories.value().second.size() % 2 == 0);
 
         nonlinear_history.first.swap(new_histories.value().first);
@@ -68,35 +71,36 @@ void GreedyRoundMinimizor::Minimize(
 
         strategy.SetTaskRemoved(task_i_id, true);
         strategy.SetTaskRemoved(task_j_id, true);
-        break; // tasks (i, j) were removed, so go to the next iteration of i
+        break;  // tasks (i, j) were removed, so go to the next iteration of i
       }
     }
   }
 
   // replay minimized round one last time to put coroutines in `returned` state
-  // (because multiple failed attempts to minimize new scenarios could leave tasks in invalid state)
-  sched.ReplayRound(RoundMinimizor::GetTasksOrdering(nonlinear_history.first, {}));
+  // (because multiple failed attempts to minimize new scenarios could leave
+  // tasks in invalid state)
+  sched.ReplayRound(
+      RoundMinimizor::GetTasksOrdering(nonlinear_history.first, {}));
 }
-
 
 // same interleaving
 Scheduler::Result SameInterleavingMinimizor::OnTasksRemoved(
-  SchedulerWithReplay& sched,
-  const Scheduler::BothHistories& nonlinear_history,
-  const std::unordered_set<int>& task_ids
-) const {
-  std::vector<int> new_ordering = RoundMinimizor::GetTasksOrdering(nonlinear_history.first, task_ids);
+    SchedulerWithReplay& sched,
+    const Scheduler::BothHistories& nonlinear_history,
+    const std::unordered_set<int>& task_ids) const {
+  std::vector<int> new_ordering =
+      RoundMinimizor::GetTasksOrdering(nonlinear_history.first, task_ids);
   return sched.ReplayRound(new_ordering);
 }
 
 // strategy exploration
-StrategyExplorationMinimizor::StrategyExplorationMinimizor(int runs_): runs(runs_) {}
+StrategyExplorationMinimizor::StrategyExplorationMinimizor(int runs_)
+    : runs(runs_) {}
 
 Scheduler::Result StrategyExplorationMinimizor::OnTasksRemoved(
-  SchedulerWithReplay& sched,
-  const Scheduler::BothHistories& nonlinear_history,
-  const std::unordered_set<int>& task_ids
-) const {
+    SchedulerWithReplay& sched,
+    const Scheduler::BothHistories& nonlinear_history,
+    const std::unordered_set<int>& task_ids) const {
   auto mark_tasks_as_removed = [&](bool is_removed) {
     for (const auto& task_id : task_ids) {
       sched.GetStrategy().SetTaskRemoved(task_id, is_removed);

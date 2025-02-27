@@ -69,7 +69,8 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
       }
     }
 
-    assert((max != std::numeric_limits<size_t>::min() && "all threads are empty or parked"));
+    assert((max != std::numeric_limits<size_t>::min() &&
+            "all threads are empty or parked"));
 
     // Check whether the priority change is required
     current_schedule_length++;
@@ -81,7 +82,8 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
 
     if (threads[index_of_max].empty() ||
         threads[index_of_max].back()->IsReturned()) {
-      auto constructor = this->constructors.at(this->constructors_distribution(rng));
+      auto constructor =
+          this->constructors.at(this->constructors_distribution(rng));
       if (forbid_all_same) {
         auto names = CountNames(index_of_max);
         // TODO: выглядит непонятно и так себе
@@ -90,7 +92,8 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
           names.insert(name);
           CreatedTaskMetaData task = {name, true, index_of_max};
           if (names.size() == 1 || !this->sched_checker.Verify(task)) {
-            constructor = this->constructors.at(this->constructors_distribution(rng));
+            constructor =
+                this->constructors.at(this->constructors_distribution(rng));
           } else {
             break;
           }
@@ -115,10 +118,8 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
     for (size_t i = 0; i < threads.size(); ++i) {
       int task_index = this->GetNextTaskInThread(i);
       // Ignore waiting tasks
-      if (
-        task_index == threads[i].size() ||
-        threads[i][task_index]->IsParked()
-      ) {
+      if (task_index == threads[i].size() ||
+          threads[i][task_index]->IsParked()) {
         // dual waiting if request finished, but follow up isn't
         // skip dual tasks that already have finished the request
         // section(follow-up will be executed in another task, so we can't
@@ -143,7 +144,8 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
     int next_task_index = this->GetNextTaskInThread(index_of_max);
     bool is_new = round_schedule[index_of_max] != next_task_index;
     round_schedule[index_of_max] = next_task_index;
-    return TaskWithMetaData{ threads[index_of_max][next_task_index], is_new, index_of_max };
+    return TaskWithMetaData{threads[index_of_max][next_task_index], is_new,
+                            index_of_max};
   }
 
   void StartNextRound() override {
@@ -168,11 +170,9 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
     UpdateStatistics();
   }
 
-  ~PctStrategy() {
-    this->TerminateTasks();
-  }
+  ~PctStrategy() { this->TerminateTasks(); }
 
-private:
+ private:
   void UpdateStatistics() {
     // Update statistics
     current_depth++;
@@ -183,7 +183,8 @@ private:
     current_schedule_length = 0;
 
     // current_depth have been increased
-    size_t new_k = std::reduce(k_statistics.begin(), k_statistics.end()) / k_statistics.size();
+    size_t new_k = std::reduce(k_statistics.begin(), k_statistics.end()) /
+                   k_statistics.size();
     log() << "k: " << new_k << "\n";
     PrepareForDepth(current_depth, new_k);
   }

@@ -25,8 +25,8 @@ struct Set {
     };
 
     method_t erase_func = [](Set *l, void *args) -> int {
-        auto real_args = reinterpret_cast<ArgTuple *>(args);
-        return l->Erase(std::get<ValueIndex>(*real_args));
+      auto real_args = reinterpret_cast<ArgTuple *>(args);
+      return l->Erase(std::get<ValueIndex>(*real_args));
     };
 
     return std::map<std::string, method_t>{
