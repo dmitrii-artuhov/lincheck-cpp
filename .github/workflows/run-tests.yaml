@@ -82,7 +82,7 @@ jobs:
           if [ "${error_code}" -ne 1 ]; then 
             exit 1
           fi
-  verifying-test (Release):
+  verifying-test-release:
     runs-on: ubuntu-latest
     defaults:
       run:
