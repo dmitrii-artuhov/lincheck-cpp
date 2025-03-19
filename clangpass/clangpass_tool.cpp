@@ -7,8 +7,7 @@
 //    clangpass.cpp for a complete description.
 //
 // USAGE:
-//    * ./build/bin/clangpass_tool --replace-name=::std::atomic '\'
-//                                 --insert-name=MyAtomic ./AtomicsReplacer/test-project/main.cpp
+//    * ./build/bin/clangpass_tool --replace-name=::std::atomic --insert-name=LTestAtomic ./AtomicsReplacer/test-project/main.cpp
 //
 //
 // License: The Unlicense
@@ -29,6 +28,7 @@ using namespace clang;
 //===----------------------------------------------------------------------===//
 static cl::OptionCategory CodeRefactorCategory("atomics-replacer options");
 
+// TODO: make the prefix (e.g. `__tmp_`source.cpp) a external parameter as well
 static cl::opt<std::string> ClassNameToReplaceOpt{
   "replace-name",
   cl::desc("The name of the class/struct which usages should be renamed"),
