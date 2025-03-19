@@ -34,6 +34,12 @@ endif()
 
 add_library(ClangPass SHARED clangpass.cpp)
 
+target_include_directories(
+  ClangPass
+  PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
 # Allow undefined symbols in shared objects on Darwin (this is the default
 # behaviour on Linux)
 target_link_libraries(ClangPass
