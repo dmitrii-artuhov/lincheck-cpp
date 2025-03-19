@@ -1,16 +1,6 @@
 #===============================================================================
 # SETUP CLANG PLUGIN
 #===============================================================================
-
-# Set this to a valid LLVM installation dir
-set(CT_Clang_INSTALL_DIR "/usr/lib/llvm-19" CACHE PATH "Clang installation directory")
-
-message("Clang install path: ${CT_Clang_INSTALL_DIR}")
-
-# Add the location of ClangConfig.cmake to CMake search paths (so that
-# find_package can locate it)
-list(APPEND CMAKE_PREFIX_PATH "${CT_Clang_INSTALL_DIR}/lib/cmake/clang/")
-
 find_package(Clang REQUIRED CONFIG)
 if("${LLVM_VERSION_MAJOR}" VERSION_LESS 19)
   message(FATAL_ERROR "Found LLVM ${LLVM_VERSION_MAJOR}, but need LLVM 19 or above")

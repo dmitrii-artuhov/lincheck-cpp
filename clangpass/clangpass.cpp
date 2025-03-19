@@ -3,7 +3,7 @@
 //    clangpass.cpp
 //
 // DESCRIPTION:
-//    Substitutes all input files std::atomic<T> usages with MyAtomic<T> with
+//    Substitutes all input files std::atomic<T> usages with LTestAtomic<T> with
 //    the same API.
 //
 // USAGE:
@@ -205,12 +205,14 @@ public:
 
 private:
   Rewriter RewriterForCodeRefactor;
+  // The shared library has predefined replace- and insert-class names,
+  // users are intended to use clangpass_tool.cpp instead.
   std::string ClassNameToReplace = "::std::atomic";
-  std::string ClassNameToInsert = "MyAtomic";
+  std::string ClassNameToInsert = "LTestAtomic";
 };
 
   
 static FrontendPluginRegistry::Add<CodeRefactorAddPluginAction> X(
   "ClangPass",
-  "Replace all std::atomic usages with MyAtomic"
+  "Replace all std::atomic usages with LTestAtomic"
 );
