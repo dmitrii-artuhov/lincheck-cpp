@@ -24,6 +24,7 @@ include(GoogleTest)
 fuzztest_setup_fuzzing_flags()
 enable_testing()
 
+add_subdirectory(clangpass)
 add_subdirectory(codegen)
 add_subdirectory(runtime)
 
