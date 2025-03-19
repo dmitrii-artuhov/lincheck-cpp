@@ -32,7 +32,7 @@ function(verify_target target)
         add_custom_command(
             OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/__tmp_${source_name}
             COMMAND ${CLANG_TOOL_EXECUTABLE}
-                    -p=${CMAKE_BINARY_DIR}/compile_commands.json
+                    -p=${CMAKE_BINARY_DIR}/compile_commands.json # passing compilation database, make sure CMAKE_EXPORT_COMPILE_COMMANDS flag is set
                     --replace-name=::std::atomic
                     --insert-name=LTestAtomic
                     ${CMAKE_CURRENT_SOURCE_DIR}/${source_name}
