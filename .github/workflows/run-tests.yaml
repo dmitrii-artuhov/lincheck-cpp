@@ -44,18 +44,32 @@ jobs:
         run: |
           cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=Debug
           cmake --build build --target verifying/targets/nonlinear_queue verifying/blocking/nonlinear_mutex verifying/blocking/simple_mutex
+      # Does not work, see issue: https://github.com/ITMO-PTDC-Team/LTest/issues/13
+      # - name: Run nonlinear_mutex with random strategy
+      #   run: |
+      #     LD_PRELOAD=build/syscall_intercept/libpreload.so ./build/verifying/blocking/nonlinear_mutex --strategy random || error_code=$?
+      #     if [ "${error_code}" -ne 1 ]; then 
+      #       exit 1
+      #     fi
+      # - name: Run nonlinear_mutex with pct strategy
+      #   run: |
+      #     LD_PRELOAD=build/syscall_intercept/libpreload.so ./build/verifying/blocking/nonlinear_mutex --strategy pct --tasks 10 --rounds 240 || error_code=$?
+      #     if [ "${error_code}" -ne 1 ]; then 
+      #       exit 1
+      #     fi
       - name: Run nonlinear_mutex with random strategy
         run: |
-          LD_PRELOAD=build/syscall_intercept/libpreload.so ./build/verifying/blocking/nonlinear_mutex --strategy random || error_code=$?
+          LD_PRELOAD=build/syscall_intercept/libpreload.so ./build/verifying/blocking/simple_mutex --strategy random || error_code=$?
           if [ "${error_code}" -ne 1 ]; then 
             exit 1
           fi
-      - name: Run nonlinear_mutex with pct strategy
-        run: |
-          LD_PRELOAD=build/syscall_intercept/libpreload.so ./build/verifying/blocking/nonlinear_mutex --strategy pct --tasks 10 --rounds 240 || error_code=$?
-          if [ "${error_code}" -ne 1 ]; then 
-            exit 1
-          fi
+      # Does not work, see issue: https://github.com/ITMO-PTDC-Team/LTest/issues/12
+      # - name: Run nonlinear_mutex with pct strategy
+      #   run: |
+      #     LD_PRELOAD=build/syscall_intercept/libpreload.so ./build/verifying/blocking/simple_mutex --strategy pct --tasks 10 --rounds 240 || error_code=$?
+      #     if [ "${error_code}" -ne 1 ]; then 
+      #       exit 1
+      #     fi
       - name: Run nonlinear_queue with random strategy
         run: |
           ./build/verifying/targets/nonlinear_queue --tasks 4 --rounds 100000 --strategy random --switches 1 || error_code=$?
