@@ -182,7 +182,7 @@ struct BaseStrategyWithThreads : public Strategy {
   // We do it in a dangerous way: in random order.
   // Actually, we assume obstruction free here.
   // TODO: for non obstruction-free we need to take into account dependencies.
-  // NOTE(dartiukhov): scenarios with mutexes do not support minimization
+  // TODO: for locks we need to figure out how to properly terminate: see https://github.com/ITMO-PTDC-Team/LTest/issues/13
   void TerminateTasks() {
     auto& round_schedule = this->round_schedule;
     assert(round_schedule.size() == this->threads.size() &&
