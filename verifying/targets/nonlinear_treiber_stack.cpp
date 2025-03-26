@@ -83,7 +83,6 @@ using spec_t = ltest::Spec<TreiberStack, spec::Stack<>, spec::StackHash<>,
 
 LTEST_ENTRYPOINT(spec_t);
 
-// Targets.
 target_method(generateInt, void, TreiberStack, Push, int);
 
 target_method(ltest::generators::genEmpty, int, TreiberStack, Pop);

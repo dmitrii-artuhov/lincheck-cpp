@@ -131,7 +131,6 @@ using spec_t =
 
 LTEST_ENTRYPOINT(spec_t);
 
-// Targets.
 target_method(generateInt, void, MSQueue, Push, int);
 
 target_method(ltest::generators::genEmpty, int, MSQueue, Pop);

@@ -49,7 +49,6 @@ using spec_t =
 
 LTEST_ENTRYPOINT(spec_t);
 
-// Targets.
 target_method(generateInt, void, Queue, Push, int);
 
 target_method(ltest::generators::genEmpty, int, Queue, Pop);

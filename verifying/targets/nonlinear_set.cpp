@@ -84,7 +84,6 @@ using spec_t =
 
 LTEST_ENTRYPOINT(spec_t);
 
-// Targets.
 target_method(generateInt, int, SlotsSet, Insert, int);
 
 target_method(generateInt, int, SlotsSet, Erase, int);
