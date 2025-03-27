@@ -149,13 +149,14 @@ public:
     return atomicValue.fetch_add(arg, order);
   }
   
-  T* fetch_add(std::ptrdiff_t arg, std::memory_order order = std::memory_order_seq_cst) noexcept {
-    return atomicValue.fetch_add(arg, order);
-  }
+  // TODO: fix ambiguity with specialization for T*
+  // T* fetch_add(std::ptrdiff_t arg, std::memory_order order = std::memory_order_seq_cst) noexcept {
+  //   return atomicValue.fetch_add(arg, order);
+  // }
 
-  T* fetch_add(std::ptrdiff_t arg, std::memory_order order = std::memory_order_seq_cst) volatile noexcept {
-    return atomicValue.fetch_add(arg, order);
-  }
+  // T* fetch_add(std::ptrdiff_t arg, std::memory_order order = std::memory_order_seq_cst) volatile noexcept {
+  //   return atomicValue.fetch_add(arg, order);
+  // }
 
   // fetch_sub
   T fetch_sub(T arg, std::memory_order order = std::memory_order_seq_cst) noexcept {
@@ -166,13 +167,14 @@ public:
     return atomicValue.fetch_sub(arg, order);
   }
   
-  T* fetch_sub(std::ptrdiff_t arg, std::memory_order order = std::memory_order_seq_cst) noexcept {
-    return atomicValue.fetch_sub(arg, order);
-  }
+  // TODO: fix ambiguity with specialization for T*
+  // T* fetch_sub(std::ptrdiff_t arg, std::memory_order order = std::memory_order_seq_cst) noexcept {
+  //   return atomicValue.fetch_sub(arg, order);
+  // }
 
-  T* fetch_sub(std::ptrdiff_t arg, std::memory_order order = std::memory_order_seq_cst) volatile noexcept {
-    return atomicValue.fetch_sub(arg, order);
-  }
+  // T* fetch_sub(std::ptrdiff_t arg, std::memory_order order = std::memory_order_seq_cst) volatile noexcept {
+  //   return atomicValue.fetch_sub(arg, order);
+  // }
 
   // operator+=
   T operator+=(T arg) noexcept {
@@ -183,13 +185,14 @@ public:
     return atomicValue.operator+=(arg);
   }
   
-  T* operator+=(std::ptrdiff_t arg) noexcept {
-    return atomicValue.operator+=(arg);
-  }
+  // TODO: fix ambiguity with specialization for T*
+  // T* operator+=(std::ptrdiff_t arg) noexcept {
+  //   return atomicValue.operator+=(arg);
+  // }
   
-  T* operator+=(std::ptrdiff_t arg) volatile noexcept {
-    return atomicValue.operator+=(arg);
-  }
+  // T* operator+=(std::ptrdiff_t arg) volatile noexcept {
+  //   return atomicValue.operator+=(arg);
+  // }
 
   // operator-=
   T operator-=(T arg) noexcept {
@@ -200,13 +203,14 @@ public:
     return atomicValue.operator-=(arg);
   }
   
-  T* operator-=(std::ptrdiff_t arg) noexcept {
-    return atomicValue.operator-=(arg);
-  }
+  // TODO: fix ambiguity with specialization for T*
+  // T* operator-=(std::ptrdiff_t arg) noexcept {
+  //   return atomicValue.operator-=(arg);
+  // }
   
-  T* operator-=(std::ptrdiff_t arg) volatile noexcept {
-    return atomicValue.operator-=(arg);
-  }
+  // T* operator-=(std::ptrdiff_t arg) volatile noexcept {
+  //   return atomicValue.operator-=(arg);
+  // }
 
   // fetch_max
   T fetch_max(T arg, std::memory_order order = std::memory_order_seq_cst) noexcept {
