@@ -30,12 +30,6 @@ target_include_directories(
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
-target_include_directories(
-  ClangPass
-  PRIVATE
-  "${CMAKE_CURRENT_SOURCE_DIR}/include"
-)
-
 # Allow undefined symbols in shared objects on Darwin (this is the default
 # behaviour on Linux)
 target_link_libraries(ClangPass
