@@ -228,6 +228,7 @@ struct BaseStrategyWithThreads : public Strategy {
         }
       }
     }
+
     this->sched_checker.Reset();
     state.Reset();
   }
