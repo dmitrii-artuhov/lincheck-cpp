@@ -181,7 +181,6 @@ struct BaseStrategyWithThreads : public Strategy {
   // Terminates all running tasks.
   // We do it in a dangerous way: in random order.
   // Actually, we assume obstruction free here.
-  // TODO: for non obstruction-free we need to take into account dependencies.
   // TODO: for locks we need to figure out how to properly terminate: see https://github.com/ITMO-PTDC-Team/LTest/issues/13
   void TerminateTasks() {
     auto& round_schedule = this->round_schedule;
@@ -189,16 +188,40 @@ struct BaseStrategyWithThreads : public Strategy {
            "sizes expected to be the same");
     round_schedule.assign(round_schedule.size(), -1);
 
-    for (auto& thread : this->threads) {
-      for (size_t i = 0; i < thread.size(); ++i) {
-        auto& t = thread[i];
-        if (
-          !t->IsReturned() && !t->IsBlocked() // do not call on finished tasks
-        ) {
-          t->Terminate();
+    std::vector<size_t> task_indexes(this->threads.size(), 0);
+    bool has_nonterminated_threads = true;
+
+    while (has_nonterminated_threads) {
+      has_nonterminated_threads = false;
+
+      for (size_t thread_index = 0; thread_index < this->threads.size(); ++thread_index) {
+        auto& thread = this->threads[thread_index];
+        auto& task_index = task_indexes[thread_index];
+
+        // find first non-finished task in the thread
+        while (task_index < thread.size() && thread[task_index]->IsReturned()) {
+          task_index++;
+        }
+
+        if (task_index < thread.size()) {
+          auto& task = thread[task_index];
+
+          // if task is blocked and it is the last one, then just increment the task index
+          if (task->IsBlocked()) {
+            assert(task_index == thread.size() - 1 && "Trying to terminate blocked task, which is not last in the thread.");
+            if (task_index == thread.size() - 1) {
+              task_index++;
+            }
+          }
+          else {
+            has_nonterminated_threads = true;
+            // do a single step in this task
+            task->Resume();
+          }
         }
       }
     }
+
     this->sched_checker.Reset();
     state.Reset();
   }
