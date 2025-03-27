@@ -22,7 +22,13 @@ if(${SUPPORTS_FVISIBILITY_INLINES_HIDDEN_FLAG} EQUAL "1")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility-inlines-hidden")
 endif()
 
-add_library(ClangPass SHARED clangpass.cpp)
+add_library(ClangPass SHARED "${CMAKE_CURRENT_SOURCE_DIR}/clangpass.cpp")
+
+target_include_directories(
+  ClangPass
+  PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
 
 target_include_directories(
   ClangPass
