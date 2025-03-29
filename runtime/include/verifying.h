@@ -37,6 +37,9 @@ struct Opts {
   size_t tasks;
   size_t switches;
   size_t rounds;
+  bool minimize;
+  size_t exploration_runs;
+  size_t minimization_runs;
   bool verbose;
   bool syscall_trap;
   StrategyType typ;
@@ -48,8 +51,7 @@ Opts parse_opts();
 std::vector<std::string> split(const std::string &s, char delim);
 
 template <typename TargetObj, StrategyVerifier Verifier>
-std::unique_ptr<Strategy<Verifier>> MakeStrategy(Opts &opts,
-                                                 std::vector<TaskBuilder> l) {
+std::unique_ptr<Strategy> MakeStrategy(Opts &opts, std::vector<TaskBuilder> l) {
   switch (opts.typ) {
     case RR: {
       std::cout << "round-robin\n";
@@ -75,7 +77,7 @@ std::unique_ptr<Strategy<Verifier>> MakeStrategy(Opts &opts,
           opts.threads, std::move(l), opts.forbid_all_same);
     }
     default:
-      assert(false && "unexpected typ");
+      assert(false && "unexpected type");
   }
 }
 
@@ -83,15 +85,17 @@ std::unique_ptr<Strategy<Verifier>> MakeStrategy(Opts &opts,
 // TODO: refactor.
 template <StrategyVerifier Verifier>
 struct StrategySchedulerWrapper : StrategyScheduler<Verifier> {
-  StrategySchedulerWrapper(std::unique_ptr<Strategy<Verifier>> strategy,
+  StrategySchedulerWrapper(std::unique_ptr<Strategy> strategy,
                            ModelChecker &checker, PrettyPrinter &pretty_printer,
-                           size_t max_tasks, size_t max_rounds)
+                           size_t max_tasks, size_t max_rounds, bool minimize,
+                           size_t exploration_runs, size_t minimization_runs)
       : strategy(std::move(strategy)),
         StrategyScheduler<Verifier>(*strategy.get(), checker, pretty_printer,
-                                    max_tasks, max_rounds) {};
+                                    max_tasks, max_rounds, minimize,
+                                    exploration_runs, minimization_runs) {};
 
  private:
-  std::unique_ptr<Strategy<Verifier>> strategy;
+  std::unique_ptr<Strategy> strategy;
 };
 
 template <typename TargetObj, StrategyVerifier Verifier>
@@ -105,15 +109,19 @@ std::unique_ptr<Scheduler> MakeScheduler(ModelChecker &checker, Opts &opts,
     case RND: {
       auto strategy = MakeStrategy<TargetObj, Verifier>(opts, std::move(l));
       auto scheduler = std::make_unique<StrategySchedulerWrapper<Verifier>>(
-          std::move(strategy), checker, pretty_printer, opts.tasks,
-          opts.rounds);
+          std::move(strategy), checker, pretty_printer, opts.tasks, opts.rounds,
+          opts.minimize, opts.exploration_runs, opts.minimization_runs);
       return scheduler;
     }
     case TLA: {
+      std::cout << "tla\n";
       auto scheduler = std::make_unique<TLAScheduler<TargetObj>>(
           opts.tasks, opts.rounds, opts.threads, opts.switches, std::move(l),
           checker, pretty_printer);
       return scheduler;
+    }
+    default: {
+      assert(false && "Unknown strategy type specified");
     }
   }
 }
@@ -138,10 +146,16 @@ int Run(int argc, char *argv[]) {
   Opts opts = parse_opts();
 
   logger_init(opts.verbose);
+  std::cout << "verbose: " << opts.verbose << "\n";
   std::cout << "threads  = " << opts.threads << "\n";
   std::cout << "tasks    = " << opts.tasks << "\n";
   std::cout << "switches = " << opts.switches << "\n";
   std::cout << "rounds   = " << opts.rounds << "\n";
+  std::cout << "minimize = " << opts.minimize << "\n";
+  if (opts.minimize) {
+    std::cout << "exploration runs = " << opts.exploration_runs << "\n";
+    std::cout << "minimization runs = " << opts.minimization_runs << "\n";
+  }
   std::cout << "targets  = " << task_builders.size() << "\n";
 
   PrettyPrinter pretty_printer{opts.threads};

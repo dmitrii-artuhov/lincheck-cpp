@@ -1,6 +1,10 @@
 __pycache__
 build
 venv
+.vscode
 .devcontainer/**
 .cache/**
 third_party/**
+!third_party/CMakeLists.txt
+dist
+folly

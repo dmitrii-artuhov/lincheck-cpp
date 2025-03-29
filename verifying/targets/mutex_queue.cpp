@@ -56,14 +56,14 @@ auto generateArgs(size_t thread_num) {
   return std::tuple_cat(token, _int);
 }
 
-target_method(generateArgs, void, Queue, Push, std::shared_ptr<Token>, int);
-
-target_method(ltest::generators::genToken, int, Queue, Pop,
-              std::shared_ptr<Token>);
-
 using QueueCls = spec::Queue<std::tuple<std::shared_ptr<Token>, int>, 1>;
 
 using spec_t = ltest::Spec<Queue, QueueCls, spec::QueueHash<QueueCls>,
                            spec::QueueEquals<QueueCls>>;
 
 LTEST_ENTRYPOINT(spec_t);
+
+target_method(generateArgs, void, Queue, Push, std::shared_ptr<Token>, int);
+
+target_method(ltest::generators::genToken, int, Queue, Pop,
+              std::shared_ptr<Token>);

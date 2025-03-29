@@ -62,11 +62,11 @@ class Mutex {
   std::atomic_int32_t locked_{0};
 };
 
-target_method(ltest::generators::genEmpty, int, Mutex, Lock);
-
-target_method(ltest::generators::genEmpty, int, Mutex, Unlock);
-
 using spec_t = ltest::Spec<Mutex, spec::LinearMutex, spec::LinearMutexHash,
                            spec::LinearMutexEquals>;
 
 LTEST_ENTRYPOINT_CONSTRAINT(spec_t, MutexVerifier);
+
+target_method(ltest::generators::genEmpty, int, Mutex, Lock);
+
+target_method(ltest::generators::genEmpty, int, Mutex, Unlock);

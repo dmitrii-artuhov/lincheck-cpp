@@ -31,6 +31,8 @@ void CoroBase::Resume() {
   this_coro.reset();
 }
 
+int CoroBase::GetId() const { return id; }
+
 int CoroBase::GetRetVal() const {
   assert(IsReturned());
   return ret;
