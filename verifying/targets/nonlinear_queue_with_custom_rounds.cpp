@@ -49,11 +49,11 @@ auto generateInt(size_t unused_param) {
 using spec_t =
     ltest::Spec<Queue, spec::Queue<>, spec::QueueHash<>, spec::QueueEquals<>>;
 
-LTEST_ENTRYPOINT_WITH_CUSTOM_ROUNDS(
-    spec_t, {{
-                 method_invocation(std::tuple(1), void, Queue, Push, int),
-                 method_invocation(std::tuple(2), void, Queue, Push, int),
-                 method_invocation(std::tuple(), int, Queue, Pop),
-             },
-             {method_invocation(std::tuple(3), void, Queue, Push, int),
-              method_invocation(std::tuple(), int, Queue, Pop)}});
+LTEST_ENTRYPOINT(spec_t,
+                 {{
+                      method_invocation(std::tuple(1), void, Queue, Push, int),
+                      method_invocation(std::tuple(2), void, Queue, Push, int),
+                      method_invocation(std::tuple(), int, Queue, Pop),
+                  },
+                  {method_invocation(std::tuple(3), void, Queue, Push, int),
+                   method_invocation(std::tuple(), int, Queue, Pop)}});

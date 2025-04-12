@@ -188,26 +188,28 @@ int Run(int argc, char *argv[], std::vector<CustomRound> custom_rounds = {}) {
 
 }  // namespace ltest
 
-#define LTEST_ENTRYPOINT_CONSTRAINT(spec_obj_t, strategy_verifier) \
-  int main(int argc, char *argv[]) {                               \
-    return ltest::Run<spec_obj_t, strategy_verifier>(argc, argv);  \
-  }
-
-#define LTEST_ENTRYPOINT(spec_obj_t)           \
-  int main(int argc, char *argv[]) {           \
-    return ltest::Run<spec_obj_t>(argc, argv); \
-  }
-
 // `...` is used instead of named argument in order to allow
 // user to specify custom rounds without wrapping them into
 // parenthesis `()` manually
-#define LTEST_ENTRYPOINT_WITH_CUSTOM_ROUNDS(spec_obj_t, ...)             \
-  int main(int argc, char *argv[]) {                                     \
-    std::vector<std::vector<std::vector<TaskBuilder>>> builders = {      \
-        __VA_ARGS__};                                                    \
-    std::vector<CustomRound> custom_rounds;                              \
-    for (auto &v : builders) {                                           \
-      custom_rounds.emplace_back(std::move(v));                          \
-    }                                                                    \
-    return ltest::Run<spec_obj_t>(argc, argv, std::move(custom_rounds)); \
+#define LTEST_ENTRYPOINT(spec_obj_t, ...)                                    \
+  int main(int argc, char *argv[]) {                                         \
+    std::vector<CustomRound> custom_rounds;                                  \
+    __VA_OPT__(std::vector<std::vector<std::vector<TaskBuilder>>> builders = \
+                   {__VA_ARGS__};                                            \
+               for (auto &v : builders) {                                    \
+                 custom_rounds.emplace_back(std::move(v));                   \
+               })                                                            \
+    return ltest::Run<spec_obj_t>(argc, argv, std::move(custom_rounds));     \
+  }
+
+#define LTEST_ENTRYPOINT_CONSTRAINT(spec_obj_t, strategy_verifier, ...)      \
+  int main(int argc, char *argv[]) {                                         \
+    std::vector<CustomRound> custom_rounds;                                  \
+    __VA_OPT__(std::vector<std::vector<std::vector<TaskBuilder>>> builders = \
+                   {__VA_ARGS__};                                            \
+               for (auto &v : builders) {                                    \
+                 custom_rounds.emplace_back(std::move(v));                   \
+               })                                                            \
+    return ltest::Run<spec_obj_t, strategy_verifier>(                        \
+        argc, argv, std::move(custom_rounds));                               \
   }
