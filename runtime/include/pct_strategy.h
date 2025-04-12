@@ -17,19 +17,10 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
   explicit PctStrategy(size_t threads_count,
                        std::vector<TaskBuilder> constructors,
                        bool forbid_all_same)
-      : threads_count(threads_count),
+      : BaseStrategyWithThreads<TargetObj, Verifier>(threads_count, std::move(constructors)),
         current_depth(1),
         current_schedule_length(0),
         forbid_all_same(forbid_all_same) {
-    this->constructors = std::move(constructors);
-    this->round_schedule.resize(threads_count, -1);
-
-    std::random_device dev;
-    rng = std::mt19937(dev());
-    this->constructors_distribution =
-        std::uniform_int_distribution<std::mt19937::result_type>(
-            0, this->constructors.size() - 1);
-
     // We have information about potential number of resumes
     // but because of the implementation, it's only available in the task.
     // In fact, it doesn't depend on the task, it only depends on the
@@ -38,11 +29,6 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
     avg_k = avg_k / this->constructors.size();
 
     PrepareForDepth(current_depth, avg_k);
-
-    // Create queues.
-    for (size_t i = 0; i < threads_count; ++i) {
-      this->threads.emplace_back();
-    }
   }
 
   // If there aren't any non returned tasks and the amount of finished tasks
@@ -83,7 +69,7 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
     if (threads[index_of_max].empty() ||
         threads[index_of_max].back()->IsReturned()) {
       auto constructor =
-          this->constructors.at(this->constructors_distribution(rng));
+          this->constructors.at(this->constructors_distribution(this->rng));
       if (forbid_all_same) {
         auto names = CountNames(index_of_max);
         // TODO: выглядит непонятно и так себе
@@ -93,7 +79,7 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
           CreatedTaskMetaData task = {name, true, index_of_max};
           if (names.size() == 1 || !this->sched_checker.Verify(task)) {
             constructor =
-                this->constructors.at(this->constructors_distribution(rng));
+                this->constructors.at(this->constructors_distribution(this->rng));
           } else {
             break;
           }
@@ -149,19 +135,7 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
   }
 
   void StartNextRound() override {
-    this->new_task_id = 0;
-    //    log() << "depth: " << current_depth << "\n";
-    // Reconstruct target as we start from the beginning.
-    this->TerminateTasks();
-    for (auto& thread : this->threads) {
-      // We don't have to keep references alive
-      while (thread.size() > 0) {
-        thread.pop_back();
-      }
-      thread = StableVector<Task>();
-    }
-    //this->state.Reset();
-
+    BaseStrategyWithThreads<TargetObj, Verifier>::StartNextRound();
     UpdateStatistics();
   }
 
@@ -185,7 +159,7 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
     // current_depth have been increased
     size_t new_k = std::reduce(k_statistics.begin(), k_statistics.end()) /
                    k_statistics.size();
-    log() << "k: " << new_k << "\n";
+    //log() << "k: " << new_k << "\n";
     PrepareForDepth(current_depth, new_k);
   }
 
@@ -207,23 +181,22 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
 
   void PrepareForDepth(size_t depth, size_t k) {
     // Generates priorities
-    priorities = std::vector<size_t>(threads_count);
+    priorities = std::vector<size_t>(this->threads.size());
     for (size_t i = 0; i < priorities.size(); ++i) {
       priorities[i] = current_depth + i;
     }
-    std::shuffle(priorities.begin(), priorities.end(), rng);
+    std::shuffle(priorities.begin(), priorities.end(), this->rng);
 
     // Generates priority_change_points
     auto k_distribution =
         std::uniform_int_distribution<std::mt19937::result_type>(1, k);
     priority_change_points = std::vector<size_t>(depth - 1);
     for (size_t i = 0; i < depth - 1; ++i) {
-      priority_change_points[i] = k_distribution(rng);
+      priority_change_points[i] = k_distribution(this->rng);
     }
   }
 
   std::vector<size_t> k_statistics;
-  size_t threads_count;
   size_t current_depth;
   size_t current_schedule_length;
   std::vector<size_t> priorities;
@@ -233,5 +206,4 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
   // so we have to contains all tasks in queues(queue doesn't invalidate the
   // references)
   bool forbid_all_same;
-  std::mt19937 rng;
 };

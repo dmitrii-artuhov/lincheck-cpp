@@ -115,7 +115,19 @@ jobs:
       - name: Build
         run: |
           cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --target verifying/targets/nonlinear_queue verifying/targets/nonlinear_ms_queue verifying/targets/nonlinear_treiber_stack verifying/targets/nonlinear_set verifying/blocking/nonlinear_mutex verifying/blocking/simple_mutex
+          cmake --build build --target verifying/targets/nonlinear_queue verifying/targets/nonlinear_ms_queue verifying/targets/nonlinear_treiber_stack verifying/targets/nonlinear_set verifying/targets/nonlinear_queue_with_custom_rounds verifying/blocking/nonlinear_mutex verifying/blocking/simple_mutex
+      - name: Run nonlinear_queue_with_custom_rounds with random strategy
+        run: |
+          ./build/verifying/targets/nonlinear_queue_with_custom_rounds --rounds 0 --exploration_runs 100000 --strategy random || error_code=$?
+          if [ "${error_code}" -ne 1 ]; then 
+            exit 1
+          fi
+      - name: Run nonlinear_queue_with_custom_rounds with pct strategy
+        run: |
+          ./build/verifying/targets/nonlinear_queue_with_custom_rounds --rounds 0 --exploration_runs 100000 --strategy pct || error_code=$?
+          if [ "${error_code}" -ne 1 ]; then 
+            exit 1
+          fi
       - name: Run nonlinear_queue with random strategy (minimization)
         run: |
           ./build/verifying/targets/nonlinear_queue --tasks 40 --rounds 100000 --strategy random --minimize || error_code=$?

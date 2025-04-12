@@ -46,8 +46,6 @@ struct Queue {
   int a[N]{};
 };
 
-namespace ltest {}  // namespace ltest
-
 auto generateInt() { return ltest::generators::makeSingleArg(rand() % 10 + 1); }
 
 auto generateArgs(size_t thread_num) {

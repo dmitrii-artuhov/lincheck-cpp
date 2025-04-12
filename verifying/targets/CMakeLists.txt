@@ -8,6 +8,7 @@ set (SOURCE_TARGET_LIST
     nonlinear_set.cpp
     nonlinear_ms_queue.cpp
     nonlinear_treiber_stack.cpp
+    nonlinear_queue_with_custom_rounds.cpp
 )
 
 foreach(source_name ${SOURCE_TARGET_LIST})
