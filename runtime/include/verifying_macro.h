@@ -49,8 +49,10 @@ template <typename Ret, typename Target, typename... Args>
 struct TargetMethod;
 
 // TODO:
-//  1. Merge PR with arbitrary return type https://github.com/ITMO-PTDC-Team/LTest/pull/11
-//  2. Fix a lot of code duplication in this file (between `TargetMethod` and `MethodInvocation`)
+//  1. Merge PR with arbitrary return type
+//  https://github.com/ITMO-PTDC-Team/LTest/pull/11
+//  2. Fix a lot of code duplication in this file (between `TargetMethod` and
+//  `MethodInvocation`)
 template <typename Ret, typename Target, typename... Args>
 struct MethodInvocation;
 
@@ -77,24 +79,20 @@ struct TargetMethod<int, Target, Args...> {
   }
 };
 
-
 template <typename Target, typename... Args>
 struct MethodInvocation<int, Target, Args...> {
   using Method = std::function<int(Target *, Args...)>;
 
-  inline static TaskBuilder GetTaskBuilder(
-    std::string_view method_name,
-    std::tuple<Args...> params,
-    Method method 
-  ) {
-    auto builder = [method_name, params = std::move(params), method = std::move(method)]
-                   (void *this_ptr, size_t unused_thread_num, int task_id) -> Task {
+  inline static TaskBuilder GetTaskBuilder(std::string_view method_name,
+                                           std::tuple<Args...> params,
+                                           Method method) {
+    auto builder =
+        [method_name, params = std::move(params), method = std::move(method)](
+            void *this_ptr, size_t unused_thread_num, int task_id) -> Task {
       auto args = std::shared_ptr<void>(new std::tuple(params));
-      auto coro = Coro<Target, Args...>::New(
-        method, this_ptr, args,
-        &ltest::toStringArgs<Args...>,
-        method_name, task_id
-      );
+      auto coro = Coro<Target, Args...>::New(method, this_ptr, args,
+                                             &ltest::toStringArgs<Args...>,
+                                             method_name, task_id);
       if (ltest::generators::generated_token) {
         coro->SetToken(ltest::generators::generated_token);
         ltest::generators::generated_token.reset();
@@ -145,20 +143,17 @@ template <typename Target, typename... Args>
 struct MethodInvocation<void, Target, Args...> {
   using Method = std::function<void(Target *, Args...)>;
 
-  inline static TaskBuilder GetTaskBuilder(
-    std::string_view method_name,
-    std::tuple<Args...> params,
-    Method method 
-  ) {
-    auto builder = [method_name, params = std::move(params), method = std::move(method)]
-                   (void *this_ptr, size_t unused_thread_num, int task_id) -> Task {
+  inline static TaskBuilder GetTaskBuilder(std::string_view method_name,
+                                           std::tuple<Args...> params,
+                                           Method method) {
+    auto builder =
+        [method_name, params = std::move(params), method = std::move(method)](
+            void *this_ptr, size_t unused_thread_num, int task_id) -> Task {
       auto wrapper = Wrapper<Target, decltype(method), Args...>{method};
       auto args = std::shared_ptr<void>(new std::tuple(params));
-      auto coro = Coro<Target, Args...>::New(
-        wrapper, this_ptr, args,
-        &ltest::toStringArgs<Args...>,
-        method_name, task_id
-      );
+      auto coro = Coro<Target, Args...>::New(wrapper, this_ptr, args,
+                                             &ltest::toStringArgs<Args...>,
+                                             method_name, task_id);
       if (ltest::generators::generated_token) {
         coro->SetToken(ltest::generators::generated_token);
         ltest::generators::generated_token.reset();
@@ -180,6 +175,8 @@ struct MethodInvocation<void, Target, Args...> {
 
 #define stringify_detail(x) #x
 #define stringify(x) stringify_detail(x)
-#define method_invocation(params, ret, cls, symbol, ...)       \
-  ltest::MethodInvocation<ret, cls __VA_OPT__(, ) __VA_ARGS__> \
-    ::GetTaskBuilder(stringify(symbol), params, &cls::symbol)
+#define method_invocation(params, ret, cls, symbol, ...)                      \
+  ltest::MethodInvocation<                                                    \
+      ret, cls __VA_OPT__(, ) __VA_ARGS__>::GetTaskBuilder(stringify(symbol), \
+                                                           params,            \
+                                                           &cls::symbol)

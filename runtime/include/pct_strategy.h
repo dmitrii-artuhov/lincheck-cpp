@@ -17,7 +17,8 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
   explicit PctStrategy(size_t threads_count,
                        std::vector<TaskBuilder> constructors,
                        bool forbid_all_same)
-      : BaseStrategyWithThreads<TargetObj, Verifier>(threads_count, std::move(constructors)),
+      : BaseStrategyWithThreads<TargetObj, Verifier>(threads_count,
+                                                     std::move(constructors)),
         current_depth(1),
         current_schedule_length(0),
         forbid_all_same(forbid_all_same) {
@@ -78,8 +79,8 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
           names.insert(name);
           CreatedTaskMetaData task = {name, true, index_of_max};
           if (names.size() == 1 || !this->sched_checker.Verify(task)) {
-            constructor =
-                this->constructors.at(this->constructors_distribution(this->rng));
+            constructor = this->constructors.at(
+                this->constructors_distribution(this->rng));
           } else {
             break;
           }
@@ -159,7 +160,7 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
     // current_depth have been increased
     size_t new_k = std::reduce(k_statistics.begin(), k_statistics.end()) /
                    k_statistics.size();
-    //log() << "k: " << new_k << "\n";
+    // log() << "k: " << new_k << "\n";
     PrepareForDepth(current_depth, new_k);
   }
 

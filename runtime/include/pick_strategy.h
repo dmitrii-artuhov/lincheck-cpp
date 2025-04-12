@@ -13,7 +13,8 @@ struct PickStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
 
   explicit PickStrategy(size_t threads_count,
                         std::vector<TaskBuilder> constructors)
-      : BaseStrategyWithThreads<TargetObj, Verifier>(threads_count, std::move(constructors)),
+      : BaseStrategyWithThreads<TargetObj, Verifier>(threads_count,
+                                                     std::move(constructors)),
         next_task(0) {}
 
   // If there aren't any non returned tasks and the amount of finished tasks
@@ -27,7 +28,8 @@ struct PickStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
     if (threads[current_thread].empty() ||
         threads[current_thread].back()->IsReturned()) {
       // a task has finished or the queue is empty, so we add a new task
-      std::shuffle(this->constructors.begin(), this->constructors.end(), this->rng);
+      std::shuffle(this->constructors.begin(), this->constructors.end(),
+                   this->rng);
       size_t verified_constructor = -1;
       for (size_t i = 0; i < this->constructors.size(); ++i) {
         TaskBuilder constructor = this->constructors.at(i);
@@ -73,7 +75,7 @@ struct PickStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
       for (size_t i = 0; i < tasks; ++i) {
         Task& task = thread[i];
         if (task->GetId() == task_id) {
-          std::tuple<Task&, int> result = { task, thread_id };
+          std::tuple<Task&, int> result = {task, thread_id};
           return result;
           // return std::make_tuple(task, thread_id);
         }
