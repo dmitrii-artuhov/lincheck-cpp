@@ -199,7 +199,13 @@ int Run(int argc, char *argv[], std::vector<CustomRound> custom_rounds = {}) {
 // parenthesis `()` manually
 #define LTEST_ENTRYPOINT_WITH_CUSTOM_ROUNDS(spec_obj_t, ...) \
   int main(int argc, char *argv[]) {                         \
+    std::vector<std::vector<std::vector<TaskBuilder>>>       \
+        builders = {__VA_ARGS__};                            \
+    std::vector<CustomRound> custom_rounds;                  \
+    for (auto &v : builders) {                               \
+      custom_rounds.emplace_back(std::move(v));              \
+    }                                                        \
     return ltest::Run<spec_obj_t>(                           \
-      argc, argv, std::move((__VA_ARGS__))                   \
+      argc, argv, std::move(custom_rounds)                   \
     );                                                       \
   }

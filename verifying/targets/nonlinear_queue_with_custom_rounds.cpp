@@ -51,20 +51,15 @@ using spec_t =
 
 LTEST_ENTRYPOINT_WITH_CUSTOM_ROUNDS(
   spec_t,
-  std::vector<ltest::CustomRound>{
-    // this custom round should detect the nonlinearizable interleaving
+  {
     {
-      {
-        {
-          method_invocation(std::tuple(1), void, Queue, Push, int),
-          method_invocation(std::tuple(2), void, Queue, Push, int),
-          method_invocation(std::tuple(), int, Queue, Pop),
-        },
-        {
-          method_invocation(std::tuple(3), void, Queue, Push, int),
-          method_invocation(std::tuple(), int, Queue, Pop)
-        }
-      }
+      method_invocation(std::tuple(1), void, Queue, Push, int),
+      method_invocation(std::tuple(2), void, Queue, Push, int),
+      method_invocation(std::tuple(), int, Queue, Pop),
+    },
+    {
+      method_invocation(std::tuple(3), void, Queue, Push, int),
+      method_invocation(std::tuple(), int, Queue, Pop)
     }
   }
 );

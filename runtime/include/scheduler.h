@@ -92,7 +92,7 @@ struct Strategy {
   // Sets custom round provided by the user for execution.
   // The round should be executed via `Scheduler::ExploreRound` method
   // instead of `Scheduler::GenerateAndRunRound`.
-  virtual void SetCustomRound(ltest::CustomRound& custom_round) = 0;
+  virtual void SetCustomRound(CustomRound& custom_round) = 0;
 
   // Returns the number of non-removed tasks
   virtual int GetValidTasksCount() const = 0;
@@ -206,7 +206,7 @@ struct BaseStrategyWithThreads : public Strategy {
     }
   }
 
-  void SetCustomRound(ltest::CustomRound& custom_round) override {
+  void SetCustomRound(CustomRound& custom_round) override {
     size_t custom_threads_count = custom_round.threads.size();
 
     // custom round threads count might differ from the generated rounds
@@ -334,7 +334,7 @@ struct StrategyScheduler : public SchedulerWithReplay {
   // max_switches represents the maximal count of switches. After this count
   // scheduler will end execution of the Run function
   StrategyScheduler(Strategy& sched_class, ModelChecker& checker,
-                    std::vector<ltest::CustomRound> custom_rounds,
+                    std::vector<CustomRound> custom_rounds,
                     PrettyPrinter& pretty_printer, size_t max_tasks,
                     size_t max_rounds, bool minimize, size_t exploration_runs,
                     size_t minimization_runs)
@@ -559,7 +559,7 @@ struct StrategyScheduler : public SchedulerWithReplay {
  private:
   Strategy& strategy;
   ModelChecker& checker;
-  std::vector<ltest::CustomRound> custom_rounds;
+  std::vector<CustomRound> custom_rounds;
   PrettyPrinter& pretty_printer;
   size_t max_tasks;
   size_t max_rounds;
