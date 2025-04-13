@@ -368,21 +368,22 @@ struct StrategyScheduler : public SchedulerWithReplay {
       if (histories.has_value()) {
         if (should_minimize_history) {
           auto& [full_history, sequential_history] = histories.value();
+          int threads_num = GetStartegyThreadsCount();
 
           log() << "Full nonlinear scenario: \n";
-          pretty_printer.PrettyPrint(sequential_history, log());
+          pretty_printer.PrettyPrint(sequential_history, threads_num, log());
 
           log() << "Minimizing same interleaving...\n";
           Minimize(histories.value(), SameInterleavingMinimizor());
           log() << "Minimized to:\n";
-          pretty_printer.PrettyPrint(sequential_history, log());
+          pretty_printer.PrettyPrint(sequential_history, threads_num, log());
 
           log() << "Minimizing with rescheduling (exploration runs: "
                 << exploration_runs << ")...\n";
           Minimize(histories.value(),
                    StrategyExplorationMinimizor(exploration_runs));
           log() << "Minimized to:\n";
-          pretty_printer.PrettyPrint(sequential_history, log());
+          pretty_printer.PrettyPrint(sequential_history, threads_num, log());
 
           log() << "Minimizing with smart minimizor (exploration runs: "
                 << exploration_runs
@@ -400,6 +401,10 @@ struct StrategyScheduler : public SchedulerWithReplay {
     }
 
     return std::nullopt;
+  }
+
+  int GetStartegyThreadsCount() const override {
+    return strategy.GetThreadsCount();
   }
 
  protected:
@@ -432,7 +437,8 @@ struct StrategyScheduler : public SchedulerWithReplay {
       }
     }
 
-    pretty_printer.PrettyPrint(sequential_history, log());
+    pretty_printer.PrettyPrint(sequential_history, GetStartegyThreadsCount(),
+                               log());
 
     if (!checker.Check(sequential_history)) {
       return std::make_pair(full_history, sequential_history);
@@ -469,7 +475,8 @@ struct StrategyScheduler : public SchedulerWithReplay {
       }
 
       if (log_each_interleaving) {
-        pretty_printer.PrettyPrint(sequential_history, log());
+        pretty_printer.PrettyPrint(sequential_history,
+                                   GetStartegyThreadsCount(), log());
         log() << "\n";
       }
 
@@ -589,6 +596,8 @@ struct TLAScheduler : Scheduler {
     return res;
   }
 
+  int GetStartegyThreadsCount() const override { return threads.size(); }
+
   ~TLAScheduler() { TerminateTasks(); }
 
  private:
@@ -698,7 +707,8 @@ struct TLAScheduler : Scheduler {
       }
     } else {
       log() << "run round: " << finished_rounds << "\n";
-      pretty_printer.PrettyPrint(full_history, log());
+      pretty_printer.PrettyPrint(full_history, GetStartegyThreadsCount(),
+                                 log());
       log() << "===============================================\n\n";
       log().flush();
       // Stop, check if the the generated history is linearizable.

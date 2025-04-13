@@ -143,7 +143,8 @@ inline int TrapRun(std::unique_ptr<Scheduler> &&scheduler,
   auto result = scheduler->Run();
   if (result.has_value()) {
     std::cout << "non linearized:\n";
-    pretty_printer.PrettyPrint(result.value().second, std::cout);
+    pretty_printer.PrettyPrint(result.value().second,
+                               scheduler->GetStartegyThreadsCount(), std::cout);
     return 1;
   } else {
     std::cout << "success!\n";
@@ -169,7 +170,7 @@ int Run(int argc, char *argv[], std::vector<CustomRound> custom_rounds = {}) {
   }
   std::cout << "targets  = " << task_builders.size() << "\n";
 
-  PrettyPrinter pretty_printer{opts.threads};
+  PrettyPrinter pretty_printer;
 
   using lchecker_t =
       LinearizabilityCheckerRecursive<typename Spec::linear_spec_t,
