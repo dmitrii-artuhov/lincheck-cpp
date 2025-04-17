@@ -18,7 +18,7 @@ enum class MemoryOrder {
 struct HBClock {
   HBClock(int nThreads): times(nThreads, 0) {}
 
-  bool IsSubsetOf(const HBClock& other) {
+  bool IsSubsetOf(const HBClock& other) const {
     assert(IsSameLength(other));
     
     for (int i = 0; i < times.size(); ++i) {
@@ -44,7 +44,7 @@ struct HBClock {
   }
 
 private:
-  bool IsSameLength(const HBClock& other) {
+  bool IsSameLength(const HBClock& other) const {
     return times.size() == other.times.size();
   }
 
@@ -52,8 +52,8 @@ private:
 };
 
 struct WmmUtils {
-  inline static MemoryOrder moFromStd(std::memory_order mo) {
-    switch (mo) {
+  inline static MemoryOrder moFromStd(std::memory_order order) {
+    switch (order) {
       case std::memory_order_relaxed:
         return MemoryOrder::Relaxed;
       case std::memory_order_acquire:
@@ -69,8 +69,8 @@ struct WmmUtils {
     }
   }
 
-  inline static std::string moToString(MemoryOrder mo) {
-    switch (mo) {
+  inline static std::string moToString(MemoryOrder order) {
+    switch (order) {
       case MemoryOrder::Relaxed:
         return "Relaxed";
       case MemoryOrder::Acquire:
@@ -97,8 +97,10 @@ using EventId = int;
 
 enum class EdgeType {
   PO, // program order / sequenced before
+  SC, // seq-cst edge
   RF, // reads-from
-  HB, // happens-before
+  // TODO: do we need it? since we have hb-clocks already
+  // HB, // happens-before
   MO, // modification order
   SW, // synchronized-with
 };
@@ -117,19 +119,63 @@ enum class EventType {
 
 struct Event {
 protected:
-  Event(EventId id, EventType type, int nThreads, int location, int threadId, MemoryOrder mo):
-    id(id), type(type), location(location), threadId(threadId), mo(mo), clock(nThreads) {}
+  Event(EventId id, EventType type, int nThreads, int location, int threadId, MemoryOrder order):
+    id(id), type(type), location(location), threadId(threadId), order(order), clock(nThreads) {}
 
 public:
   EventId id;
   EventType type;
   int location;
   int threadId;
-  MemoryOrder mo;
+  MemoryOrder order;
   HBClock clock;
   std::vector<EdgeId> edges; // outgoing edges (e.g. `edge.to == this`)
   
   virtual ~Event() = default;
+
+  virtual void SetReadFromEvent(Event* event) {
+    assert(false && "'SetReadFromEvent' can only be called on read events");
+  }
+
+  virtual void SetMoBeforeEvent(Event* event) {
+    assert(false && "'SetMoBeforeEvent' can only be called on write events");
+  }
+
+  bool HappensBefore(Event* other) const {
+    return clock.IsSubsetOf(other->clock);
+  }
+
+  bool IsDummy() const {
+    return type == EventType::DUMMY;
+  }
+
+  bool IsWrite() const {
+    return type == EventType::WRITE;
+  }
+
+  bool IsRead() const {
+    return type == EventType::READ;
+  }
+
+  bool IsSeqCst() const {
+    return order == MemoryOrder::SeqCst;
+  }
+
+  bool IsAcqRel() const {
+    return order == MemoryOrder::AcqRel;
+  }
+
+  bool IsAcquire() const {
+    return order == MemoryOrder::Acquire;
+  }
+
+  bool IsRelease() const {
+    return order == MemoryOrder::Release;
+  }
+
+  bool IsRelaxed() const {
+    return order == MemoryOrder::Relaxed;
+  }
 };
 
 struct DummyEvent : Event {
@@ -139,23 +185,30 @@ struct DummyEvent : Event {
 
 template<class T>
 struct ReadEvent : Event {
-  ReadEvent(EventId id, int nThreads, int location, int threadId, MemoryOrder mo):
-    Event(id, EventType::READ, nThreads, location, threadId, mo), readFrom(-1) {}
+  ReadEvent(EventId id, int nThreads, int location, int threadId, MemoryOrder order):
+    Event(id, EventType::READ, nThreads, location, threadId, order), readFrom(-1) {}
+  
+  virtual void SetReadFromEvent(Event* event) override {
+    readFrom = event->id;
+  }
 
-  // edge.from points to write-event which we read from
-  // edge.to is this event
-  EdgeId readFrom;
+  // points to write-event which we read from
+  EventId readFrom;
   T value;
 };
 
 template<class T>
 struct WriteEvent : Event {
-  WriteEvent(EventId id, int nThreads, int location, int threadId, MemoryOrder mo, T value):
-    Event(id, EventType::WRITE, nThreads, location, threadId, mo), value(std::move(value)), moBefore(-1) {}
+  WriteEvent(EventId id, int nThreads, int location, int threadId, MemoryOrder order, T value):
+    Event(id, EventType::WRITE, nThreads, location, threadId, order), value(std::move(value)), moBefore(-1) {}
 
-  // edge.to points to event which goes after current in modification order
-  // edge.from is this event
-  EdgeId moBefore;
+  void SetMoBeforeEvent(Event* event) override {
+    moBefore = event->id;
+  }
+
+  // points to write event to the same location
+  // which goes after current in modification order
+  EventId moBefore;
   T value;
 };
 
@@ -173,22 +226,116 @@ public:
 
   // TODO: add `ExecutionPolicy` or other way of specifying how to create edges (Random, BoundedModelChecker, etc.)
   template<class T>
-  T AddReadEvent(int location, int threadId, MemoryOrder mo) {
+  T AddReadEvent(int location, int threadId, MemoryOrder order) {
     EventId eventId = events.size();
-    auto event = new ReadEvent<T>(eventId, nThreads, location, threadId, mo);
+    auto event = new ReadEvent<T>(eventId, nThreads, location, threadId, order);
     
-    // TODO: actually insert read event
+    // establish po-edge
+    CreatePoEdgeToEvent(event); // prevInThread --po--> event
+
+    // TODO: implement
+
     return T{};
   }
 
   template<class T>
-  void AddWriteEvent(int location, int threadId, MemoryOrder mo, T value) {
+  void AddWriteEvent(int location, int threadId, MemoryOrder order, T value) {
     EventId eventId = events.size();
-    auto event = new WriteEvent<T>(eventId, nThreads, location, threadId, mo, value);
-    // TODO: actually insert write event
+    auto event = new WriteEvent<T>(eventId, nThreads, location, threadId, order, value);
+
+    // establish po-edge
+    CreatePoEdgeToEvent(event); // prevInThread --po--> event
+    
+    if (order == MemoryOrder::SeqCst) {
+      // establish sc-edge + Seq-Cst / MO Consistency
+      CreateScEdgeToWriteEvent(event); // prevScCst --sc--> event
+    }
+
+    // Write-Write Coherence
+    CreateWriteWriteCoherenceMoEdges(event);
+    // TODO: Read-Write Coherence
   }
 
 private:
+  // Creates a po-edge between last event in the same thread as `event`.
+  void CreatePoEdgeToEvent(Event* event) {
+    int threadId = event->threadId;
+    EventId eventId = event->id;
+
+    // connect prev event in the same thread with new event via PO edge
+    auto lastEventInSameThread = events[eventsPerThread[threadId].back()];
+    Edge po = { EdgeType::PO, lastEventInSameThread->id, eventId };
+    EdgeId poEdgeId = edges.size();
+    edges.push_back(po);
+    lastEventInSameThread->edges.push_back(poEdgeId);
+    
+    // update last event in thread
+    eventsPerThread[threadId].push_back(eventId);
+    
+    // insert in all events vector
+    events.push_back(event);
+
+    // set correct hb-clocks for new event
+    event->clock = lastEventInSameThread->clock;
+    event->clock.Increment(threadId);
+  }
+
+  // Creates a sc-edge between `event` and last seq-cst write event.
+  void CreateScEdgeToWriteEvent(Event* event) {
+    assert(event->IsWrite() && event->IsSeqCst() && "Event must be a write with seq-cst order");
+    // last seq_cst write should appear before us (location does not matter)
+    if (lastSeqCstWriteEvent != -1) {
+      auto lastSeqCstWrite = events[lastSeqCstWriteEvent];
+      Edge sc = { EdgeType::SC, lastSeqCstWrite->id, event->id };
+      EdgeId scEdgeId = edges.size();
+      edges.push_back(sc);
+      lastSeqCstWrite->edges.push_back(scEdgeId);
+      // unite current hb-clock with last seq-cst write
+      event->clock.UniteWith(lastSeqCstWrite->clock);
+      
+      // TODO: update mo-edges here as well but only to the same location?
+      // add mo-edge if both events corrspond to the same location
+      // Seq-Cst / MO Consistency
+      if (lastSeqCstWrite->location == event->location) {
+        Edge mo = { EdgeType::MO, lastSeqCstWrite->id, event->id };
+        EdgeId moEdgeId = edges.size();
+        edges.push_back(mo);
+        lastSeqCstWrite->edges.push_back(moEdgeId);
+      }
+      
+      // update last seq_cst write
+      lastSeqCstWriteEvent = event->id;
+    }
+  }
+
+  // establishing mo-edges between other writes that happened before `event`
+  // only for the same location
+  void CreateWriteWriteCoherenceMoEdges(Event* event) {
+    assert(event->IsWrite());
+
+    // iterate through each thread and find last write-event that hb `event`
+    for (int t = 0; t < nThreads; ++t) {
+      // iterate from most recent to earliest events in thread `t`
+      const auto& threadEvents = eventsPerThread[t];
+      for (auto it = threadEvents.rbegin(); it != threadEvents.rend(); ++it) {
+        Event* otherEvent = events[*it];
+        if (event->id == otherEvent->id) continue;
+        if (
+          !otherEvent->IsWrite() ||
+          otherEvent->location != event->location ||
+          !otherEvent->HappensBefore(event)
+        ) continue;
+        
+        // establish mo edge
+        Edge mo = { EdgeType::MO, otherEvent->id, event->id };
+        EdgeId moEdgeId = edges.size();
+        edges.push_back(mo);
+        otherEvent->edges.push_back(moEdgeId);
+        break; // no need to establish mo-edges with earlier events from this thread
+      }
+    }
+  }
+
   bool IsConsistent() {
     // TODO: implement
     return true;
@@ -204,17 +351,23 @@ private:
 
   void InitThreads(int nThreads) {
     this->nThreads = nThreads;
+    eventsPerThread.clear();
+    eventsPerThread.resize(nThreads);
+
     // insert dummy events (with all-zero hbClocks),
     // which will be the first event in each thread
     for (int t = 0; t < nThreads; ++t) {
       int eventId = events.size();
       auto dummyEvent = new DummyEvent(eventId, nThreads, t);
       events.push_back(dummyEvent);
+      eventsPerThread[t].push_back(eventId);
     }
   }
 
   std::vector<Edge> edges;
   std::vector<Event*> events;
+  std::vector<std::vector<EventId>> eventsPerThread;
+  EventId lastSeqCstWriteEvent = -1;
   int nThreads = 0;
 };
 
@@ -249,19 +402,19 @@ ExecutionGraph(const ExecutionGraph&) = delete;
   }
 
   template<class T>
-  T Load(int location, int threadId, MemoryOrder mo) {
+  T Load(int location, int threadId, MemoryOrder order) {
     // TODO: if we now only do real atomics, then they should be stored in graph, I guess?
     std::cout << "Load: loc-" << location << ", thread="
-              << threadId << ", mo=" << WmmUtils::moToString(mo) << std::endl;
-    T readValue = graph.AddReadEvent<T>(location, threadId, mo);
+              << threadId << ", order=" << WmmUtils::moToString(order) << std::endl;
+    T readValue = graph.AddReadEvent<T>(location, threadId, order);
     return readValue;
   }
 
   template <class T>
-  void Store(int location, int threadId, MemoryOrder mo, T value) {
+  void Store(int location, int threadId, MemoryOrder order, T value) {
     std::cout << "Store: loc-" << location << ", thread=" << threadId
-              << ", mo=" << WmmUtils::moToString(mo) << ", value=" << value << std::endl;
-    graph.AddWriteEvent(location, threadId, mo, value);
+              << ", order=" << WmmUtils::moToString(order) << ", value=" << value << std::endl;
+    graph.AddWriteEvent(location, threadId, order, value);
   }
 
 private:
