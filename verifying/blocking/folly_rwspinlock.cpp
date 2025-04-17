@@ -149,8 +149,8 @@ class RWSpinLock {
 
 }  // namespace folly
 using spec_t =
-ltest::Spec<folly::RWSpinLock, spec::SharedLinearMutex,
-spec::SharedLinearMutexHash, spec::SharedLinearMutexEquals>;
+    ltest::Spec<folly::RWSpinLock, spec::SharedLinearMutex,
+                spec::SharedLinearMutexHash, spec::SharedLinearMutexEquals>;
 
 LTEST_ENTRYPOINT_CONSTRAINT(spec_t, SharedMutexVerifier);
 
@@ -158,4 +158,5 @@ target_method(ltest::generators::genEmpty, int, folly::RWSpinLock, lock);
 target_method(ltest::generators::genEmpty, int, folly::RWSpinLock, lock_shared);
 
 target_method(ltest::generators::genEmpty, int, folly::RWSpinLock, unlock);
-target_method(ltest::generators::genEmpty, int, folly::RWSpinLock, unlock_shared);
+target_method(ltest::generators::genEmpty, int, folly::RWSpinLock,
+              unlock_shared);

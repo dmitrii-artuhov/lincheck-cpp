@@ -17,6 +17,8 @@ struct Scheduler {
 
   virtual Result Run() = 0;
 
+  virtual int GetStartegyThreadsCount() const = 0;
+
   virtual ~Scheduler() = default;
 };
 
@@ -27,9 +29,9 @@ struct SchedulerWithReplay : Scheduler {
   friend class StrategyExplorationMinimizor;
   friend class SmartMinimizor;
 
-  virtual Result RunRound() = 0;
+  virtual Result GenerateAndRunRound() = 0;
 
-  virtual Result ExploreRound(int runs) = 0;
+  virtual Result ExploreRound(int runs, bool log_each_interleaving = false) = 0;
 
   virtual Result ReplayRound(const std::vector<int>& tasks_ordering) = 0;
 

@@ -13,7 +13,7 @@ using std::string;
 using std::to_string;
 
 struct PrettyPrinter {
-  PrettyPrinter(size_t threads_num);
+  explicit PrettyPrinter();
 
   /*
       Prints like this:
@@ -30,7 +30,7 @@ struct PrettyPrinter {
   */
   template <typename Out_t>
   void PrettyPrint(const std::vector<std::variant<Invoke, Response>>& result,
-                   Out_t& out) {
+                   int threads_num, Out_t& out) {
     auto get_thread_num = [](const std::variant<Invoke, Response>& v) {
       // Crutch.
       if (v.index() == 0) {
@@ -41,7 +41,7 @@ struct PrettyPrinter {
 
     int cell_width = 20;  // Up it if necessary. Enough for now.
 
-    auto print_separator = [&out, this, cell_width]() {
+    auto print_separator = [threads_num, &out, this, cell_width]() {
       out << "*";
       for (int i = 0; i < threads_num; ++i) {
         for (int j = 0; j < cell_width; ++j) {
@@ -122,10 +122,10 @@ struct PrettyPrinter {
   template <typename Out_t>
   void PrettyPrint(
       const std::vector<std::pair<int, std::reference_wrapper<Task>>>& result,
-      Out_t& out) {
+      int threads_num, Out_t& out) {
     int cell_width = 20;  // Up it if necessary. Enough for now.
 
-    auto print_separator = [&out, this, cell_width]() {
+    auto print_separator = [threads_num, &out, this, cell_width]() {
       out << "*";
       for (int i = 0; i < threads_num; ++i) {
         for (int j = 0; j < cell_width; ++j) {
@@ -224,5 +224,4 @@ struct PrettyPrinter {
       out << msg;
     }
   };
-  size_t threads_num;
 };

@@ -13,21 +13,9 @@ struct PickStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
 
   explicit PickStrategy(size_t threads_count,
                         std::vector<TaskBuilder> constructors)
-      : next_task(0), threads_count(threads_count) {
-    this->constructors = std::move(constructors);
-    this->round_schedule.resize(threads_count, -1);
-
-    std::random_device dev;
-    rng = std::mt19937(dev());
-    this->constructors_distribution =
-        std::uniform_int_distribution<std::mt19937::result_type>(
-            0, this->constructors.size() - 1);
-
-    // Create queues.
-    for (size_t i = 0; i < threads_count; ++i) {
-      this->threads.emplace_back();
-    }
-  }
+      : BaseStrategyWithThreads<TargetObj, Verifier>(threads_count,
+                                                     std::move(constructors)),
+        next_task(0) {}
 
   // If there aren't any non returned tasks and the amount of finished tasks
   // is equal to the max_tasks the finished task will be returned
@@ -40,7 +28,8 @@ struct PickStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
     if (threads[current_thread].empty() ||
         threads[current_thread].back()->IsReturned()) {
       // a task has finished or the queue is empty, so we add a new task
-      std::shuffle(this->constructors.begin(), this->constructors.end(), rng);
+      std::shuffle(this->constructors.begin(), this->constructors.end(),
+                   this->rng);
       size_t verified_constructor = -1;
       for (size_t i = 0; i < this->constructors.size(); ++i) {
         TaskBuilder constructor = this->constructors.at(i);
@@ -86,7 +75,7 @@ struct PickStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
       for (size_t i = 0; i < tasks; ++i) {
         Task& task = thread[i];
         if (task->GetId() == task_id) {
-          std::tuple<Task&, int> result = { task, thread_id };
+          std::tuple<Task&, int> result = {task, thread_id};
           return result;
           // return std::make_tuple(task, thread_id);
         }
@@ -97,25 +86,8 @@ struct PickStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
     return std::nullopt;
   }
 
-  void StartNextRound() override {
-    this->new_task_id = 0;
-
-    this->TerminateTasks();
-    for (auto& thread : this->threads) {
-      // We don't have to keep references alive
-      while (thread.size() > 0) {
-        thread.pop_back();
-      }
-    }
-
-    // Reinitial target as we start from the beginning.
-    //this->state.Reset();
-  }
-
   ~PickStrategy() { this->TerminateTasks(); }
 
  protected:
   size_t next_task = 0;
-  size_t threads_count;
-  std::mt19937 rng;
 };
