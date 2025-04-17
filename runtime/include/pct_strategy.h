@@ -88,7 +88,7 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
       }
 
       threads[index_of_max].emplace_back(
-          constructor.Build(&this->state, index_of_max, this->new_task_id++));
+          constructor.Build(this->state.get(), index_of_max, this->new_task_id++));
       return {threads[index_of_max].back(), true, index_of_max};
     }
 

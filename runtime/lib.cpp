@@ -7,6 +7,7 @@
 
 // See comments in the lib.h.
 Task this_coro{};
+int this_thread_id = -1;
 
 boost::context::fiber_context sched_ctx;
 
@@ -20,8 +21,9 @@ Task CoroBase::GetPtr() { return shared_from_this(); }
 
 void CoroBase::SetToken(std::shared_ptr<Token> token) { this->token = token; }
 
-void CoroBase::Resume() {
+void CoroBase::Resume(int resumed_thread_id) {
   this_coro = this->GetPtr();
+  this_thread_id = resumed_thread_id;
   assert(!this_coro->IsReturned() && this_coro->ctx);
   boost::context::fiber_context([](boost::context::fiber_context&& ctx) {
     sched_ctx = std::move(ctx);
@@ -29,6 +31,7 @@ void CoroBase::Resume() {
     return std::move(sched_ctx);
   }).resume();
   this_coro.reset();
+  this_thread_id = -1;
 }
 
 int CoroBase::GetId() const { return id; }
@@ -59,11 +62,11 @@ extern "C" void CoroYield() {
   }).resume();
 }
 
-void CoroBase::Terminate() {
+void CoroBase::Terminate(int running_thread_id) {
   int tries = 0;
   while (!IsReturned()) {
     ++tries;
-    Resume();
+    Resume(running_thread_id);
     assert(tries < 10000000 &&
            "coroutine is spinning too long, possible wrong terminating order");
   }

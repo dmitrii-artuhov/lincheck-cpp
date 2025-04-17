@@ -3,11 +3,16 @@
 #include <atomic>
 #include <iostream>
 
+#include "lib.h"
+#include "wmm.h"
+
 // This class is intended to be the entry point
-// for the weak memory logic later.
+// for the weak memory logic.
 template <class T>
 class LTestAtomic {
   std::atomic<T> atomicValue;
+  int locationId;
+  ExecutionGraph& wmmGraph = ExecutionGraph::getInstance();
 
  public:
 #if __cplusplus >= 201703L  // C++17
@@ -16,11 +21,45 @@ class LTestAtomic {
 #endif
 
   // Constructors
-  constexpr LTestAtomic() noexcept = default;
-  constexpr LTestAtomic(T desired) noexcept : atomicValue(desired) {}
+  constexpr LTestAtomic() noexcept: LTestAtomic(T{}) {}
+  constexpr LTestAtomic(T desired) noexcept : atomicValue(desired) {
+    locationId = wmmGraph.RegisterLocation(desired);
+  }
   LTestAtomic(const LTestAtomic&) = delete;
   LTestAtomic& operator=(const LTestAtomic&) = delete;
   LTestAtomic& operator=(const LTestAtomic&) volatile = delete;
+
+  // load
+  T load(std::memory_order order = std::memory_order_seq_cst) const noexcept {
+    T value = atomicValue.load(order);
+    if (this_coro) {
+      // std::cout << "Load: coro id=" << this_coro->GetId() << ", thread=" << this_thread_id
+      //           << ", name=" << this_coro->GetName() << std::endl;
+      T gValue = wmmGraph.Load<T>(locationId, this_thread_id, WmmUtils::moFromStd(order));
+    }
+    return value;
+  }
+
+  T load(std::memory_order order = std::memory_order_seq_cst) const
+      volatile noexcept {
+    return atomicValue.load(order);
+  }
+
+  // store
+  void store(T desired,
+             std::memory_order order = std::memory_order_seq_cst) noexcept {
+    atomicValue.store(desired, order);
+    if (this_coro) {
+      // std::cout << "Store: coro id=" << this_coro->GetId() << ", thread=" << this_thread_id
+      //           << ", name=" << this_coro->GetName() << std::endl;
+      wmmGraph.Store(locationId, this_thread_id, WmmUtils::moFromStd(order), desired);
+    }
+  }
+
+  void store(T desired, std::memory_order order =
+                            std::memory_order_seq_cst) volatile noexcept {
+    atomicValue.store(desired, order);
+  }
 
   // operator=
   T operator=(T desired) noexcept {
@@ -38,27 +77,6 @@ class LTestAtomic {
 
   bool is_lock_free() const volatile noexcept {
     return atomicValue.is_lock_free();
-  }
-
-  // store
-  void store(T desired,
-             std::memory_order order = std::memory_order_seq_cst) noexcept {
-    atomicValue.store(desired, order);
-  }
-
-  void store(T desired, std::memory_order order =
-                            std::memory_order_seq_cst) volatile noexcept {
-    atomicValue.store(desired, order);
-  }
-
-  // load
-  T load(std::memory_order order = std::memory_order_seq_cst) const noexcept {
-    return atomicValue.load(order);
-  }
-
-  T load(std::memory_order order = std::memory_order_seq_cst) const
-      volatile noexcept {
-    return atomicValue.load(order);
   }
 
   // operator T()
