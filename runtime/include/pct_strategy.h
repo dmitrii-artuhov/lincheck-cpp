@@ -27,7 +27,9 @@ struct PctStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
     // In fact, it doesn't depend on the task, it only depends on the
     // constructor
     size_t avg_k = 0;
-    avg_k = avg_k / this->constructors.size();
+    if (!this->constructors.empty()) {
+      avg_k = avg_k / this->constructors.size();
+    }
 
     PrepareForDepth(current_depth, avg_k);
   }
