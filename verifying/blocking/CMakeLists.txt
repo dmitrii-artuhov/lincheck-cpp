@@ -10,3 +10,37 @@ foreach(source_name ${SOURCE_TARGET_LIST})
     verify_target(${target})
     add_dependencies(${target} preload)
 endforeach(source_name ${SOURCE_TARGET_LIST})
+
+#Worlaround due no folly
+list(APPEND VERIFY_BLOCKING_LIST simple_mutex)
+
+add_custom_target(verify-blocking 
+    DEPENDS
+    ${VERIFY_BLOCKING_LIST}
+)
+
+function (add_integration_test_blocking test_name label fail)
+    set(full_name "${label}_${test_name}")
+    add_integration_test(${test_name} ${label} ${fail} ${ARGN})
+    set_tests_properties("${full_name}"
+        PROPERTIES
+        ENVIRONMENT_MODIFICATION "LD_PRELOAD=string_append:${CMAKE_BINARY_DIR}/syscall_intercept/libpreload.so")
+endfunction()
+
+# Does not work, see issue: https://github.com/ITMO-PTDC-Team/LTest/issues/12
+# add_integration_test_blocking("simple_mutex_pct" "verify" TRUE 
+#     simple_mutex --strategy pct
+# )
+
+add_integration_test_blocking("simple_mutex_random" "verify" FALSE 
+    simple_mutex --strategy random
+)
+
+# Does not work, see issue: https://github.com/ITMO-PTDC-Team/LTest/issues/13
+# add_integration_test_blocking("nonlinear_mutex_random" "verify" TRUE 
+#     nonlinear_mutex --strategy random
+# )
+
+# add_integration_test_blocking("nonlinear_mutex_pct" "verify" TRUE 
+#     nonlinear_mutex --strategy pct
+# )

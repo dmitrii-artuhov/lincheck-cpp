@@ -2,6 +2,7 @@
 #include <gflags/gflags.h>
 
 #include <memory>
+#include <type_traits>
 
 #include "lib.h"
 #include "lincheck_recursive.h"
@@ -21,32 +22,56 @@ enum StrategyType { RR, RND, TLA, PCT };
 
 constexpr const char *GetLiteral(StrategyType t);
 
+class NoOverride {};
+struct DefaultCanceler {
+  static void Cancel() {};
+};
 template <class TargetObj, class LinearSpec,
           class LinearSpecHash = std::hash<LinearSpec>,
-          class LinearSpecEquals = std::equal_to<LinearSpec>>
+          class LinearSpecEquals = std::equal_to<LinearSpec>,
+          class OptionsOverride = NoOverride, class Canceler = DefaultCanceler>
 struct Spec {
   using target_obj_t = TargetObj;
   using linear_spec_t = LinearSpec;
   using linear_spec_hash_t = LinearSpecHash;
   using linear_spec_equals_t = LinearSpecEquals;
+  using options_override_t = OptionsOverride;
+  using cancel_t = Canceler;
 };
 
 struct Opts {
   size_t threads;
-  size_t forbid_all_same;
   size_t tasks;
   size_t switches;
   size_t rounds;
   bool minimize;
   size_t exploration_runs;
   size_t minimization_runs;
+  size_t depth;
+  bool forbid_all_same;
   bool verbose;
   bool syscall_trap;
   StrategyType typ;
   std::vector<int> thread_weights;
 };
 
-Opts parse_opts();
+struct DefaultOptions {
+  size_t threads;
+  size_t tasks;
+  size_t switches;
+  size_t rounds;
+  size_t depth;
+  bool forbid_all_same;
+  bool verbose;
+  const char *strategy;
+  const char *weights;
+  size_t minimization_runs;
+  size_t exploration_runs;
+};
+
+void SetOpts(const DefaultOptions &def);
+
+Opts ParseOpts();
 
 std::vector<std::string> split(const std::string &s, char delim);
 
@@ -100,8 +125,9 @@ struct StrategySchedulerWrapper : StrategyScheduler<Verifier> {
 
 template <typename TargetObj, StrategyVerifier Verifier>
 std::unique_ptr<Scheduler> MakeScheduler(ModelChecker &checker, Opts &opts,
-                                         std::vector<TaskBuilder> l,
-                                         PrettyPrinter &pretty_printer) {
+                                         const std::vector<TaskBuilder> &l,
+                                         PrettyPrinter &pretty_printer,
+                                         const std::function<void()> &cancel) {
   std::cout << "strategy = ";
   switch (opts.typ) {
     case RR:
@@ -115,9 +141,9 @@ std::unique_ptr<Scheduler> MakeScheduler(ModelChecker &checker, Opts &opts,
     }
     case TLA: {
       std::cout << "tla\n";
-      auto scheduler = std::make_unique<TLAScheduler<TargetObj>>(
-          opts.tasks, opts.rounds, opts.threads, opts.switches, std::move(l),
-          checker, pretty_printer);
+      auto scheduler = std::make_unique<TLAScheduler<TargetObj, Verifier>>(
+          opts.tasks, opts.rounds, opts.threads, opts.switches, opts.depth,
+          std::move(l), checker, pretty_printer, cancel);
       return scheduler;
     }
     default: {
@@ -142,16 +168,20 @@ inline int TrapRun(std::unique_ptr<Scheduler> &&scheduler,
 
 template <class Spec, StrategyVerifier Verifier = DefaultStrategyVerifier>
 int Run(int argc, char *argv[]) {
+  if constexpr (!std::is_same_v<typename Spec::options_override_t,
+                                ltest::NoOverride>) {
+    SetOpts(Spec::options_override_t::GetOptions());
+  }
   gflags::ParseCommandLineFlags(&argc, &argv, true);
-  Opts opts = parse_opts();
+  Opts opts = ParseOpts();
 
   logger_init(opts.verbose);
-  std::cout << "verbose: " << opts.verbose << "\n";
+  std::cout << "verbose: " << std::boolalpha << opts.verbose << "\n";
   std::cout << "threads  = " << opts.threads << "\n";
   std::cout << "tasks    = " << opts.tasks << "\n";
   std::cout << "switches = " << opts.switches << "\n";
   std::cout << "rounds   = " << opts.rounds << "\n";
-  std::cout << "minimize = " << opts.minimize << "\n";
+  std::cout << "minimize = " << std::boolalpha << opts.minimize << "\n";
   if (opts.minimize) {
     std::cout << "exploration runs = " << opts.exploration_runs << "\n";
     std::cout << "minimization runs = " << opts.minimization_runs << "\n";
@@ -168,7 +198,8 @@ int Run(int argc, char *argv[]) {
                      typename Spec::linear_spec_t{}};
 
   auto scheduler = MakeScheduler<typename Spec::target_obj_t, Verifier>(
-      checker, opts, std::move(task_builders), pretty_printer);
+      checker, opts, std::move(task_builders), pretty_printer,
+      &Spec::cancel_t::Cancel);
   std::cout << "\n\n";
   std::cout.flush();
   return TrapRun(std::move(scheduler), pretty_printer);

@@ -4,16 +4,14 @@
 #include <map>
 
 #include "../../runtime/include/verifying.h"
+#include "runtime/include/value_wrapper.h"
 
 namespace spec {
 
 template <typename PushArgTuple = std::tuple<int>, std::size_t ValueIndex = 0>
 struct Stack {
   std::deque<int> deq{};
-  int Push(int v) {
-    deq.push_back(v);
-    return 0;
-  }
+  void Push(int v) { deq.push_back(v); }
   int Pop() {
     if (deq.empty()) return 0;
     int res = deq.back();
@@ -21,11 +19,12 @@ struct Stack {
     return res;
   }
 
-  using method_t = std::function<int(Stack *l, void *args)>;
+  using method_t = std::function<ValueWrapper(Stack *l, void *args)>;
   static auto GetMethods() {
-    method_t push_func = [](Stack *l, void *args) -> int {
+    method_t push_func = [](Stack *l, void *args) -> ValueWrapper {
       auto real_args = reinterpret_cast<PushArgTuple *>(args);
-      return l->Push(std::get<ValueIndex>(*real_args));
+      l->Push(std::get<ValueIndex>(*real_args));
+      return void_v;
     };
 
     method_t pop_func = [](Stack *l, void *args) -> int { return l->Pop(); };

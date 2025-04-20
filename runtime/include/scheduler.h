@@ -1,7 +1,12 @@
 #pragma once
+#include <algorithm>
+#include <cassert>
+#include <functional>
+#include <iterator>
 #include <limits>
 #include <optional>
 #include <random>
+#include <string_view>
 #include <utility>
 
 #include "lib.h"
@@ -40,6 +45,7 @@ concept StrategyVerifier = requires(T a) {
     a.OnFinished(TaskWithMetaData(std::declval<Task&>(), bool(), int()))
   } -> std::same_as<void>;
   { a.Reset() } -> std::same_as<void>;
+  { a.UpdateState(std::string_view(), int(), bool()) } -> std::same_as<void>;
 };
 
 // Strategy is the general strategy interface which decides which task
@@ -92,8 +98,8 @@ struct Strategy {
   virtual int GetThreadsCount() const = 0;
 
   // Called when the finished task must be reported to the verifier
-  // (Strategy is a pure interface, the templated subclass BaseStrategyWithThreads knows
-  // about the Verifier and will delegate to that)
+  // (Strategy is a pure interface, the templated subclass
+  // BaseStrategyWithThreads knows about the Verifier and will delegate to that)
   virtual void OnVerifierTaskFinish(TaskWithMetaData task) = 0;
 
   virtual ~Strategy() = default;
@@ -139,7 +145,7 @@ struct BaseStrategyWithThreads : public Strategy {
 
   void ResetCurrentRound() override {
     TerminateTasks();
-    //state.Reset();
+    // state.Reset();
     for (auto& thread : threads) {
       size_t tasks_in_thread = thread.size();
       for (size_t i = 0; i < tasks_in_thread; ++i) {
@@ -181,7 +187,8 @@ struct BaseStrategyWithThreads : public Strategy {
   // Terminates all running tasks.
   // We do it in a dangerous way: in random order.
   // Actually, we assume obstruction free here.
-  // TODO: for locks we need to figure out how to properly terminate: see https://github.com/ITMO-PTDC-Team/LTest/issues/13
+  // TODO: for locks we need to figure out how to properly terminate: see
+  // https://github.com/ITMO-PTDC-Team/LTest/issues/13
   void TerminateTasks() {
     auto& round_schedule = this->round_schedule;
     assert(round_schedule.size() == this->threads.size() &&
@@ -194,7 +201,8 @@ struct BaseStrategyWithThreads : public Strategy {
     while (has_nonterminated_threads) {
       has_nonterminated_threads = false;
 
-      for (size_t thread_index = 0; thread_index < this->threads.size(); ++thread_index) {
+      for (size_t thread_index = 0; thread_index < this->threads.size();
+           ++thread_index) {
         auto& thread = this->threads[thread_index];
         auto& task_index = task_indexes[thread_index];
 
@@ -206,14 +214,16 @@ struct BaseStrategyWithThreads : public Strategy {
         if (task_index < thread.size()) {
           auto& task = thread[task_index];
 
-          // if task is blocked and it is the last one, then just increment the task index
+          // if task is blocked and it is the last one, then just increment the
+          // task index
           if (task->IsBlocked()) {
-            assert(task_index == thread.size() - 1 && "Trying to terminate blocked task, which is not last in the thread.");
+            assert(task_index == thread.size() - 1 &&
+                   "Trying to terminate blocked task, which is not last in the "
+                   "thread.");
             if (task_index == thread.size() - 1) {
               task_index++;
             }
-          }
-          else {
+          } else {
             has_nonterminated_threads = true;
             // do a single step in this task
             task->Resume();
@@ -473,17 +483,20 @@ struct StrategyScheduler : public SchedulerWithReplay {
 };
 
 // TLAScheduler generates all executions satisfying some conditions.
-template <typename TargetObj>
+template <typename TargetObj, StrategyVerifier Verifier>
 struct TLAScheduler : Scheduler {
   TLAScheduler(size_t max_tasks, size_t max_rounds, size_t threads_count,
-               size_t max_switches, std::vector<TaskBuilder> constructors,
-               ModelChecker& checker, PrettyPrinter& pretty_printer)
+               size_t max_switches, size_t max_depth,
+               std::vector<TaskBuilder> constructors, ModelChecker& checker,
+               PrettyPrinter& pretty_printer, std::function<void()> cancel_func)
       : max_tasks{max_tasks},
         max_rounds{max_rounds},
         max_switches{max_switches},
         constructors{std::move(constructors)},
         checker{checker},
-        pretty_printer{pretty_printer} {
+        pretty_printer{pretty_printer},
+        max_depth(max_depth),
+        cancel(cancel_func) {
     for (size_t i = 0; i < threads_count; ++i) {
       threads.emplace_back(Thread{
           .id = i,
@@ -527,8 +540,9 @@ struct TLAScheduler : Scheduler {
   // Terminates all running tasks.
   // We do it in a dangerous way: in random order.
   // Actually, we assume obstruction free here.
-  // TODO: for non obstruction-free we need to take into account dependencies.
+  // cancel() func takes care for graceful shutdown
   void TerminateTasks() {
+    cancel();
     for (size_t i = 0; i < threads.size(); ++i) {
       for (size_t j = 0; j < threads[i].tasks.size(); ++j) {
         auto& task = threads[i].tasks[j];
@@ -544,7 +558,7 @@ struct TLAScheduler : Scheduler {
     // Firstly, terminate all running tasks.
     TerminateTasks();
     // In histories we store references, so there's no need to update it.
-    //state.Reset();
+    state.Reset();
     for (size_t step = 0; step < step_end; ++step) {
       auto& frame = frames[step];
       auto task = frame.task;
@@ -558,8 +572,32 @@ struct TLAScheduler : Scheduler {
       }
       (*task)->Resume();
     }
+    coroutine_status.reset();
   }
 
+  void UpdateFullHistory(size_t thread_id, Task& task, bool is_new) {
+    if (coroutine_status.has_value()) {
+      if (is_new) {
+        assert(coroutine_status->has_started);
+        full_history.emplace_back(thread_id, task);
+      }
+      //To prevent cases like this
+      // +--------+--------+
+      // |   T1   |   T2   |
+      // +--------+--------+
+      // |        | Recv   |
+      // | Send   |        |
+      // |        | >read  |
+      // | >flush |        |
+      // +--------+--------+
+      verifier.UpdateState(coroutine_status->name, thread_id, coroutine_status->has_started);
+      full_history.emplace_back(thread_id, coroutine_status.value());
+      coroutine_status.reset();
+    } else {
+      verifier.UpdateState(task->GetName(), thread_id, is_new);
+      full_history.emplace_back(thread_id, task);
+    }
+  }
   // Resumes choosed task.
   // If task is finished and finished tasks == max_tasks, stops.
   std::tuple<bool, typename Scheduler::Result> ResumeTask(
@@ -582,7 +620,6 @@ struct TLAScheduler : Scheduler {
     auto& task = thread.tasks.back();
     frame.task = &task;
 
-    full_history.push_back({thread_id, task});
     thread_id_history.push_back(thread_id);
     if (is_new) {
       sequential_history.emplace_back(Invoke(task, thread_id));
@@ -590,9 +627,11 @@ struct TLAScheduler : Scheduler {
 
     assert(!task->IsParked());
     task->Resume();
+    UpdateFullHistory(thread_id, task, is_new);
     bool is_finished = task->IsReturned();
     if (is_finished) {
       finished_tasks++;
+      verifier.OnFinished(TaskWithMetaData{task, false, thread.id});
       auto result = task->GetRetVal();
       sequential_history.emplace_back(Response(task, result, thread_id));
     }
@@ -622,6 +661,21 @@ struct TLAScheduler : Scheduler {
     }
 
     thread_id_history.pop_back();
+    // Removing combination of start of task + coroutine start
+    if (full_history.back().second.index() == 1) {
+      auto& cor = std::get<1>(full_history.back().second);
+      auto& prev = full_history[full_history.size() - 2];
+      int thread = full_history.back().first;
+      auto first_ind =
+          std::find_if(full_history.begin(), --full_history.end(),
+                       [&thread](auto& a) { return a.first == thread; });
+      if (cor.has_started &&
+          std::distance(full_history.begin(), first_ind) ==
+              full_history.size() - 2 &&
+          prev.second.index() == 0) {
+        full_history.pop_back();
+      }
+    }
     full_history.pop_back();
     if (is_finished) {
       --finished_tasks;
@@ -630,6 +684,7 @@ struct TLAScheduler : Scheduler {
     }
     if (is_new) {
       // inv.
+      --started_tasks;
       sequential_history.pop_back();
     }
 
@@ -652,6 +707,10 @@ struct TLAScheduler : Scheduler {
           continue;
         }
         all_parked = false;
+        if (!verifier.Verify(CreatedTaskMetaData{
+                std::string{tasks.back()->GetName()}, false, i})) {
+          continue;
+        }
         // Task exists.
         frame.is_new = false;
         auto [is_over, res] = ResumeTask(frame, step, switches, thread, false);
@@ -666,24 +725,27 @@ struct TLAScheduler : Scheduler {
 
       all_parked = false;
       // Choose constructor to create task.
-      for (size_t cons_num = 0; auto cons : constructors) {
-        frame.is_new = true;
-        auto size_before = tasks.size();
-        tasks.emplace_back(cons.Build(&state, i, -1 /* TODO: fix task id for tla, because it is Scheduler and not Strategy class for some reason */));
-
-        auto [is_over, res] = ResumeTask(frame, step, switches, thread, true);
-        if (is_over || res.has_value()) {
-          return {is_over, res};
+      bool stop = started_tasks == max_tasks;
+      if (!stop && threads[i].tasks.size() < max_depth) {
+        for (auto cons : constructors) {
+          if (!verifier.Verify(CreatedTaskMetaData{cons.GetName(), true, i})) {
+            continue;
+          }
+          frame.is_new = true;
+          auto size_before = tasks.size();
+          tasks.emplace_back(cons.Build(&state, i, -1/* TODO: fix task id for tla, because it is Scheduler and not Strategy class for some reason */));
+          started_tasks++;
+          auto [is_over, res] = ResumeTask(frame, step, switches, thread, true);
+          if (is_over || res.has_value()) {
+            return {is_over, res};
+          }
+          tasks.pop_back();
+          auto size_after = thread.tasks.size();
+          assert(size_before == size_after);
+          // As we can't return to the past in coroutine, we need to replay all
+          // tasks from the beginning.
+          Replay(step);
         }
-
-        tasks.back()->Terminate();
-        tasks.pop_back();
-        auto size_after = thread.tasks.size();
-        assert(size_before == size_after);
-        // As we can't return to the past in coroutine, we need to replay all
-        // tasks from the beginning.
-        Replay(step);
-        ++cons_num;
       }
     }
 
@@ -696,16 +758,21 @@ struct TLAScheduler : Scheduler {
   size_t max_tasks;
   size_t max_rounds;
   size_t max_switches;
+  size_t max_depth;
+
   std::vector<TaskBuilder> constructors;
   ModelChecker& checker;
 
   // Running state.
+  size_t started_tasks{};
   size_t finished_tasks{};
   size_t finished_rounds{};
   TargetObj state{};
   std::vector<std::variant<Invoke, Response>> sequential_history;
-  std::vector<std::pair<int, std::reference_wrapper<Task>>> full_history;
+  FullHistoryWithThreads full_history;
   std::vector<size_t> thread_id_history;
   StableVector<Thread> threads;
   StableVector<Frame> frames;
+  Verifier verifier;
+  std::function<void()> cancel;
 };
