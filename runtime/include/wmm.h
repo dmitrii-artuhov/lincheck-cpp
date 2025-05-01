@@ -188,10 +188,6 @@ public:
     assert(false && "'SetReadFromEvent' can only be called on read events");
   }
 
-  virtual void SetMoBeforeEvent(Event* event) {
-    assert(false && "'SetMoBeforeEvent' can only be called on write events");
-  }
-
   bool HappensBefore(Event* other) const {
     return clock.IsSubsetOf(other->clock);
   }
@@ -253,13 +249,6 @@ struct WriteEvent : Event {
   WriteEvent(EventId id, int nThreads, int location, int threadId, MemoryOrder order, T value):
     Event(id, EventType::WRITE, nThreads, location, threadId, order), value(std::move(value)) {} // , moBefore(-1)
 
-  // void SetMoBeforeEvent(Event* event) override {
-  //   moBefore = event->id;
-  // }
-
-  // points to write event to the same location
-  // which goes after current in modification order
-  // EventId moBefore;
   T value;
 };
 
@@ -355,13 +344,9 @@ public:
   }
 
 private:
-
   // Tries to create a read-from edge between `write` and `read` events (write --rf--> read).
   // Returns `true` if edge was created, `false` otherwise.
   bool TryCreateRfEdge(Event* write, Event* read) {
-    // TODO: Seq-Cst Write-Read Coherence
-    // TODO: Read-Read Coherence
-    // TODO: Write-Read Coherence
     assert(write->IsWrite() && read->IsRead() && "Write and Read events must be of correct type");
     assert(write->location == read->location && "Write and Read events must be of the same location");
 
@@ -385,6 +370,7 @@ private:
 
     bool isConsistent = IsConsistent();   
     if (isConsistent) {
+      // preserve added edges
       ApplySnapshot();
     }
     else {
