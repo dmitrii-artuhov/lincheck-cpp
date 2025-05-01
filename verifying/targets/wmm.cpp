@@ -16,15 +16,15 @@ struct WmmTest {
   std::atomic<int> x{0}, y{0};
 
   non_atomic void A() {
-    int r1 = y.load(std::memory_order_relaxed);
-    x.store(1, std::memory_order_relaxed);
+    int r1 = y.load(std::memory_order_seq_cst);
+    x.store(1, std::memory_order_seq_cst);
     std::string out = "r1 = " + std::to_string(r1);
     std::cout << out << std::endl;
   }
 
   non_atomic void B() {
-    int r2 = x.load(std::memory_order_relaxed);
-    y.store(1, std::memory_order_relaxed);
+    int r2 = x.load(std::memory_order_seq_cst);
+    y.store(1, std::memory_order_seq_cst);
     std::string out = "r2 = " + std::to_string(r2);
     std::cout << out << std::endl;
   }

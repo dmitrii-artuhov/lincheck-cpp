@@ -33,9 +33,9 @@ class LTestAtomic {
   T load(std::memory_order order = std::memory_order_seq_cst) const noexcept {
     T value = atomicValue.load(order);
     if (this_coro) {
-      // std::cout << "Load: coro id=" << this_coro->GetId() << ", thread=" << this_thread_id
-      //           << ", name=" << this_coro->GetName() << std::endl;
-      T gValue = wmmGraph.Load<T>(locationId, this_thread_id, WmmUtils::moFromStd(order));
+      std::cout << "Load: coro id=" << this_coro->GetId() << ", thread=" << this_thread_id
+                << ", name=" << this_coro->GetName() << std::endl;
+      T gValue = wmmGraph.Load<T>(locationId, this_thread_id, WmmUtils::OrderFromStd(order));
     }
     return value;
   }
@@ -50,9 +50,9 @@ class LTestAtomic {
              std::memory_order order = std::memory_order_seq_cst) noexcept {
     atomicValue.store(desired, order);
     if (this_coro) {
-      // std::cout << "Store: coro id=" << this_coro->GetId() << ", thread=" << this_thread_id
-      //           << ", name=" << this_coro->GetName() << std::endl;
-      wmmGraph.Store(locationId, this_thread_id, WmmUtils::moFromStd(order), desired);
+      std::cout << "Store: coro id=" << this_coro->GetId() << ", thread=" << this_thread_id
+                << ", name=" << this_coro->GetName() << std::endl;
+      wmmGraph.Store(locationId, this_thread_id, WmmUtils::OrderFromStd(order), desired);
     }
   }
 
