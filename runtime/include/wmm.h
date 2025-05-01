@@ -128,8 +128,6 @@ struct WmmUtils {
         return "AcqRel";
       case MemoryOrder::SeqCst:
         return "SeqCst";
-      default:
-        throw std::invalid_argument("Unsupported memory order");
     }
   }
 
