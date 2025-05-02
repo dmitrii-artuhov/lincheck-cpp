@@ -444,7 +444,7 @@ private:
   //              W_x          --mo--> W_x
   void CreateSeqCstReadWriteCoherenceEdges(Event* write, Event* read) {
     assert(write->IsWrite() && read->IsRead() && "Write and read events must be of correct type");
-    assert(write->location == read->location && "Write and read events must be of the same location");\
+    assert(write->location == read->location && "Write and read events must be of the same location");
     assert(read->GetReadFromEvent() == write && "Read event must read-from the write event");
 
     EventId lastSeqCstWriteEvent = GetLastSeqCstWriteEventId(read->location);
@@ -468,7 +468,45 @@ private:
   //               |          \         |
   //              W_x          --mo--> W_x
   void CreateWriteReadCoherenceEdges(Event* write, Event* read) {
-    // TODO: implement
+    assert(write->IsWrite() && read->IsRead() && "Write and read events must be of correct type");
+    assert(write->location == read->location && "Write and read events must be of the same location");
+    assert(read->GetReadFromEvent() == write && "Read event must read-from the write event");
+
+    IterateThroughMostRecentEventsByPredicate(
+      [write, read](Event* otherEvent) -> bool {
+        return (
+          read->id != otherEvent->id && write->id != otherEvent->id && // not the same events
+          otherEvent->IsWrite() &&
+          otherEvent->location == read->location &&
+          otherEvent->HappensBefore(read)
+        );
+      },
+      [this, write](Event* otherEvent) -> void {
+        // establish mo edge
+        AddEdge(EdgeType::MO, otherEvent->id, write->id);
+      }
+    );
+
+    /*
+    // iterate through each thread and find last write-event that hb `read`
+    for (int t = 0; t < nThreads; ++t) {
+      // iterate from most recent to earliest events in thread `t`
+      const auto& threadEvents = eventsPerThread[t];
+      for (auto it = threadEvents.rbegin(); it != threadEvents.rend(); ++it) {
+        Event* otherEvent = events[*it];
+        if (read->id == otherEvent->id || write->id == otherEvent->id) continue;
+        if (
+          !otherEvent->IsWrite() ||
+          otherEvent->location != read->location ||
+          !otherEvent->HappensBefore(read)
+        ) continue;
+        
+        // establish mo edge
+        AddEdge(EdgeType::MO, otherEvent->id, write->id);
+        break; // no need to establish mo-edges with earlier events from this thread
+      }
+    }
+    */
   }
 
   // Applies Read-Read Coherence rules: establishes mo-edges between
@@ -481,7 +519,26 @@ private:
   //               v         v           v
   // W_x  --rf--> R_x      W_x  --rf--> R_x
   void CreateReadReadCoherenceEdges(Event* write, Event* read) {
-    // TODO: implement
+    assert(write->IsWrite() && read->IsRead() && "Write and read events must be of correct type");
+    assert(write->location == read->location && "Write and read events must be of the same location");
+    assert(read->GetReadFromEvent() == write && "Read event must read-from the write event");
+
+    IterateThroughMostRecentEventsByPredicate(
+      [write, read](Event* otherEvent) -> bool {
+        return (
+          read->id != otherEvent->id && write->id != otherEvent->id && // not the same events
+          otherEvent->IsRead() &&
+          otherEvent->location == read->location &&
+          otherEvent->HappensBefore(read) &&
+          otherEvent->GetReadFromEvent() != nullptr && otherEvent->GetReadFromEvent() != write // R'_x does not read-from `write`
+        );
+      },
+      [this, write](Event* otherRead) -> void {
+        auto otherWrite = otherRead->GetReadFromEvent();
+        // establish mo-edge
+        AddEdge(EdgeType::MO, otherWrite->id, write->id);
+      }
+    );
   }
 
   // TODO: instead of sc-edges, add reads-from from "Repairing Sequential Consistency in C/C++11"?
@@ -506,6 +563,22 @@ private:
   void CreateWriteWriteCoherenceEdges(Event* event) {
     assert(event->IsWrite());
 
+    IterateThroughMostRecentEventsByPredicate(
+      [event](Event* otherEvent) -> bool {
+        return (
+          event->id != otherEvent->id && // not the same event
+          otherEvent->IsWrite() &&
+          otherEvent->location == event->location && // same location
+          otherEvent->HappensBefore(event)
+        );
+      },
+      [this, event](Event* otherEvent) -> void {
+        // establish mo edge
+        AddEdge(EdgeType::MO, otherEvent->id, event->id);
+      }
+    );
+
+    /*
     // iterate through each thread and find last write-event that hb `event`
     for (int t = 0; t < nThreads; ++t) {
       // iterate from most recent to earliest events in thread `t`
@@ -524,6 +597,7 @@ private:
         break; // no need to establish mo-edges with earlier events from this thread
       }
     }
+    */
   }
 
   // Applies Read-Write Coherence rules: establishes mo-edges between
@@ -535,11 +609,51 @@ private:
   //               v            \         v
   //              W_x            --mo--> W_x
   void CreateReadWriteCoherenceEdges(Event* event) {
-    // TODO: implement
+    assert(event->IsWrite());
+
+    IterateThroughMostRecentEventsByPredicate(
+      [event](Event* otherEvent) -> bool {
+        return (
+          event->id != otherEvent->id && // not the same event
+          otherEvent->IsRead() &&
+          otherEvent->location == event->location && // same location
+          otherEvent->HappensBefore(event)
+        );
+      },
+      [this, event](Event* otherEvent) -> void {
+        assert(otherEvent->GetReadFromEvent() != nullptr && "Read event must have read-from event");
+        auto writeEvent = otherEvent->GetReadFromEvent();
+        // establish mo edge
+        AddEdge(EdgeType::MO, writeEvent->id, event->id);
+      }
+    );
   }
 
 
   // ===== Helper methods =====
+
+  template<class Predicate, class Callback>
+  requires 
+    requires(Predicate p, Event* event) {
+      { p(event) } -> std::same_as<bool>;
+    } &&
+    requires(Callback cb, Event* event) {
+      { cb(event) } -> std::same_as<void>;
+    }
+  void IterateThroughMostRecentEventsByPredicate(Predicate&& predicate, Callback&& callback) {
+    // iterate through each thread and find last write-event that hb `event`
+    for (int t = 0; t < nThreads; ++t) {
+      // iterate from most recent to earliest events in thread `t`
+      const auto& threadEvents = eventsPerThread[t];
+      for (auto it = threadEvents.rbegin(); it != threadEvents.rend(); ++it) {
+        Event* otherEvent = events[*it];
+        if (!std::forward<Predicate>(predicate)(otherEvent)) continue;
+        // invoke `callback` on the most recent event in the thread `t`
+        std::forward<Callback>(callback)(otherEvent);
+        break; // no need to invoke `callback` with earlier events from this thread
+      }
+    }
+  }
 
   EventId GetLastSeqCstWriteEventId(int location) const {
     if (lastSeqCstWriteEvents.contains(location)) {
