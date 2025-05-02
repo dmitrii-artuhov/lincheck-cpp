@@ -15,8 +15,11 @@
 
 struct CoroBase;
 
+using Task = std::shared_ptr<CoroBase>;
+
 // Current executing coroutine.
-extern std::shared_ptr<CoroBase> this_coro;
+extern Task this_coro;
+extern int this_thread_id;
 
 extern boost::context::fiber_context sched_ctx;
 
@@ -49,7 +52,7 @@ struct CoroBase : public std::enable_shared_from_this<CoroBase> {
   virtual std::shared_ptr<CoroBase> Restart(void* this_ptr) = 0;
 
   // Resume the coroutine to the next yield.
-  void Resume();
+  void Resume(int resumed_thread_id);
 
   // Check if the coroutine is returned.
   bool IsReturned() const;
@@ -74,7 +77,7 @@ struct CoroBase : public std::enable_shared_from_this<CoroBase> {
   std::shared_ptr<CoroBase> GetPtr();
 
   // Terminate the coroutine.
-  void Terminate();
+  void Terminate(int running_thread_id);
 
   // Sets the token.
   void SetToken(std::shared_ptr<Token>);
@@ -138,7 +141,7 @@ struct Coro final : public CoroBase {
   std::shared_ptr<CoroBase> Restart(void* this_ptr) override {
     /**
      *  The task must be returned if we want to restart it.
-     *   We can't just Terminate() it because it is the runtime responsibility
+     *   We can't just Terminate(...) it because it is the runtime responsibility
      * to decide, in which order the tasks should be terminated.
      *
      */
@@ -193,8 +196,6 @@ struct Coro final : public CoroBase {
   // Raw pointer to the target class object.
   void* this_ptr;
 };
-
-using Task = std::shared_ptr<CoroBase>;
 
 // (this_ptr, thread_num, task_id) -> Task
 
