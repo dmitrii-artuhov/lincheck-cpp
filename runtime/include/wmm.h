@@ -486,27 +486,6 @@ private:
         AddEdge(EdgeType::MO, otherEvent->id, write->id);
       }
     );
-
-    /*
-    // iterate through each thread and find last write-event that hb `read`
-    for (int t = 0; t < nThreads; ++t) {
-      // iterate from most recent to earliest events in thread `t`
-      const auto& threadEvents = eventsPerThread[t];
-      for (auto it = threadEvents.rbegin(); it != threadEvents.rend(); ++it) {
-        Event* otherEvent = events[*it];
-        if (read->id == otherEvent->id || write->id == otherEvent->id) continue;
-        if (
-          !otherEvent->IsWrite() ||
-          otherEvent->location != read->location ||
-          !otherEvent->HappensBefore(read)
-        ) continue;
-        
-        // establish mo edge
-        AddEdge(EdgeType::MO, otherEvent->id, write->id);
-        break; // no need to establish mo-edges with earlier events from this thread
-      }
-    }
-    */
   }
 
   // Applies Read-Read Coherence rules: establishes mo-edges between
@@ -577,27 +556,6 @@ private:
         AddEdge(EdgeType::MO, otherEvent->id, event->id);
       }
     );
-
-    /*
-    // iterate through each thread and find last write-event that hb `event`
-    for (int t = 0; t < nThreads; ++t) {
-      // iterate from most recent to earliest events in thread `t`
-      const auto& threadEvents = eventsPerThread[t];
-      for (auto it = threadEvents.rbegin(); it != threadEvents.rend(); ++it) {
-        Event* otherEvent = events[*it];
-        if (event->id == otherEvent->id) continue;
-        if (
-          !otherEvent->IsWrite() ||
-          otherEvent->location != event->location ||
-          !otherEvent->HappensBefore(event)
-        ) continue;
-        
-        // establish mo edge
-        AddEdge(EdgeType::MO, otherEvent->id, event->id);
-        break; // no need to establish mo-edges with earlier events from this thread
-      }
-    }
-    */
   }
 
   // Applies Read-Write Coherence rules: establishes mo-edges between
