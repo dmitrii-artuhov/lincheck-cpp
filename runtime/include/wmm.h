@@ -81,7 +81,8 @@ enum class EdgeType {
   // TODO: do we need it? since we have hb-clocks already
   // HB, // happens-before
   MO, // modification order
-  SW, // synchronized-with
+  // TODO: do we need it explicitly? hb-clocks can give the same basically
+  // SW, // synchronized-with 
 };
 
 struct Edge {
@@ -146,7 +147,7 @@ struct WmmUtils {
       case EdgeType::RF: return "rf";
       // case EdgeType::HB: return "hb";
       case EdgeType::MO: return "mo";
-      case EdgeType::SW: return "sw";
+      //case EdgeType::SW: return "sw";
     }
   }
 
@@ -184,6 +185,11 @@ public:
 
   virtual void SetReadFromEvent(Event* event) {
     assert(false && "'SetReadFromEvent' can only be called on read events");
+  }
+
+  virtual Event* GetReadFromEvent() const {
+    assert(false && "'GetReadFromEvent' can only be called on read events");
+    return nullptr;
   }
 
   bool HappensBefore(Event* other) const {
@@ -231,14 +237,19 @@ struct DummyEvent : Event {
 template<class T>
 struct ReadEvent : Event {
   ReadEvent(EventId id, int nThreads, int location, int threadId, MemoryOrder order):
-    Event(id, EventType::READ, nThreads, location, threadId, order), readFrom(-1) {}
+    Event(id, EventType::READ, nThreads, location, threadId, order), readFrom(nullptr) {}
   
   virtual void SetReadFromEvent(Event* event) override {
-    readFrom = event->id;
+    readFrom = event;
   }
 
+  virtual Event* GetReadFromEvent() const override {
+    return readFrom;
+  }
+    
+
   // points to write-event which we read from
-  EventId readFrom;
+  Event* readFrom;
   T value;
 };
 
@@ -293,11 +304,10 @@ public:
       }
     }
 
-    assert(event->readFrom != -1 && "Read event must have appropriate write event to read from");
-    Event* writeEvent = events[event->readFrom];
-    assert(writeEvent->IsWrite() && "Read event must read from write event");
-    auto writeEventWithValue = static_cast<WriteEvent<T>*>(writeEvent);
-    return writeEventWithValue->value;
+    assert(event->readFrom != nullptr && "Read event must have appropriate write event to read from");
+    assert(event->readFrom->IsWrite() && "Read event must read from write event");
+    auto writeEvent = static_cast<WriteEvent<T>*>(event->readFrom);
+    return writeEvent->value;
   }
 
   template<class T>
@@ -395,7 +405,7 @@ private:
     // update last event in thread
     eventsPerThread[threadId].push_back(eventId);
     
-    // insert in all events vector
+    // insert in all-events vector
     events.push_back(event);
 
     // set correct hb-clocks for new event
@@ -433,7 +443,20 @@ private:
   //               |          \         |
   //              W_x          --mo--> W_x
   void CreateSeqCstReadWriteCoherenceEdges(Event* write, Event* read) {
-    // TODO: implement
+    assert(write->IsWrite() && read->IsRead() && "Write and read events must be of correct type");
+    assert(write->location == read->location && "Write and read events must be of the same location");\
+    assert(read->GetReadFromEvent() == write && "Read event must read-from the write event");
+
+    EventId lastSeqCstWriteEvent = GetLastSeqCstWriteEventId(read->location);
+    // no such event, no need to create mo edge
+    if (lastSeqCstWriteEvent == -1) return;
+
+    // create mo-edge between last sc-write and `write` that `read` event reads-from
+    auto lastSeqCstWrite = events[lastSeqCstWriteEvent];
+    assert(lastSeqCstWrite->IsWrite() && "Last sc-write event must be a write");
+    assert(lastSeqCstWrite->location == read->location && "Last sc-write event must have the same location as read event");
+    // TODO: check that sc-edge between lastSeqCstWrite and read exists
+    AddEdge(EdgeType::MO, lastSeqCstWrite->id, write->id);
   }
 
   // Applies Write-Read Coherence rules: establishes mo-edges between
@@ -471,9 +494,10 @@ private:
     EventId lastSeqCstWriteEvent = GetLastSeqCstWriteEventId(event->location);
     if (lastSeqCstWriteEvent == -1) return;
     auto lastSeqCstWrite = events[lastSeqCstWriteEvent];
-    if (lastSeqCstWrite->location == event->location) {
-      AddEdge(EdgeType::MO, lastSeqCstWrite->id, event->id);
-    }
+    assert(lastSeqCstWrite->IsWrite() && "Last sc-write event must be a write");
+    assert(lastSeqCstWrite->location == event->location && "Last sc-write event must have the same location as event");
+    // TODO: check that sc-edge between lastSeqCstWrite and read exists
+    AddEdge(EdgeType::MO, lastSeqCstWrite->id, event->id);
   }
 
   // Applies Write-Write Coherence rules: establishes mo-edges between
@@ -496,7 +520,6 @@ private:
         ) continue;
         
         // establish mo edge
-        // TODO: extract to separate methods/class graph building (adding edges/nodes)
         AddEdge(EdgeType::MO, otherEvent->id, event->id);
         break; // no need to establish mo-edges with earlier events from this thread
       }
