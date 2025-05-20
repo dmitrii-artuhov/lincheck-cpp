@@ -67,6 +67,25 @@ struct WmmTest {
       assert(x.load(std::memory_order_seq_cst) == 10);
     }
   }
+
+  // Example 4
+  non_atomic void Exp4_A() {
+    y.store(20, std::memory_order_relaxed);
+    x.store(10, std::memory_order_relaxed);
+  }
+
+  non_atomic void Exp4_B() {
+    if (x.load(std::memory_order_relaxed) == 10) {
+      assert(y.load(std::memory_order_relaxed) == 20); // could fail
+      y.store(10, std::memory_order_relaxed);
+    }
+  }
+
+  non_atomic void Exp4_C() {
+    if (y.load(std::memory_order_relaxed) == 10) {
+      assert(x.load(std::memory_order_relaxed) == 10); // could fail
+    }
+  }
 };
 
 struct LinearWmmSpec {
@@ -85,6 +104,10 @@ struct LinearWmmSpec {
       {"Exp3_A", func},
       {"Exp3_B", func},
       {"Exp3_C", func},
+
+      {"Exp4_A", func},
+      {"Exp4_B", func},
+      {"Exp4_C", func},
     };
   }
 };
@@ -103,22 +126,22 @@ using spec_t =
     ltest::Spec<WmmTest, LinearWmmSpec, LinearWmmHash, LinearWmmEquals>;
 
 LTEST_ENTRYPOINT(spec_t, 
-  // {
-  //   {
-  //     method_invocation(std::tuple(), void, WmmTest, Exp1_A)
-  //   },
-  //   {
-  //     method_invocation(std::tuple(), void, WmmTest, Exp1_B)
-  //   }
-  // },
-  // {
-  //   {
-  //     method_invocation(std::tuple(), void, WmmTest, Exp2_A)
-  //   },
-  //   {
-  //     method_invocation(std::tuple(), void, WmmTest, Exp2_B)
-  //   }
-  // },
+  {
+    {
+      method_invocation(std::tuple(), void, WmmTest, Exp1_A)
+    },
+    {
+      method_invocation(std::tuple(), void, WmmTest, Exp1_B)
+    }
+  },
+  {
+    {
+      method_invocation(std::tuple(), void, WmmTest, Exp2_A)
+    },
+    {
+      method_invocation(std::tuple(), void, WmmTest, Exp2_B)
+    }
+  },
   {
     {
       method_invocation(std::tuple(), void, WmmTest, Exp3_A)
@@ -128,6 +151,17 @@ LTEST_ENTRYPOINT(spec_t,
     },
     {
       method_invocation(std::tuple(), void, WmmTest, Exp3_C)
+    }
+  },
+  { // could fail
+    {
+      method_invocation(std::tuple(), void, WmmTest, Exp4_A)
+    },
+    {
+      method_invocation(std::tuple(), void, WmmTest, Exp4_B)
+    },
+    {
+      method_invocation(std::tuple(), void, WmmTest, Exp4_C)
     }
   }
 );

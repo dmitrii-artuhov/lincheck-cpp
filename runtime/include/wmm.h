@@ -4,11 +4,13 @@
 #include <atomic>
 #include <iostream>
 #include <ostream>
+#include <random>
 #include <sstream>
 #include <unordered_set>
 #include <vector>
 #include <cassert>
 #include <map>
+#include <ranges>
 
 
 enum class MemoryOrder {
@@ -236,25 +238,6 @@ struct DummyEvent : Event {
 };
 
 template<class T>
-struct ReadEvent : Event {
-  ReadEvent(EventId id, int nThreads, int location, int threadId, MemoryOrder order):
-    Event(id, EventType::READ, nThreads, location, threadId, order), readFrom(nullptr) {}
-  
-  virtual void SetReadFromEvent(Event* event) override {
-    readFrom = event;
-  }
-
-  virtual Event* GetReadFromEvent() const override {
-    return readFrom;
-  }
-    
-
-  // points to write-event which we read from
-  Event* readFrom;
-  T value;
-};
-
-template<class T>
 struct WriteEvent : Event {
   WriteEvent(EventId id, int nThreads, int location, int threadId, MemoryOrder order, T value):
     Event(id, EventType::WRITE, nThreads, location, threadId, order), value(std::move(value)) {} // , moBefore(-1)
@@ -270,6 +253,30 @@ struct WriteEvent : Event {
   }
   
   T value;
+};
+
+template<class T>
+struct ReadEvent : Event {
+  ReadEvent(EventId id, int nThreads, int location, int threadId, MemoryOrder order):
+    Event(id, EventType::READ, nThreads, location, threadId, order), readFrom(nullptr) {}
+  
+  virtual void SetReadFromEvent(Event* event) override {
+    readFrom = event;
+  }
+
+  virtual Event* GetReadFromEvent() const override {
+    return readFrom;
+  }
+  
+  T GetValue() const {
+    assert(readFrom != nullptr && "Read event hasn't set its 'readFrom` write-event");
+    assert(readFrom->IsWrite() && "Read event must read from write event");
+    auto writeEvent = static_cast<WriteEvent<T>*>(readFrom);
+    return writeEvent->value;
+  }
+
+  // points to write-event which we read from
+  Event* readFrom;
 };
 
 }
@@ -301,14 +308,22 @@ public:
       // TODO: implement
     }
 
-    for (auto readFromEvent : events) {
+    // Shuffle events to randomize the order of read-from edges
+    // and allow for more non-sc behaviours
+    auto filtered_events_view = events | std::views::filter(
+      [event](Event* e) {
+        return (
+          e->IsWrite() &&
+          e->location == event->location &&
+          e != event
+        );
+      }
+    );
+    std::vector<Event*> shuffled_events(filtered_events_view.begin(), filtered_events_view.end());
+    std::ranges::shuffle(shuffled_events, gen);
+    
+    for (auto readFromEvent : shuffled_events) {
       // TODO: account for RMW
-      if (readFromEvent == event) continue;
-      if (
-        !readFromEvent->IsWrite() ||
-        readFromEvent->location != event->location
-      ) continue;
-
       // try reading from `readFromEvent`
       if (TryCreateRfEdge(readFromEvent, event)) {
         std::cout << "Read event " << event->AsString() << " now reads from " << readFromEvent->AsString() << std::endl;
@@ -659,7 +674,6 @@ private:
   }
 
   bool ExistsEdge(EdgeType type, EventId from, EventId to) const {
-    
     const auto& from_edges = events[from]->edges;
     auto it = std::ranges::find_if(from_edges, [this, from, to, type](EdgeId eId) {
       auto& edge = edges[eId];
@@ -778,6 +792,7 @@ private:
   std::vector<std::vector<EventId>> eventsPerThread;
   std::map<int /* location */, EventId> lastSeqCstWriteEvents;
   std::unordered_set<EdgeId> snapshotEdges; // edges that are part of the snapshot (which case be discarded or applied, which is usefull when adding rf-edge)
+  std::mt19937 gen{std::random_device{}()}; // random number generator for randomized rf-edge selection
   bool inSnapshotMode = false;
   int nThreads = 0;
 };
@@ -819,8 +834,7 @@ ExecutionGraph(const ExecutionGraph&) = delete;
   template<class T>
   T Load(int location, int threadId, MemoryOrder order) {
     // TODO: if we now only do real atomics, then they should be stored in graph, I guess?
-    std::cout << "Load: loc-" << location << ", thread="
-              << threadId << ", order=" << WmmUtils::OrderToString(order) << std::endl;
+    std::cout << "Load: loc-" << location << ", thread=" << threadId << ", order=" << WmmUtils::OrderToString(order) << std::endl;
     T readValue = graph.AddReadEvent<T>(location, threadId, order);
 
     graph.Print(std::cout);
@@ -829,8 +843,7 @@ ExecutionGraph(const ExecutionGraph&) = delete;
 
   template <class T>
   void Store(int location, int threadId, MemoryOrder order, T value) {
-    std::cout << "Store: loc-" << location << ", thread=" << threadId
-              << ", order=" << WmmUtils::OrderToString(order) << ", value=" << value << std::endl;
+    std::cout << "Store: loc-" << location << ", thread=" << threadId << ", order=" << WmmUtils::OrderToString(order) << ", value=" << value << std::endl;
     graph.AddWriteEvent(location, threadId, order, value);
     
     graph.Print(std::cout);
