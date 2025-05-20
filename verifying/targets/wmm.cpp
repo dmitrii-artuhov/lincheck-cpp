@@ -14,19 +14,24 @@ struct WmmTest {
   }
 
   std::atomic<int> x{0}, y{0};
+  int r1 = -1, r2 = -1;
 
   non_atomic void A() {
-    int r1 = y.load(std::memory_order_seq_cst);
+    r1 = y.load(std::memory_order_seq_cst);
     x.store(1, std::memory_order_seq_cst);
-    std::string out = "r1 = " + std::to_string(r1);
-    std::cout << out << std::endl;
+    std::string out = "r1 = " + std::to_string(r1) + "\n";
+    std::cout << out;
+
+    assert(!(r1 == 1 && r2 == 1));
   }
 
   non_atomic void B() {
-    int r2 = x.load(std::memory_order_seq_cst);
+    r2 = x.load(std::memory_order_seq_cst);
     y.store(1, std::memory_order_seq_cst);
-    std::string out = "r2 = " + std::to_string(r2);
-    std::cout << out << std::endl;
+    std::string out = "r2 = " + std::to_string(r2) + "\n";
+    std::cout << out;
+    
+    assert(!(r1 == 1 && r2 == 1));
   }
 };
 
@@ -34,17 +39,13 @@ struct LinearWmmSpec {
   using method_t = std::function<int(LinearWmmSpec *l, void *)>;
 
   static auto GetMethods() {
-    method_t A_func = [](LinearWmmSpec *l, void *) -> int {
-      return 0;
-    };
+    method_t A_func = [](LinearWmmSpec *l, void *) -> int { return 0; };
 
-    method_t B_func = [](LinearWmmSpec *l, void *) -> int {
-      return 0;
-    };
+    method_t B_func = [](LinearWmmSpec *l, void *) -> int { return 0; };
 
     return std::map<std::string, method_t>{
-      {"A", A_func},
-      {"B", B_func},
+        {"A", A_func},
+        {"B", B_func},
     };
   }
 };
@@ -59,16 +60,8 @@ struct LinearWmmEquals {
   }
 };
 
-using spec_t = ltest::Spec<WmmTest, LinearWmmSpec, LinearWmmHash, LinearWmmEquals>;
+using spec_t =
+    ltest::Spec<WmmTest, LinearWmmSpec, LinearWmmHash, LinearWmmEquals>;
 
-LTEST_ENTRYPOINT(
-  spec_t,
-  {
-    {
-      method_invocation(std::tuple(), void, WmmTest, A)
-    },
-    {
-      method_invocation(std::tuple(), void, WmmTest, B)
-    }
-  }
-);
+LTEST_ENTRYPOINT(spec_t, {{method_invocation(std::tuple(), void, WmmTest, A)},
+                          {method_invocation(std::tuple(), void, WmmTest, B)}});

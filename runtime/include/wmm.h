@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <iostream>
 #include <ostream>
@@ -258,6 +259,16 @@ struct WriteEvent : Event {
   WriteEvent(EventId id, int nThreads, int location, int threadId, MemoryOrder order, T value):
     Event(id, EventType::WRITE, nThreads, location, threadId, order), value(std::move(value)) {} // , moBefore(-1)
 
+  virtual std::string AsString() const {
+    std::stringstream ss;
+
+    ss << id << ":" << WmmUtils::EventTypeToString(type) << "(" << value << ")"
+       << ":T" << threadId << ":L" << location << ":"
+       << WmmUtils::OrderToString(order) << ":" << clock.AsString();
+
+    return ss.str();
+  }
+  
   T value;
 };
 
@@ -300,6 +311,7 @@ public:
 
       // try reading from `readFromEvent`
       if (TryCreateRfEdge(readFromEvent, event)) {
+        std::cout << "Read event " << event->AsString() << " now reads from " << readFromEvent->AsString() << std::endl;
         break;
       }
     }
@@ -378,12 +390,18 @@ private:
 
     bool isConsistent = IsConsistent();   
     if (isConsistent) {
+      std::cout << "Consistent graph:" << std::endl;
+      Print(std::cout);
       // preserve added edges
       ApplySnapshot();
     }
     else {
+      std::cout << "Not consistent graph:" << std::endl;
+      Print(std::cout);
       // removes all added edges
+      std::cout << "Discarding snapshot" << std::endl;
       DiscardSnapshot();
+      Print(std::cout);
       // remove rf-edge
       read->SetReadFromEvent(nullptr);
     }
@@ -430,8 +448,6 @@ private:
   }
 
 
-
-
   // ===== Methods to create mo edges =====
   
   // Applies Seq-Cst Write-Read Coherence rules: establishes mo-edge between
@@ -452,9 +468,12 @@ private:
     if (lastSeqCstWriteEvent == -1) return;
 
     // create mo-edge between last sc-write and `write` that `read` event reads-from
-    auto lastSeqCstWrite = events[lastSeqCstWriteEvent];
+    auto lastSeqCstWrite = events[lastSeqCstWriteEvent];    
     assert(lastSeqCstWrite->IsWrite() && "Last sc-write event must be a write");
     assert(lastSeqCstWrite->location == read->location && "Last sc-write event must have the same location as read event");
+    
+    if (lastSeqCstWrite->id == write->id) return; // no need to create edge to itself
+    
     // TODO: check that sc-edge between lastSeqCstWrite and read exists
     AddEdge(EdgeType::MO, lastSeqCstWrite->id, write->id);
   }
@@ -621,14 +640,32 @@ private:
   }
 
   void AddEdge(EdgeType type, EventId from, EventId to) {
+    // for mo edges we might add duplicates, so we need to check that such mo-edge does not exist
+    if (type == EdgeType::MO && ExistsEdge(type, from, to)) {
+      // std::cout << "Edge already exists: " << events[from]->AsString() << " --" << WmmUtils::EdgeTypeToString(type) << "--> "
+      //           << events[to]->AsString() << std::endl;
+      return;
+    }
+
+    auto& from_edges = events[from]->edges;
     EdgeId eId = edges.size();
     Edge e = { eId, type, from, to };
     edges.push_back(e);
-    events[from]->edges.push_back(eId);
+    from_edges.push_back(eId);
 
     if (inSnapshotMode) {
       snapshotEdges.insert(eId);
     }
+  }
+
+  bool ExistsEdge(EdgeType type, EventId from, EventId to) const {
+    
+    const auto& from_edges = events[from]->edges;
+    auto it = std::ranges::find_if(from_edges, [this, from, to, type](EdgeId eId) {
+      auto& edge = edges[eId];
+      return edge.from == from && edge.to == to && edge.type == type;
+    });
+    return it != from_edges.end();
   }
 
   // Check execution graph for consistency createria:
@@ -641,7 +678,7 @@ private:
       VISITED = 2
     };
     std::vector<int> colors(events.size(), NOT_VISITED); // each event is colored 0 (not visited), 1 (entered), 2 (visited)
-    std::vector<std::pair<Event*, bool /* alread considered */>> stack(events.size());
+    std::vector<std::pair<Event*, bool /* already considered */>> stack;
 
     for (auto e : events) {
       assert(colors[e->id] != IN_STACK && "Should not be possible, invalid cycle detection");

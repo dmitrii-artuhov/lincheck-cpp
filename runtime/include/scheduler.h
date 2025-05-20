@@ -130,6 +130,7 @@ struct BaseStrategyWithThreads : public Strategy {
     this->constructors_distribution =
     std::uniform_int_distribution<std::mt19937::result_type>(
       0, this->constructors.size() - 1);
+    log() << "Strategy constructor\n";
     wmm_graph.Reset(this->threads_count); // must be called before instantiating `TargetObj`
     this->state = std::make_unique<TargetObj>();
 
@@ -208,6 +209,7 @@ struct BaseStrategyWithThreads : public Strategy {
     // custom round threads count might differ from the generated rounds
     this->threads.resize(custom_threads_count);
     this->round_schedule.resize(custom_threads_count, -1);
+    log() << "Set custom round\n";
     wmm_graph.Reset(custom_threads_count);
     sched_checker.Reset();
     state = std::make_unique<TargetObj>();
@@ -262,10 +264,6 @@ struct BaseStrategyWithThreads : public Strategy {
     assert(round_schedule.size() == this->threads.size() &&
            "sizes expected to be the same");
     round_schedule.assign(round_schedule.size(), -1);
-    // must appear before state reset, so that constructors of atomics in
-    // data structure under test register themselves in the new execution graph 
-    // TODO: for custom scenarios threads number might differ, check for places where `threads.size()` cannot be used
-    wmm_graph.Reset(threads.size());
 
     std::vector<size_t> task_indexes(this->threads.size(), 0);
     bool has_nonterminated_threads = true;
@@ -305,6 +303,11 @@ struct BaseStrategyWithThreads : public Strategy {
     }
 
     this->sched_checker.Reset();
+    // must appear before state reset, so that constructors of atomics in
+    // data structure under test register themselves in the new execution graph 
+    // TODO: for custom scenarios threads number might differ, check for places where `threads.size()` cannot be used
+    log() << "Terminate tasks\n";
+    wmm_graph.Reset(threads.size());
     state = std::make_unique<TargetObj>();
   }
 
