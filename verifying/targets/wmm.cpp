@@ -86,6 +86,25 @@ struct WmmTest {
       assert(x.load(std::memory_order_relaxed) == 10); // could fail
     }
   }
+
+  // Example 5
+  non_atomic void Exp5_A() {
+    y.store(20, std::memory_order_release);
+    x.store(10, std::memory_order_release);
+  }
+
+  non_atomic void Exp5_B() {
+    if (x.load(std::memory_order_acquire) == 10) {
+      assert(y.load(std::memory_order_acquire) == 20);
+      y.store(10, std::memory_order_release);
+    }
+  }
+
+  non_atomic void Exp5_C() {
+    if (y.load(std::memory_order_acquire) == 10) {
+      assert(x.load(std::memory_order_acquire) == 10);
+    }
+  }
 };
 
 struct LinearWmmSpec {
@@ -108,6 +127,10 @@ struct LinearWmmSpec {
       {"Exp4_A", func},
       {"Exp4_B", func},
       {"Exp4_C", func},
+
+      {"Exp5_A", func},
+      {"Exp5_B", func},
+      {"Exp5_C", func},
     };
   }
 };
@@ -163,5 +186,16 @@ LTEST_ENTRYPOINT(spec_t,
     {
       method_invocation(std::tuple(), void, WmmTest, Exp4_C)
     }
-  }
+  },
+  {
+    {
+      method_invocation(std::tuple(), void, WmmTest, Exp5_A)
+    },
+    {
+      method_invocation(std::tuple(), void, WmmTest, Exp5_B)
+    },
+    {
+      method_invocation(std::tuple(), void, WmmTest, Exp5_C)
+    }
+  },
 );

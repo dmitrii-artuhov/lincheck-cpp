@@ -23,6 +23,7 @@ enum class MemoryOrder {
 
 namespace { // translation-unit-local details
 struct HBClock {
+  HBClock() = default;
   HBClock(int nThreads): times(nThreads, 0) {}
 
   std::string AsString() const {
@@ -230,6 +231,14 @@ public:
   bool IsRelaxed() const {
     return order == MemoryOrder::Relaxed;
   }
+
+  bool IsAtLeastAcquire() const {
+    return order >= MemoryOrder::Acquire && order != MemoryOrder::Release;
+  }
+
+  bool IsAtLeastRelease() const {
+    return order >= MemoryOrder::Release;
+  }
 };
 
 struct DummyEvent : Event {
@@ -304,9 +313,6 @@ public:
       // establish sc-edge
       CreateScEdgeToEvent(event); // prevScCstWrite --sc--> event
     }
-    else {
-      // TODO: implement
-    }
 
     // Shuffle events to randomize the order of read-from edges
     // and allow for more non-sc behaviours
@@ -355,9 +361,6 @@ public:
       // update last seq_cst write
       lastSeqCstWriteEvents[event->location] = event->id;
     }
-    else {
-      // TODO: implement
-    }
 
     // Read-Write Coherence
     CreateReadWriteCoherenceEdges(event);
@@ -389,7 +392,23 @@ private:
 
     // establish rf-edge
     AddEdge(EdgeType::RF, write->id, read->id);
+    // rememeber the event we read from
     read->SetReadFromEvent(write);
+    // update the clock if synchronized-with relation has appeared
+    // and save the old clock in case snapshot is discarded
+    HBClock old_clock;
+    bool is_clock_updated = false;
+    if (
+      read->IsAtLeastAcquire() &&
+      write->IsAtLeastRelease() &&
+      !(read->IsSeqCst() && write->IsSeqCst()) // this case no need to consider, because we have sc edges instead
+    ) {
+      is_clock_updated = true;
+      // save the old clock
+      old_clock = read->clock;
+      // instantitate a SW (synchronized-with) relation
+      read->clock.UniteWith(write->clock);
+    }
 
     if (read->IsSeqCst()) {
       // Note: sc-edge already created, we don't need to add that here anymore
@@ -419,6 +438,10 @@ private:
       Print(std::cout);
       // remove rf-edge
       read->SetReadFromEvent(nullptr);
+      // restore old clock if nessary
+      if (is_clock_updated) {
+        read->clock = old_clock;
+      }
     }
 
     return isConsistent;
