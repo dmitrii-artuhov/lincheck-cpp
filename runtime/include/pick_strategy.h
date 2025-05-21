@@ -45,7 +45,7 @@ struct PickStrategy : public BaseStrategyWithThreads<TargetObj, Verifier> {
       }
       threads[current_thread].emplace_back(
           this->constructors[verified_constructor].Build(
-              &this->state, current_thread, this->new_task_id++));
+              this->state.get(), current_thread, this->new_task_id++));
       TaskWithMetaData task{threads[current_thread].back(), true,
                             current_thread};
       return task;

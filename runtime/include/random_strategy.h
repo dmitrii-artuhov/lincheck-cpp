@@ -5,6 +5,7 @@
 
 #include "lib.h"
 #include "pick_strategy.h"
+#include "scheduler.h"
 
 // Allows a random thread to work.
 // Randoms new task.
@@ -76,6 +77,14 @@ struct RandomStrategy : PickStrategy<TargetObj, Verifier> {
       num--;
     }
     assert(false && "Cannot pick thread to continue round scheduling");
+  }
+
+  void SetCustomRound(CustomRound &custom_round) override {
+    BaseStrategyWithThreads<TargetObj, Verifier>::SetCustomRound(custom_round);
+
+    size_t custom_threads_count = custom_round.threads.size();
+    weights.resize(custom_threads_count, 1);
+    pick_weights.clear();
   }
 
  private:
