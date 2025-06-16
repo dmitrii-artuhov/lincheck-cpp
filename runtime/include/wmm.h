@@ -99,7 +99,8 @@ struct Edge {
 enum class EventType {
   DUMMY,
   READ,
-  WRITE
+  WRITE,
+  RMW
 };
 }
 
@@ -141,6 +142,7 @@ struct WmmUtils {
       case EventType::DUMMY: return "D";
       case EventType::READ: return "R"; 
       case EventType::WRITE: return "W";
+      case EventType::RMW: return "RMW";
     }
   }
 
@@ -188,11 +190,11 @@ public:
   }
 
   virtual void SetReadFromEvent(Event* event) {
-    assert(false && "'SetReadFromEvent' can only be called on read events");
+    assert(false && "'SetReadFromEvent' can only be called on read/rmw events");
   }
 
   virtual Event* GetReadFromEvent() const {
-    assert(false && "'GetReadFromEvent' can only be called on read events");
+    assert(false && "'GetReadFromEvent' can only be called on read/rmw events");
     return nullptr;
   }
 
@@ -210,6 +212,18 @@ public:
 
   bool IsRead() const {
     return type == EventType::READ;
+  }
+
+  bool IsRMW() const {
+    return type == EventType::RMW;
+  }
+
+  bool IsWriteOrRMW() const {
+    return IsWrite() || IsRMW();
+  }
+
+  bool IsReadOrRMW() const {
+    return IsRead() || IsRMW();
   }
 
   bool IsSeqCst() const {
@@ -239,6 +253,12 @@ public:
   bool IsAtLeastRelease() const {
     return order >= MemoryOrder::Release;
   }
+
+  template<class T>
+  static T GetWrittenValue(Event* event);
+
+  template<class T>
+  static T GetReadValue(Event* event);
 };
 
 struct DummyEvent : Event {
@@ -260,6 +280,10 @@ struct WriteEvent : Event {
 
     return ss.str();
   }
+
+  T GetWrittenValue() const {
+    return value;
+  }
   
   T value;
 };
@@ -270,6 +294,7 @@ struct ReadEvent : Event {
     Event(id, EventType::READ, nThreads, location, threadId, order), readFrom(nullptr) {}
   
   virtual void SetReadFromEvent(Event* event) override {
+    assert((readFrom == nullptr || readFrom->IsWriteOrRMW()) && "Read event must read from write/rmw event");
     readFrom = event;
   }
 
@@ -277,16 +302,119 @@ struct ReadEvent : Event {
     return readFrom;
   }
   
-  T GetValue() const {
-    assert(readFrom != nullptr && "Read event hasn't set its 'readFrom` write-event");
-    assert(readFrom->IsWrite() && "Read event must read from write event");
-    auto writeEvent = static_cast<WriteEvent<T>*>(readFrom);
-    return writeEvent->value;
+  T GetReadValue() const {
+    assert(readFrom != nullptr && "Read event hasn't set its 'readFrom' write-event");
+    return Event::GetWrittenValue<T>(readFrom);
   }
 
   // points to write-event which we read from
   Event* readFrom;
 };
+
+enum RMWState {
+  READ,
+  MODIFY,
+  UNSET
+};
+
+template<class T>
+struct RMWEvent : Event {
+  RMWEvent(EventId id, int nThreads, int location, int threadId, T* expected, T desired,
+           MemoryOrder successOrder, MemoryOrder failureOrder):
+    Event(id, EventType::RMW, nThreads, location, threadId, successOrder), 
+    initialExpectedValue(*expected), expected(expected), desired(desired), failureOrder(failureOrder), readFrom(nullptr) {}
+
+  virtual std::string AsString() const override {
+    std::stringstream ss;
+
+    ss << id << ":" << WmmUtils::EventTypeToString(type) << "(" << *expected << " -> " << desired << ")"
+       << ":T" << threadId << ":L" << location << ":"
+       << WmmUtils::OrderToString(order) << ":" << clock.AsString();
+
+    return ss.str();
+  }
+
+  virtual void SetReadFromEvent(Event* event) override {
+    assert((readFrom == nullptr || readFrom->IsWriteOrRMW()) && "Read event must read from write/rmw event");
+    readFrom = event;
+
+    if (readFrom == nullptr) {
+      state = RMWState::UNSET;
+      *expected = initialExpectedValue; // reset expected value
+    }
+    else {
+      T readValue = Event::GetWrittenValue<T>(readFrom);
+      if (readValue == *expected) {
+        // in case of MODIFY we do not change expected value
+        state = RMWState::MODIFY;
+      }
+      else {
+        // in case of READ we set expected to the actually read value
+        state = RMWState::READ;
+        *expected = readValue;
+      }
+    }
+  }
+
+  virtual Event* GetReadFromEvent() const override {
+    return readFrom;
+  }
+
+  T GetReadValue() const {
+    assert(readFrom != nullptr && "RMW event hasn't set its 'readFrom' write-event");
+    return Event::GetWrittenValue<T>(readFrom);
+  }
+
+  T GetWrittenValue() const {
+    assert(state != RMWState::UNSET && "RMW event must have a resolved state (not UNSET)");
+    if (state == RMWState::MODIFY) {
+      // in case of MODIFY we return desired value
+      return desired;
+    }
+    else {
+      // in case of READ we assume that RMW writes the value that it reads from its own 'readFrom' event
+      // (which is saved to the *expected pointer)
+      return *expected;
+    }
+  }
+
+  RMWState state = UNSET; // current state of the RMW operation
+  T initialExpectedValue;
+  T* expected;
+  T desired;
+  MemoryOrder failureOrder;
+  // points to write/rmw-event which we read from
+  Event* readFrom;
+};
+
+
+template<class T>
+T Event::GetWrittenValue(Event* event) {
+  assert(event != nullptr && "Event must not be null");
+  assert(event->IsWriteOrRMW() && "Only write/rmw events can write values");
+  
+  if (event->IsWrite()) {
+    auto writeEvent = static_cast<WriteEvent<T>*>(event);
+    return writeEvent->GetWrittenValue();
+  }
+  else {
+    auto rmwEvent = static_cast<RMWEvent<T>*>(event);
+    return rmwEvent->GetWrittenValue();
+  }
+}
+
+template<class T>
+T Event::GetReadValue(Event* event) {
+  assert(event->IsReadOrRMW() && "Event must be a read/rmw event");
+  if (event->IsRead()) {
+    ReadEvent<T>* readEvent = static_cast<ReadEvent<T>*>(event);
+    return readEvent->GetReadValue();
+  }
+  else {
+    RMWEvent<T>* rmwEvent = static_cast<RMWEvent<T>*>(event);
+    return rmwEvent->GetReadValue();
+  }
+}
 
 }
 
