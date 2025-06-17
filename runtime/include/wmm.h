@@ -226,32 +226,42 @@ public:
     return IsRead() || IsRMW();
   }
 
-  bool IsSeqCst() const {
+  virtual bool IsSeqCst() const {
     return order == MemoryOrder::SeqCst;
   }
 
-  bool IsAcqRel() const {
+  virtual bool IsAcqRel() const {
     return order == MemoryOrder::AcqRel;
   }
 
-  bool IsAcquire() const {
+  virtual bool IsAcquire() const {
     return order == MemoryOrder::Acquire;
   }
 
-  bool IsRelease() const {
+  virtual bool IsRelease() const {
     return order == MemoryOrder::Release;
   }
 
-  bool IsRelaxed() const {
+  virtual bool IsRelaxed() const {
     return order == MemoryOrder::Relaxed;
   }
 
-  bool IsAtLeastAcquire() const {
+  virtual bool IsAtLeastAcquire() const {
     return order >= MemoryOrder::Acquire && order != MemoryOrder::Release;
   }
 
-  bool IsAtLeastRelease() const {
+  virtual bool IsAtLeastRelease() const {
     return order >= MemoryOrder::Release;
+  }
+
+  // Returns true if this event is a RMW and it is resolved to a READ state
+  virtual bool IsReadRWM() const {
+    return false;
+  }
+
+  // Returns true if this event is a RMW and it is resolved to a MODIFY state
+  virtual bool IsModifyRMW() const {
+    return false;
   }
 
   template<class T>
@@ -327,11 +337,68 @@ struct RMWEvent : Event {
   virtual std::string AsString() const override {
     std::stringstream ss;
 
-    ss << id << ":" << WmmUtils::EventTypeToString(type) << "(" << *expected << " -> " << desired << ")"
+    ss << id << ":" << WmmUtils::EventTypeToString(type)
+       << "(" << *expected << " -> " << desired << ", " << StateAsString(state) << ")"
        << ":T" << threadId << ":L" << location << ":"
-       << WmmUtils::OrderToString(order) << ":" << clock.AsString();
+       << "succ=" << WmmUtils::OrderToString(order) << ", fail=" << WmmUtils::OrderToString(failureOrder)
+       << ":" << clock.AsString();
 
     return ss.str();
+  }
+
+  /*
+    All methods below will use a correct memory order of this RMW event,
+    meaning that for 'state == READ' it will use 'failureOrder', and for 
+    'state == MODIFY' it will use 'order' (successOrder). 
+  */
+  virtual bool IsSeqCst() const {
+    assert(state != RMWState::UNSET && "RMW event's memory order is queried for its resolving");
+    auto order = (state == RMWState::MODIFY) ? this->order : failureOrder;
+    order == MemoryOrder::SeqCst;
+  }
+
+  virtual bool IsAcqRel() const {
+    assert(state != RMWState::UNSET && "RMW event's memory order is queried for its resolving");
+    auto order = (state == RMWState::MODIFY) ? this->order : failureOrder;
+    return order == MemoryOrder::AcqRel;
+  }
+
+  virtual bool IsAcquire() const {
+    assert(state != RMWState::UNSET && "RMW event's memory order is queried for its resolving");
+    auto order = (state == RMWState::MODIFY) ? this->order : failureOrder;
+    return order == MemoryOrder::Acquire;
+  }
+
+  virtual bool IsRelease() const {
+    assert(state != RMWState::UNSET && "RMW event's memory order is queried for its resolving");
+    auto order = (state == RMWState::MODIFY) ? this->order : failureOrder;
+    return order == MemoryOrder::Release;
+  }
+
+  virtual bool IsRelaxed() const {
+    assert(state != RMWState::UNSET && "RMW event's memory order is queried for its resolving");
+    auto order = (state == RMWState::MODIFY) ? this->order : failureOrder;
+    return order == MemoryOrder::Relaxed;
+  }
+
+  virtual bool IsAtLeastAcquire() const {
+    assert(state != RMWState::UNSET && "RMW event's memory order is queried for its resolving");
+    auto order = (state == RMWState::MODIFY) ? this->order : failureOrder;
+    return order >= MemoryOrder::Acquire && order != MemoryOrder::Release;
+  }
+
+  virtual bool IsAtLeastRelease() const {
+    assert(state != RMWState::UNSET && "RMW event's memory order is queried for its resolving");
+    auto order = (state == RMWState::MODIFY) ? this->order : failureOrder;
+    return order >= MemoryOrder::Release;
+  }
+
+  virtual bool IsReadRWM() const override {
+    return state == RMWState::READ;
+  }
+
+  virtual bool IsModifyRMW() const override {
+    return state == RMWState::MODIFY;
   }
 
   virtual void SetReadFromEvent(Event* event) override {
@@ -385,6 +452,15 @@ struct RMWEvent : Event {
   MemoryOrder failureOrder;
   // points to write/rmw-event which we read from
   Event* readFrom;
+
+private:
+  inline static std::string StateAsString(RMWState state) {
+    switch (state) {
+      case RMWState::READ: return "READ";
+      case RMWState::MODIFY: return "MODIFY";
+      case RMWState::UNSET: return "UNSET";
+    }
+  }
 };
 
 
@@ -437,27 +513,8 @@ public:
     // establish po-edge
     CreatePoEdgeToEvent(event); // prevInThread --po--> event
 
-    if (order == MemoryOrder::SeqCst) {
-      // establish sc-edge
-      CreateScEdgeToEvent(event); // prevScCstWrite --sc--> event
-    }
-
-    // Shuffle events to randomize the order of read-from edges
-    // and allow for more non-sc behaviours
-    auto filtered_events_view = events | std::views::filter(
-      [event](Event* e) {
-        return (
-          e->IsWrite() &&
-          e->location == event->location &&
-          e != event
-        );
-      }
-    );
-    std::vector<Event*> shuffled_events(filtered_events_view.begin(), filtered_events_view.end());
-    std::ranges::shuffle(shuffled_events, gen);
-    
-    for (auto readFromEvent : shuffled_events) {
-      // TODO: account for RMW
+    auto shuffledEvents = GetShuffledReadFromCandidates(event);
+    for (auto readFromEvent : shuffledEvents) {
       // try reading from `readFromEvent`
       if (TryCreateRfEdge(readFromEvent, event)) {
         std::cout << "Read event " << event->AsString() << " now reads from " << readFromEvent->AsString() << std::endl;
@@ -497,6 +554,27 @@ public:
     CreateWriteWriteCoherenceEdges(event);
   }
 
+  template<class T>
+  void AddRMWEvent(int location, int threadId, T* expected, T desired,
+                MemoryOrder successOrder, MemoryOrder failureOrder) {
+    EventId eventId = events.size();
+    auto event = new RMWEvent<T>(
+      eventId, nThreads, location, threadId, expected, desired, successOrder, failureOrder
+    );
+
+    // establish po-edge
+    CreatePoEdgeToEvent(event); // prevInThread --po--> event
+
+    auto shuffledEvents = GetShuffledReadFromCandidates(event);
+    for (auto readFromEvent : shuffledEvents) {
+      // try reading from `readFromEvent`
+      if (TryCreateRfEdge(readFromEvent, event)) {
+        std::cout << "RMW event " << event->AsString() << " now reads from " << readFromEvent->AsString() << std::endl;
+        break;
+      }
+    }
+  }
+
   void Print(std::ostream& os) const {
     os << "Graph edges:" << std::endl;
     if (edges.empty()) os << "<empty>";
@@ -510,51 +588,119 @@ public:
   }
 
 private:
+  std::vector<Event*> GetShuffledReadFromCandidates(Event* event) {
+    // Shuffle events to randomize the order of read-from edges
+    // and allow for more non-sc behaviours
+    auto filteredEventsView = events | std::views::filter(
+      [event](Event* e) {
+        return (
+          (e->IsWrite() || e->IsModifyRMW()) &&
+          e->location == event->location &&
+          e != event
+        );
+      }
+    );
+    std::vector<Event*> shuffledEvents(filteredEventsView.begin(), filteredEventsView.end());
+    std::ranges::shuffle(shuffledEvents, gen);
+    
+    return shuffledEvents;
+  }
+
   // Tries to create a read-from edge between `write` and `read` events (write --rf--> read).
   // Returns `true` if edge was created, `false` otherwise.
   bool TryCreateRfEdge(Event* write, Event* read) {
-    assert(write->IsWrite() && read->IsRead() && "Write and Read events must be of correct type");
+    assert(write->IsWriteOrRMW() && read->IsReadOrRMW() && "Write and Read events must be of correct type");
     assert(write->location == read->location && "Write and Read events must be of the same location");
 
     StartSnapshot();
 
     // establish rf-edge
     AddEdge(EdgeType::RF, write->id, read->id);
-    // rememeber the event we read from
+    // remember the event we read from
     read->SetReadFromEvent(write);
+
     // update the clock if synchronized-with relation has appeared
     // and save the old clock in case snapshot is discarded
-    HBClock old_clock;
-    bool is_clock_updated = false;
+    HBClock oldClock;
+    bool isClockUpdated = false;
+
+    // update the last seq-cst write event in case of successful RMW event
+    // and save the old value in case snapshot is discarded
+    EventId oldLastSeqCstWriteEvent = lastSeqCstWriteEvents[read->location];
+
+    // Applying rel-acq semantics via establishing synchronized-with (SW) relation
     if (
       read->IsAtLeastAcquire() &&
       write->IsAtLeastRelease() &&
+      // TODO: maybe somehow get rid of the sc-edges instead?
       !(read->IsSeqCst() && write->IsSeqCst()) // this case no need to consider, because we have sc edges instead
     ) {
-      is_clock_updated = true;
+      isClockUpdated = true;
       // save the old clock
-      old_clock = read->clock;
+      oldClock = read->clock;
       // instantitate a SW (synchronized-with) relation
       read->clock.UniteWith(write->clock);
     }
 
-    if (read->IsSeqCst()) {
-      // Note: sc-edge already created, we don't need to add that here anymore
-      // Seq-Cst Write-Read Coherence
-      CreateSeqCstReadWriteCoherenceEdges(write, read);
+    if (read->IsRead() || read->IsReadRWM()) {
+      // in case of 'read' event has actually type RMW but is resolved to READ state
+      // (basically the comparison of read value with `expected` one failed), then we treat it as a regular READ event
+      if (read->IsSeqCst()) {
+        // establish sc-edge
+        CreateScEdgeToEvent(read); // prevScCstWrite --sc--> event
+        // Seq-Cst Write-Read Coherence
+        CreateSeqCstReadWriteCoherenceEdges(write, read);
+      }
+
+      // Write-Read Coherence
+      CreateWriteReadCoherenceEdges(write, read);
+
+      // Read-Read Coherence
+      CreateReadReadCoherenceEdges(write, read);
     }
+    else {
+      // otherwise, if the RWM event is resolved to MODIFY state
+      // then we treat that as RMW event and apply rules from reads and writes as well
+      assert(read->IsModifyRMW() && "Read event must be a successful RMW event in this code branch");
+      
+      // Apply RMW-specific rules
+      // RMW / MO Consistency
+      CreateRmwConsistencyEdges(write, read);
 
-    // Write-Read Coherence
-    CreateWriteReadCoherenceEdges(write, read);
+      // RMW Atomicity
+      CreateRmwAtomicityEdges(write, read);
 
-    // Read-Read Coherence
-    CreateReadReadCoherenceEdges(write, read);
+      // Applying rules both from READs and WRITEs
+      if (read->IsSeqCst()) {
+        // establish sc-edge
+        CreateScEdgeToEvent(read); // prevScCstWrite --sc--> event
+        // Seq-Cst Write-Read Coherence
+        CreateSeqCstReadWriteCoherenceEdges(write, read);
+        // Seq-Cst / MO Consistency (if locations match)
+        CreateSeqCstConsistencyEdges(read); // prevScCstWrite --mo--> event
+        
+        // update last seq_cst write (will be restored in case of snapshot discard)
+        lastSeqCstWriteEvents[read->location] = read->id;
+      }
+
+      // Write-Read Coherence
+      CreateWriteReadCoherenceEdges(write, read);
+
+      // Read-Read Coherence
+      CreateReadReadCoherenceEdges(write, read);
+
+      // Read-Write Coherence
+      CreateReadWriteCoherenceEdges(read);
+
+      // Write-Write Coherence
+      CreateWriteWriteCoherenceEdges(read);
+    }
 
     bool isConsistent = IsConsistent();   
     if (isConsistent) {
       std::cout << "Consistent graph:" << std::endl;
       Print(std::cout);
-      // preserve added edges
+      // preserve added edges and other modifications
       ApplySnapshot();
     }
     else {
@@ -563,13 +709,15 @@ private:
       // removes all added edges
       std::cout << "Discarding snapshot" << std::endl;
       DiscardSnapshot();
-      Print(std::cout);
       // remove rf-edge
       read->SetReadFromEvent(nullptr);
-      // restore old clock if nessary
-      if (is_clock_updated) {
-        read->clock = old_clock;
+      // restore old clock if necessary
+      if (isClockUpdated) {
+        read->clock = oldClock;
       }
+      // restore last seq-cst write event
+      lastSeqCstWriteEvents[read->location] = oldLastSeqCstWriteEvent;
+      Print(std::cout);
     }
 
     return isConsistent;
@@ -605,7 +753,7 @@ private:
     EventId lastSeqCstWriteEvent = GetLastSeqCstWriteEventId(event->location);
     if (lastSeqCstWriteEvent != -1) {
       auto lastSeqCstWrite = events[lastSeqCstWriteEvent];
-      assert(lastSeqCstWrite->IsWrite() && "Prev scq-cst event must be a write");
+      assert((lastSeqCstWrite->IsWrite() || lastSeqCstWrite->IsModifyRMW()) && "Prev scq-cst event must be a write or modifying rmw");
       AddEdge(EdgeType::SC, lastSeqCstWrite->id, event->id);
       
       // unite current hb-clock with last seq-cst write
@@ -625,7 +773,8 @@ private:
   //               |          \         |
   //              W_x          --mo--> W_x
   void CreateSeqCstReadWriteCoherenceEdges(Event* write, Event* read) {
-    assert(write->IsWrite() && read->IsRead() && "Write and read events must be of correct type");
+    // TODO: in all such assertions do I need to check for correct RMW type?
+    assert(write->IsWriteOrRMW() && read->IsReadOrRMW() && "Write and read events must be of correct type");
     assert(write->location == read->location && "Write and read events must be of the same location");
     assert(read->GetReadFromEvent() == write && "Read event must read-from the write event");
 
@@ -635,7 +784,7 @@ private:
 
     // create mo-edge between last sc-write and `write` that `read` event reads-from
     auto lastSeqCstWrite = events[lastSeqCstWriteEvent];    
-    assert(lastSeqCstWrite->IsWrite() && "Last sc-write event must be a write");
+    assert((lastSeqCstWrite->IsWrite() || lastSeqCstWrite->IsModifyRMW()) && "Last sc-write event must be a write or modifying rmw");
     assert(lastSeqCstWrite->location == read->location && "Last sc-write event must have the same location as read event");
     
     if (lastSeqCstWrite->id == write->id) return; // no need to create edge to itself
@@ -653,7 +802,7 @@ private:
   //               |          \         |
   //              W_x          --mo--> W_x
   void CreateWriteReadCoherenceEdges(Event* write, Event* read) {
-    assert(write->IsWrite() && read->IsRead() && "Write and read events must be of correct type");
+    assert(write->IsWriteOrRMW() && read->IsReadOrRMW() && "Write and read events must be of correct type");
     assert(write->location == read->location && "Write and read events must be of the same location");
     assert(read->GetReadFromEvent() == write && "Read event must read-from the write event");
 
@@ -661,7 +810,7 @@ private:
       [write, read](Event* otherEvent) -> bool {
         return (
           read->id != otherEvent->id && write->id != otherEvent->id && // not the same events
-          otherEvent->IsWrite() &&
+          (otherEvent->IsWrite() || otherEvent->IsModifyRMW()) &&
           otherEvent->location == read->location &&
           otherEvent->HappensBefore(read)
         );
@@ -683,7 +832,7 @@ private:
   //               v         v           v
   // W_x  --rf--> R_x      W_x  --rf--> R_x
   void CreateReadReadCoherenceEdges(Event* write, Event* read) {
-    assert(write->IsWrite() && read->IsRead() && "Write and read events must be of correct type");
+    assert(write->IsWriteOrRMW() && read->IsReadOrRMW() && "Write and read events must be of correct type");
     assert(write->location == read->location && "Write and read events must be of the same location");
     assert(read->GetReadFromEvent() == write && "Read event must read-from the write event");
 
@@ -691,7 +840,7 @@ private:
       [write, read](Event* otherEvent) -> bool {
         return (
           read->id != otherEvent->id && write->id != otherEvent->id && // not the same events
-          otherEvent->IsRead() &&
+          otherEvent->IsReadOrRMW() &&
           otherEvent->location == read->location &&
           otherEvent->HappensBefore(read) &&
           otherEvent->GetReadFromEvent() != nullptr && otherEvent->GetReadFromEvent() != write // R'_x does not read-from `write`
@@ -710,12 +859,12 @@ private:
   // last sc-write and current sc-write-event if their locations match
   // W'_x --sc--> W_x  =>  W'_x --mo--> W_x
   void CreateSeqCstConsistencyEdges(Event* event) {
-    assert(event->IsWrite() && event->IsSeqCst() && "Event must be a write with seq-cst order");
+    assert(event->IsWriteOrRMW() && event->IsSeqCst() && "Event must be a write/rmw with seq-cst order");
 
     EventId lastSeqCstWriteEvent = GetLastSeqCstWriteEventId(event->location);
     if (lastSeqCstWriteEvent == -1) return;
     auto lastSeqCstWrite = events[lastSeqCstWriteEvent];
-    assert(lastSeqCstWrite->IsWrite() && "Last sc-write event must be a write");
+    assert((lastSeqCstWrite->IsWrite() || lastSeqCstWrite->IsModifyRMW()) && "Last sc-write event must be a write or modifying rmw");
     assert(lastSeqCstWrite->location == event->location && "Last sc-write event must have the same location as event");
     // TODO: check that sc-edge between lastSeqCstWrite and read exists
     AddEdge(EdgeType::MO, lastSeqCstWrite->id, event->id);
@@ -725,13 +874,13 @@ private:
   // other writes that happened before `event` only for the same location
   // W'_x --hb--> W_x  =>  W'_x --mo--> W_x
   void CreateWriteWriteCoherenceEdges(Event* event) {
-    assert(event->IsWrite());
+    assert(event->IsWriteOrRMW());
 
     IterateThroughMostRecentEventsByPredicate(
       [event](Event* otherEvent) -> bool {
         return (
           event->id != otherEvent->id && // not the same event
-          otherEvent->IsWrite() &&
+          (otherEvent->IsWrite() || otherEvent->IsModifyRMW()) &&
           otherEvent->location == event->location && // same location
           otherEvent->HappensBefore(event)
         );
@@ -752,13 +901,13 @@ private:
   //               v            \         v
   //              W_x            --mo--> W_x
   void CreateReadWriteCoherenceEdges(Event* event) {
-    assert(event->IsWrite());
+    assert(event->IsWriteOrRMW());
 
     IterateThroughMostRecentEventsByPredicate(
       [event](Event* otherEvent) -> bool {
         return (
           event->id != otherEvent->id && // not the same event
-          otherEvent->IsRead() &&
+          otherEvent->IsReadOrRMW() &&
           otherEvent->location == event->location && // same location
           otherEvent->HappensBefore(event)
         );
@@ -770,6 +919,41 @@ private:
         AddEdge(EdgeType::MO, writeEvent->id, event->id);
       }
     );
+  }
+
+  // Applies RMW Consitency rules: establishes mo-edge between
+  // store that is read-from by the current RMW event and the RMW event itself.
+  // W_x --rf--> RMW_x  =>   W_x --mo--> RMW_x
+  void CreateRmwConsistencyEdges(Event* write, Event* rmw) {
+    assert(write->IsWriteOrRMW() && rmw->IsModifyRMW() && "Write and RMW events must be of correct type");
+    assert(write->location == rmw->location && "Write and RMW events must be of the same location");
+    assert(rmw->GetReadFromEvent() == write && "RMW event must read-from the Write event");
+    
+    // establish mo-edge
+    AddEdge(EdgeType::MO, write->id, rmw->id);
+  }
+
+  // Applies RMW Atomicity rules: establishes mo-edges between
+  // RMW event and all writes that are mo-after `write` event
+  // (from which RMW reads-from)
+  // RMW_x <--rf-- W_x     RMW_x <--rf-- W_x
+  //                |        \            |
+  //                mo   =>   \           mo
+  //                |          \          |
+  //                v           \         v
+  //              W'_x           --mo--> W'_x
+  void CreateRmwAtomicityEdges(Event* write, Event* rmw) {
+    assert(write->IsWriteOrRMW() && rmw->IsModifyRMW() && "Write and RMW events must be of correct type");
+    assert(write->location == rmw->location && "Write and RMW events must be of the same location");
+    assert(rmw->GetReadFromEvent() == write && "RMW event must read-from the Write event");
+
+    for (EdgeId edgeId : write->edges) {
+      Edge& edge = edges[edgeId];
+      if (edge.type == EdgeType::MO && edge.to != rmw->id) {
+        // establish mo-edge
+        AddEdge(EdgeType::MO, rmw->id, edge.to);
+      }
+    }
   }
 
 
