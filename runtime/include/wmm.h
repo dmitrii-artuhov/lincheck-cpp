@@ -304,7 +304,7 @@ struct ReadEvent : Event {
     Event(id, EventType::READ, nThreads, location, threadId, order), readFrom(nullptr) {}
   
   virtual void SetReadFromEvent(Event* event) override {
-    assert((readFrom == nullptr || readFrom->IsWriteOrRMW()) && "Read event must read from write/rmw event");
+    assert((event == nullptr || event->IsWriteOrRMW()) && "Read event must read from write/rmw event");
     readFrom = event;
   }
 
@@ -332,13 +332,15 @@ struct RMWEvent : Event {
   RMWEvent(EventId id, int nThreads, int location, int threadId, T* expected, T desired,
            MemoryOrder successOrder, MemoryOrder failureOrder):
     Event(id, EventType::RMW, nThreads, location, threadId, successOrder), 
-    initialExpectedValue(*expected), expected(expected), desired(desired), failureOrder(failureOrder), readFrom(nullptr) {}
+    // TODO: expcted might be uninitialized, so we should not dereference it blindly, fix it
+    initialExpectedValue(*expected), cachedExpectedValue(*expected),
+    expected(expected), desired(desired), failureOrder(failureOrder), readFrom(nullptr) {}
 
   virtual std::string AsString() const override {
     std::stringstream ss;
 
     ss << id << ":" << WmmUtils::EventTypeToString(type)
-       << "(" << *expected << " -> " << desired << ", " << StateAsString(state) << ")"
+       << "(written_expected=" << cachedExpectedValue << ", init_expected=" << initialExpectedValue << ", desired=" << desired << ", " << StateAsString(state) << ")"
        << ":T" << threadId << ":L" << location << ":"
        << "succ=" << WmmUtils::OrderToString(order) << ", fail=" << WmmUtils::OrderToString(failureOrder)
        << ":" << clock.AsString();
@@ -351,43 +353,43 @@ struct RMWEvent : Event {
     meaning that for 'state == READ' it will use 'failureOrder', and for 
     'state == MODIFY' it will use 'order' (successOrder). 
   */
-  virtual bool IsSeqCst() const {
+  virtual bool IsSeqCst() const override {
     assert(state != RMWState::UNSET && "RMW event's memory order is queried for its resolving");
     auto order = (state == RMWState::MODIFY) ? this->order : failureOrder;
-    order == MemoryOrder::SeqCst;
+    return order == MemoryOrder::SeqCst;
   }
 
-  virtual bool IsAcqRel() const {
+  virtual bool IsAcqRel() const override {
     assert(state != RMWState::UNSET && "RMW event's memory order is queried for its resolving");
     auto order = (state == RMWState::MODIFY) ? this->order : failureOrder;
     return order == MemoryOrder::AcqRel;
   }
 
-  virtual bool IsAcquire() const {
+  virtual bool IsAcquire() const override {
     assert(state != RMWState::UNSET && "RMW event's memory order is queried for its resolving");
     auto order = (state == RMWState::MODIFY) ? this->order : failureOrder;
     return order == MemoryOrder::Acquire;
   }
 
-  virtual bool IsRelease() const {
+  virtual bool IsRelease() const override {
     assert(state != RMWState::UNSET && "RMW event's memory order is queried for its resolving");
     auto order = (state == RMWState::MODIFY) ? this->order : failureOrder;
     return order == MemoryOrder::Release;
   }
 
-  virtual bool IsRelaxed() const {
+  virtual bool IsRelaxed() const override {
     assert(state != RMWState::UNSET && "RMW event's memory order is queried for its resolving");
     auto order = (state == RMWState::MODIFY) ? this->order : failureOrder;
     return order == MemoryOrder::Relaxed;
   }
 
-  virtual bool IsAtLeastAcquire() const {
+  virtual bool IsAtLeastAcquire() const override {
     assert(state != RMWState::UNSET && "RMW event's memory order is queried for its resolving");
     auto order = (state == RMWState::MODIFY) ? this->order : failureOrder;
     return order >= MemoryOrder::Acquire && order != MemoryOrder::Release;
   }
 
-  virtual bool IsAtLeastRelease() const {
+  virtual bool IsAtLeastRelease() const override {
     assert(state != RMWState::UNSET && "RMW event's memory order is queried for its resolving");
     auto order = (state == RMWState::MODIFY) ? this->order : failureOrder;
     return order >= MemoryOrder::Release;
@@ -402,16 +404,18 @@ struct RMWEvent : Event {
   }
 
   virtual void SetReadFromEvent(Event* event) override {
-    assert((readFrom == nullptr || readFrom->IsWriteOrRMW()) && "Read event must read from write/rmw event");
+    assert((event == nullptr || event->IsWriteOrRMW()) && "Read event must read from write/rmw event");
     readFrom = event;
 
     if (readFrom == nullptr) {
       state = RMWState::UNSET;
       *expected = initialExpectedValue; // reset expected value
+      cachedExpectedValue = initialExpectedValue;
     }
     else {
       T readValue = Event::GetWrittenValue<T>(readFrom);
-      if (readValue == *expected) {
+      assert(*expected == initialExpectedValue && "Expected value must be equal to initial expected value on RMW resolving");
+      if (readValue == initialExpectedValue) {
         // in case of MODIFY we do not change expected value
         state = RMWState::MODIFY;
       }
@@ -419,6 +423,7 @@ struct RMWEvent : Event {
         // in case of READ we set expected to the actually read value
         state = RMWState::READ;
         *expected = readValue;
+        cachedExpectedValue = readValue;
       }
     }
   }
@@ -447,6 +452,9 @@ struct RMWEvent : Event {
 
   RMWState state = UNSET; // current state of the RMW operation
   T initialExpectedValue;
+  // TODO: I assume, that boost stack manipulation causes a failure when dereferencing of '*expected'
+  // from different thread, and it causes sanitizer to fails. Requires inverstigation to debug it.
+  T cachedExpectedValue;
   T* expected;
   T desired;
   MemoryOrder failureOrder;
@@ -523,9 +531,8 @@ public:
     }
 
     assert(event->readFrom != nullptr && "Read event must have appropriate write event to read from");
-    assert(event->readFrom->IsWrite() && "Read event must read from write event");
-    auto writeEvent = static_cast<WriteEvent<T>*>(event->readFrom);
-    return writeEvent->value;
+    assert((event->readFrom->IsWrite() || event->readFrom->IsModifyRMW()) && "Read event must read from write or modifying rmw event");
+    return Event::GetReadValue<T>(event);
   }
 
   template<class T>
@@ -555,7 +562,7 @@ public:
   }
 
   template<class T>
-  void AddRMWEvent(int location, int threadId, T* expected, T desired,
+  std::pair<bool, T> AddRMWEvent(int location, int threadId, T* expected, T desired,
                 MemoryOrder successOrder, MemoryOrder failureOrder) {
     EventId eventId = events.size();
     auto event = new RMWEvent<T>(
@@ -573,6 +580,13 @@ public:
         break;
       }
     }
+
+    assert(event->readFrom != nullptr && "RMW event must have appropriate write event to read from");
+    assert((event->readFrom->IsWrite() || event->readFrom->IsModifyRMW()) && "RMW event must read from write or modifying rmw event");
+    return {
+      event->IsModifyRMW(), // true if RMW is resolved to MODIFY state, false if rmw failed and resolve to READ state 
+      Event::GetReadValue<T>(event)
+    };
   }
 
   void Print(std::ostream& os) const {
@@ -1176,12 +1190,25 @@ ExecutionGraph(const ExecutionGraph&) = delete;
     return readValue;
   }
 
-  template <class T>
+  template<class T>
   void Store(int location, int threadId, MemoryOrder order, T value) {
     std::cout << "Store: loc-" << location << ", thread=" << threadId << ", order=" << WmmUtils::OrderToString(order) << ", value=" << value << std::endl;
     graph.AddWriteEvent(location, threadId, order, value);
     
     graph.Print(std::cout);
+  }
+
+  // TODO: generalize to any other type of the RMW operation
+  //       (which have different method signature from compare_and_set, e.g. fetch_add, etc.)
+  template<class T>
+  std::pair<bool, T> ReadModifyWrite(int location, int threadId, T* expected, T desired, MemoryOrder success, MemoryOrder failure) {
+    std::cout << "RMW: loc-" << location << ", thread=" << threadId
+              << ", expected=" << *expected << ", desired=" << desired
+              << ", success=" << WmmUtils::OrderToString(success)
+              << ", failure=" << WmmUtils::OrderToString(failure) << std::endl;
+    auto rmwResult = graph.AddRMWEvent<T>(location, threadId, expected, desired, success, failure);
+    graph.Print(std::cout);
+    return rmwResult;
   }
 
 private:

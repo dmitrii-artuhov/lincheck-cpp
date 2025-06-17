@@ -37,12 +37,13 @@ struct WmmTest {
 
   // Example 2
   non_atomic void Exp2_A() {
-    r1 = 1;
+    y.store(1, std::memory_order_relaxed);
     x.store(2, std::memory_order_seq_cst);
   }
 
   non_atomic void Exp2_B() {
     if (x.load(std::memory_order_seq_cst) == 2) {
+      r1 = y.load(std::memory_order_relaxed);
       assert(r1 == 1);
     }
     std::string out = "r1 = " + std::to_string(r1) + "\n";
@@ -105,6 +106,62 @@ struct WmmTest {
       assert(x.load(std::memory_order_acquire) == 10);
     }
   }
+
+  // Example 6 (TODO: fix mixed memory order accesses, see https://gcc.gnu.org/wiki/Atomic/GCCMM/AtomicSync)
+  // Note: might be that release sequences are not supported, thus,
+  //       missing some synchronization and the test below fails (but it should not)
+  //       requires investigation
+  non_atomic void Exp6_A() {
+    y.store(20, std::memory_order_relaxed);
+    x.store(10, std::memory_order_seq_cst);
+  }
+
+  non_atomic void Exp6_B() {
+    if (x.load(std::memory_order_relaxed) == 10) {
+      assert(y.load(std::memory_order_seq_cst) == 20);
+      y.store(10, std::memory_order_relaxed);
+    }
+  }
+
+  non_atomic void Exp6_C() {
+    if (y.load(std::memory_order_acquire) == 10) {
+      assert(x.load(std::memory_order_acquire) == 10);
+    }
+  }
+
+  // Example 7
+  non_atomic void Exp7_A() {
+    int expected = 0;
+    do {
+      expected = x.load(std::memory_order_seq_cst);
+    } while (!x.compare_exchange_weak(expected, expected + 1, std::memory_order_seq_cst));
+    assert(expected == 0);
+    assert(x.load() == 1);
+  }
+
+  non_atomic void Exp7_B() {
+    int r = x.load(std::memory_order_seq_cst);
+    std::cout << "r = " << r << "\n";
+    assert(r >= 0 && r <= 1);
+  }
+
+  // Example 8
+  non_atomic void Exp8_A() {
+    int expected;
+    do {
+      expected = x.load(std::memory_order_seq_cst);
+    } while (!x.compare_exchange_weak(expected, expected + 1, std::memory_order_seq_cst));
+    int r = x.load();
+    assert(expected == 0 || expected == 1);
+    assert(x >= 1 && x <= 2);
+  }
+
+  non_atomic void Exp8_B() {
+    x.store(1, std::memory_order_seq_cst);
+    int r = x.load(std::memory_order_seq_cst);
+    std::cout << "r = " << r << "\n";
+    assert(r >= 1 && r <= 2);
+  }
 };
 
 struct LinearWmmSpec {
@@ -131,6 +188,16 @@ struct LinearWmmSpec {
       {"Exp5_A", func},
       {"Exp5_B", func},
       {"Exp5_C", func},
+      
+      {"Exp6_A", func},
+      {"Exp6_B", func},
+      {"Exp6_C", func},
+
+      {"Exp7_A", func},
+      {"Exp7_B", func},
+      
+      {"Exp8_A", func},
+      {"Exp8_B", func},
     };
   }
 };
@@ -196,6 +263,33 @@ LTEST_ENTRYPOINT(spec_t,
     },
     {
       method_invocation(std::tuple(), void, WmmTest, Exp5_C)
+    }
+  },
+  { // TODO: fails but should not, probably due to missing support for release sequences
+    {
+      method_invocation(std::tuple(), void, WmmTest, Exp6_A)
+    },
+    {
+      method_invocation(std::tuple(), void, WmmTest, Exp6_B)
+    },
+    {
+      method_invocation(std::tuple(), void, WmmTest, Exp6_C)
+    }
+  },
+  {
+    {
+      method_invocation(std::tuple(), void, WmmTest, Exp7_A)
+    },
+    {
+      method_invocation(std::tuple(), void, WmmTest, Exp7_B)
+    }
+  },
+  {
+    {
+      method_invocation(std::tuple(), void, WmmTest, Exp8_A)
+    },
+    {
+      method_invocation(std::tuple(), void, WmmTest, Exp8_B)
     }
   },
 );
