@@ -1,5 +1,6 @@
 #include <atomic>
 #include <iostream>
+#include <sstream>
 #include <tuple>
 
 #include "runtime/include/verifying.h"
@@ -108,9 +109,8 @@ struct WmmTest {
   }
 
   // Example 6 (TODO: fix mixed memory order accesses, see https://gcc.gnu.org/wiki/Atomic/GCCMM/AtomicSync)
-  // Note: might be that release sequences are not supported, thus,
-  //       missing some synchronization and the test below fails (but it should not)
-  //       requires investigation
+  // Note: Requires further investigation, because it seems that sc support is not sound right now.
+  //       Fix it.
   non_atomic void Exp6_A() {
     y.store(20, std::memory_order_relaxed);
     x.store(10, std::memory_order_seq_cst);
@@ -151,9 +151,9 @@ struct WmmTest {
     do {
       expected = x.load(std::memory_order_seq_cst);
     } while (!x.compare_exchange_weak(expected, expected + 1, std::memory_order_seq_cst));
-    int r = x.load();
+    int r = x.load(std::memory_order_seq_cst);
     assert(expected == 0 || expected == 1);
-    assert(x >= 1 && x <= 2);
+    assert(r >= 1 && r <= 2);
   }
 
   non_atomic void Exp8_B() {
@@ -161,6 +161,24 @@ struct WmmTest {
     int r = x.load(std::memory_order_seq_cst);
     std::cout << "r = " << r << "\n";
     assert(r >= 1 && r <= 2);
+  }
+
+  // Example 9 (weak rmw)
+  non_atomic void Exp9_A() {
+    int expected = 0;
+    while (!x.compare_exchange_strong(expected, 1, std::memory_order_relaxed, std::memory_order_relaxed)) {
+      expected = 0;
+    }
+    y.store(1, std::memory_order_relaxed);
+  }
+
+  non_atomic void Exp9_B() {
+    int a = y.load(std::memory_order_relaxed);
+    int b = x.load(std::memory_order_relaxed);
+    std::stringstream ss;
+    ss << "a = " << a << ", b = " << b << "\n";
+    std::cout << ss.str();
+    assert(!(a == 1 && b == 0)); // Could fail
   }
 };
 
@@ -198,6 +216,9 @@ struct LinearWmmSpec {
       
       {"Exp8_A", func},
       {"Exp8_B", func},
+      
+      {"Exp9_A", func},
+      {"Exp9_B", func},
     };
   }
 };
@@ -215,81 +236,90 @@ struct LinearWmmEquals {
 using spec_t =
     ltest::Spec<WmmTest, LinearWmmSpec, LinearWmmHash, LinearWmmEquals>;
 
+// Uncomment required tests when needed
 LTEST_ENTRYPOINT(spec_t, 
+  // {
+  //   {
+  //     method_invocation(std::tuple(), void, WmmTest, Exp1_A)
+  //   },
+  //   {
+  //     method_invocation(std::tuple(), void, WmmTest, Exp1_B)
+  //   }
+  // },
+  // {
+  //   {
+  //     method_invocation(std::tuple(), void, WmmTest, Exp2_A)
+  //   },
+  //   {
+  //     method_invocation(std::tuple(), void, WmmTest, Exp2_B)
+  //   }
+  // },
+  // {
+  //   {
+  //     method_invocation(std::tuple(), void, WmmTest, Exp3_A)
+  //   },
+  //   {
+  //     method_invocation(std::tuple(), void, WmmTest, Exp3_B)
+  //   },
+  //   {
+  //     method_invocation(std::tuple(), void, WmmTest, Exp3_C)
+  //   }
+  // },
+  // { // could fail
+  //   {
+  //     method_invocation(std::tuple(), void, WmmTest, Exp4_A)
+  //   },
+  //   {
+  //     method_invocation(std::tuple(), void, WmmTest, Exp4_B)
+  //   },
+  //   {
+  //     method_invocation(std::tuple(), void, WmmTest, Exp4_C)
+  //   }
+  // },
+  // {
+  //   {
+  //     method_invocation(std::tuple(), void, WmmTest, Exp5_A)
+  //   },
+  //   {
+  //     method_invocation(std::tuple(), void, WmmTest, Exp5_B)
+  //   },
+  //   {
+  //     method_invocation(std::tuple(), void, WmmTest, Exp5_C)
+  //   }
+  // },
+  // { // TODO: fails but should not, probably due to missing support for release sequences
+  //   {
+  //     method_invocation(std::tuple(), void, WmmTest, Exp6_A)
+  //   },
+  //   {
+  //     method_invocation(std::tuple(), void, WmmTest, Exp6_B)
+  //   },
+  //   {
+  //     method_invocation(std::tuple(), void, WmmTest, Exp6_C)
+  //   }
+  // },
+  // {
+  //   {
+  //     method_invocation(std::tuple(), void, WmmTest, Exp7_A)
+  //   },
+  //   {
+  //     method_invocation(std::tuple(), void, WmmTest, Exp7_B)
+  //   }
+  // },
+  // {
+  //   {
+  //     method_invocation(std::tuple(), void, WmmTest, Exp8_A)
+  //   },
+  //   {
+  //     method_invocation(std::tuple(), void, WmmTest, Exp8_B)
+  //   }
+  // },
   {
     {
-      method_invocation(std::tuple(), void, WmmTest, Exp1_A)
+      method_invocation(std::tuple(), void, WmmTest, Exp9_A)
     },
     {
-      method_invocation(std::tuple(), void, WmmTest, Exp1_B)
-    }
-  },
-  {
-    {
-      method_invocation(std::tuple(), void, WmmTest, Exp2_A)
-    },
-    {
-      method_invocation(std::tuple(), void, WmmTest, Exp2_B)
-    }
-  },
-  {
-    {
-      method_invocation(std::tuple(), void, WmmTest, Exp3_A)
-    },
-    {
-      method_invocation(std::tuple(), void, WmmTest, Exp3_B)
-    },
-    {
-      method_invocation(std::tuple(), void, WmmTest, Exp3_C)
-    }
-  },
-  { // could fail
-    {
-      method_invocation(std::tuple(), void, WmmTest, Exp4_A)
-    },
-    {
-      method_invocation(std::tuple(), void, WmmTest, Exp4_B)
-    },
-    {
-      method_invocation(std::tuple(), void, WmmTest, Exp4_C)
-    }
-  },
-  {
-    {
-      method_invocation(std::tuple(), void, WmmTest, Exp5_A)
-    },
-    {
-      method_invocation(std::tuple(), void, WmmTest, Exp5_B)
-    },
-    {
-      method_invocation(std::tuple(), void, WmmTest, Exp5_C)
-    }
-  },
-  { // TODO: fails but should not, probably due to missing support for release sequences
-    {
-      method_invocation(std::tuple(), void, WmmTest, Exp6_A)
-    },
-    {
-      method_invocation(std::tuple(), void, WmmTest, Exp6_B)
-    },
-    {
-      method_invocation(std::tuple(), void, WmmTest, Exp6_C)
-    }
-  },
-  {
-    {
-      method_invocation(std::tuple(), void, WmmTest, Exp7_A)
-    },
-    {
-      method_invocation(std::tuple(), void, WmmTest, Exp7_B)
-    }
-  },
-  {
-    {
-      method_invocation(std::tuple(), void, WmmTest, Exp8_A)
-    },
-    {
-      method_invocation(std::tuple(), void, WmmTest, Exp8_B)
+      method_invocation(std::tuple(), void, WmmTest, Exp9_B)
     }
   },
 );

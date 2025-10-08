@@ -96,6 +96,7 @@ class LTestAtomic {
     return atomicValue.exchange(desired, order);
   }
 
+  // TODO: for CASes there more complex rule how to get 'failure' order from 'success', implement them instead of blind defaults
   // compare_exchange_weak
   bool compare_exchange_weak(
     T& expected,
@@ -171,7 +172,7 @@ class LTestAtomic {
     else {
       expected = myExpected; // update expected only if we are not in a coroutine
     }
-    
+
     return value;
   }
 

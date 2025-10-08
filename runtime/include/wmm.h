@@ -1208,6 +1208,7 @@ ExecutionGraph(const ExecutionGraph&) = delete;
               << ", failure=" << WmmUtils::OrderToString(failure) << std::endl;
     auto rmwResult = graph.AddRMWEvent<T>(location, threadId, expected, desired, success, failure);
     graph.Print(std::cout);
+    std::cout << "RMW result: " << (rmwResult.first ? "MODIFY" : "READ") << ", value=" << rmwResult.second << std::endl;
     return rmwResult;
   }
 
