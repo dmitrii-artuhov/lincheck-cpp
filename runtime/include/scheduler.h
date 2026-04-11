@@ -1494,12 +1494,15 @@ struct StrategyScheduler : public SchedulerWithReplay {
     return strategy.GetThreadsCount();
   }
 
- protected:
-  Result RunRound() override {
+ private:
+  // Runs a round with some interleaving while generating it
+  Result RunRoundImpl() {
+    // History of invoke and response events which is required for the checker
     SeqHistory sequential_history;
     FullHistory full_history;
 
     bool deadlock_detected{false};
+    SetExecutionInfeasible(false);
     size_t started_tasks = 0;
     size_t finished_tasks = 0;
 
@@ -1545,6 +1548,13 @@ struct StrategyScheduler : public SchedulerWithReplay {
         auto result = next_task->GetRetVal();
         sequential_history.emplace_back(Response(next_task, result, thread_id));
       }
+
+      if (IsExecutionInfeasible()) {
+        log() << "Infeasible execution detected, aborting current round\n";
+        pretty_printer.PrettyPrint(sequential_history,
+                                   GetStartegyThreadsCount(), log());
+        return std::nullopt;
+      }
     }
 
     pretty_printer.PrettyPrint(sequential_history, GetStartegyThreadsCount(),
@@ -1588,11 +1598,31 @@ struct StrategyScheduler : public SchedulerWithReplay {
     return std::nullopt;
   }
 
+ protected:
+  Result RunRound() override {
+    // We spin until we generate some round which is feasible.
+    while (true) {
+      SetExecutionInfeasible(false);
+      auto histories = RunRoundImpl();
+      if (IsExecutionInfeasible()) {
+        // regenerate the round from scratch
+        strategy.StartNextRound();
+        continue;
+      }
+      return histories;
+    }
+  }
+
+  // Runs different interleavings of the current round
   Result ExploreRound(int runs, bool log_each_interleaving) override {
-    for (int i = 0; i < runs; ++i) {
+    for (int i = 0; i < runs;) {
+      // log() << "Run " << i + 1 << "/" << runs << "\n";
       strategy.ResetCurrentRound();
       SeqHistory sequential_history;
       FullHistory full_history;
+
+      SetExecutionInfeasible(false);
+      size_t allowed_infeasible_runs = max_infeasible_runs;
 
       bool deadlock_detected{false};
 
@@ -1600,7 +1630,7 @@ struct StrategyScheduler : public SchedulerWithReplay {
       started_ids.reserve(strategy.GetTotalTasksCount());
 
       for (int tasks_to_run = strategy.GetValidTasksCount();
-           tasks_to_run > 0;) {
+           tasks_to_run > 0 && !IsExecutionInfeasible();) {
         auto t = strategy.NextSchedule();
         if (!t.has_value()) {
           deadlock_detected = true;
@@ -1650,6 +1680,24 @@ struct StrategyScheduler : public SchedulerWithReplay {
         log() << "\n";
       }
 
+      if (IsExecutionInfeasible()) {
+        // We reached an infeasible execution, so we need to abort the current
+        // interleaving and start a new one without decrementing the `run`.
+        log()
+            << "Infeasible execution detected, aborting current interleaving: "
+            << i + 1 << "/" << runs << "\n";
+
+        if (allowed_infeasible_runs == 0) {
+          i++;
+        } else {
+          // Note: we do not increment `i` here when we could detect some
+          // infeasible executions without using the `runs` quota
+          allowed_infeasible_runs--;
+        }
+
+        continue;
+      }
+
       if (deadlock_detected) {
         if (deadlock_policy != DeadlockPolicy::Fail) {
           if (checker.Check(sequential_history)) {
@@ -1673,6 +1721,8 @@ struct StrategyScheduler : public SchedulerWithReplay {
             full_history, sequential_history,
             NonLinearizableHistory::Reason::NON_LINEARIZABLE_HISTORY);
       }
+
+      i++;
     }
 
     return std::nullopt;
@@ -1763,6 +1813,14 @@ struct StrategyScheduler : public SchedulerWithReplay {
         auto result = next_task->GetRetVal();
         sequential_history.emplace_back(Response(next_task, result, thread_id));
       }
+
+      if (IsExecutionInfeasible()) {
+        SetExecutionInfeasible(false);
+        std::cerr << "Infeasible execution detected while replaying a round, "
+                     "aborting current interleaving"
+                  << std::endl;
+        return std::nullopt;
+      }
     }
 
     // Deadlock-friendly replay: detect "stuck" after ordering without forcing
@@ -1816,6 +1874,10 @@ struct StrategyScheduler : public SchedulerWithReplay {
   size_t exploration_runs;
   size_t minimization_runs;
   DeadlockPolicy deadlock_policy;
+  size_t max_infeasible_runs = 25;  // max number of infeasible runs which would
+                                    // not increase the used exploration quota
+                                    // from `exploration_runs`. Set to some
+                                    // arbitrary value as a threshold.
 };
 
 // TLAScheduler generates all executions satisfying some conditions.
