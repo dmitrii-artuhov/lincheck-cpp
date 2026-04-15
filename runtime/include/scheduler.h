@@ -181,6 +181,14 @@ struct Strategy {
   virtual std::vector<std::string> GetDeadlockProgressMethods(
       std::string_view wait_method) const = 0;
 
+  // Called by scheduler when the execution of a single round is complete
+  // (e.g. when all tasks have finished)
+  void OnExecutionComplete() {
+    if (ltest::wmm::wmm_enabled) {
+      wmm_graph.OnExecutionComplete();
+    }
+  }
+
  protected:
   // For current round returns first task index in thread which is greater
   // than `round_schedule[thread]` or the same index if the task is not finished
@@ -1548,17 +1556,17 @@ struct StrategyScheduler : public SchedulerWithReplay {
         auto result = next_task->GetRetVal();
         sequential_history.emplace_back(Response(next_task, result, thread_id));
       }
-
-      if (IsExecutionInfeasible()) {
-        log() << "Infeasible execution detected, aborting current round\n";
-        pretty_printer.PrettyPrint(sequential_history,
-                                   GetStartegyThreadsCount(), log());
-        return std::nullopt;
-      }
     }
 
+    strategy.OnExecutionComplete();
     pretty_printer.PrettyPrint(sequential_history, GetStartegyThreadsCount(),
                                log());
+
+    // check if infeasible
+    if (IsExecutionInfeasible()) {
+      log() << "Infeasible execution detected, aborting current round\n";
+      return std::nullopt;
+    }
 
     if (deadlock_detected) {
       if (deadlock_policy != DeadlockPolicy::Fail) {
@@ -1680,6 +1688,8 @@ struct StrategyScheduler : public SchedulerWithReplay {
         log() << "\n";
       }
 
+      strategy.OnExecutionComplete();
+
       if (IsExecutionInfeasible()) {
         // We reached an infeasible execution, so we need to abort the current
         // interleaving and start a new one without decrementing the `run`.
@@ -1751,6 +1761,7 @@ struct StrategyScheduler : public SchedulerWithReplay {
     std::vector<bool> thread_cutoff(strategy.GetThreadsCount(), false);
 
     for (size_t step = 0; step < tasks_ordering.size(); ++step) {
+      if (IsExecutionInfeasible()) break;
       int next_task_id = tasks_ordering[step];
 
       auto task_info = strategy.GetTask(next_task_id);
@@ -1813,14 +1824,16 @@ struct StrategyScheduler : public SchedulerWithReplay {
         auto result = next_task->GetRetVal();
         sequential_history.emplace_back(Response(next_task, result, thread_id));
       }
+    }
 
-      if (IsExecutionInfeasible()) {
-        SetExecutionInfeasible(false);
-        std::cerr << "Infeasible execution detected while replaying a round, "
-                     "aborting current interleaving"
-                  << std::endl;
-        return std::nullopt;
-      }
+    strategy.OnExecutionComplete();
+
+    if (IsExecutionInfeasible()) {
+      SetExecutionInfeasible(false);
+      std::cerr << "Infeasible execution detected while replaying a round, "
+                   "aborting current interleaving"
+                << std::endl;
+      return std::nullopt;
     }
 
     // Deadlock-friendly replay: detect "stuck" after ordering without forcing
