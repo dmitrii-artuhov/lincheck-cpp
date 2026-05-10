@@ -72,7 +72,8 @@ class Graph {
   template <class T>
   std::optional<T> AddReadEvent(int location, int threadId, MemoryOrder order) {
     EventId eventId = events.size();
-    auto event = new ReadEvent<T>(eventId, nThreads, location, threadId, order);
+    auto event = new ReadEvent<T>(eventId, nThreads, location, threadId, order,
+                                  executionState);
 
     // establish po-edge
     CreatePoEdgeToEvent(event);  // prevInThread --po--> event
@@ -110,8 +111,8 @@ class Graph {
   template <class T>
   void AddWriteEvent(int location, int threadId, MemoryOrder order, T value) {
     EventId eventId = events.size();
-    auto event =
-        new WriteEvent<T>(eventId, nThreads, location, threadId, order, value);
+    auto event = new WriteEvent<T>(eventId, nThreads, location, threadId, order,
+                                   value, executionState);
 
     // establish po-edge
     CreatePoEdgeToEvent(event);  // prevInThread --po--> event
@@ -149,7 +150,7 @@ class Graph {
     EventId eventId = events.size();
     auto event =
         new CASRMWEvent<T>(eventId, nThreads, location, threadId, expected,
-                           desired, successOrder, failureOrder);
+                           desired, successOrder, failureOrder, executionState);
 
     // establish po-edge
     CreatePoEdgeToEvent(event);  // prevInThread --po--> event
@@ -192,8 +193,9 @@ class Graph {
                                             AtomicRmwOp op, T operand,
                                             MemoryOrder order) {
     EventId eventId = events.size();
-    auto event = new UnconditionalRMWEvent<T>(eventId, nThreads, location,
-                                              threadId, op, operand, order);
+    auto event =
+        new UnconditionalRMWEvent<T>(eventId, nThreads, location, threadId, op,
+                                     operand, order, executionState);
 
     CreatePoEdgeToEvent(event);
 
@@ -226,6 +228,12 @@ class Graph {
     return Event::GetReadValue<T>(event);
   }
 
+  // // Having a write/rmw event appends its value to the future-reads set of
+  // corresponding read events. template<class T> void
+  // PopulateFutureReadValues(Event* event) {
+  //   assert(event->IsWriteOrRMW() && "Event must be a read/rmw");
+  // }
+
   template <typename Out>
   void Print(Out& os) const {
     os << "Graph edges:" << "\n";
@@ -233,9 +241,9 @@ class Graph {
       os << "<empty>\n";
     else {
       for (const auto& edge : edges) {
-        os << events[edge.from]->AsString() << " ->"
+        os << events[edge.from]->AsString(shouldPrintEventsState) << " ->"
            << WmmUtils::EdgeTypeToString(edge.type) << " "
-           << events[edge.to]->AsString() << "\n";
+           << events[edge.to]->AsString(shouldPrintEventsState) << "\n";
       }
     }
     os << "Release sequences:\n";
@@ -1047,6 +1055,15 @@ class Graph {
   // atomic-running thread changes — unlike the scheduler, which switches
   // threads on every scheduled step regardless of atomics.
   int lastThreadId = -1;
+
+  // For each read event with some fixed execution state prefix we collect the
+  // possible future read values for it. Each set contains uint64_t type because
+  // we assume that all T types which could be passed to atomic fit in uint64_t.
+  std::map<std::string /* execution state */, std::unordered_set<uint64_t>>
+      futureReadValues;
+
+  bool enableFutureReads = true;
+  bool shouldPrintEventsState = true;
 };
 
 }  // namespace ltest::wmm
