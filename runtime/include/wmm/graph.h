@@ -12,6 +12,7 @@
 #include "common.h"
 #include "edge.h"
 #include "event.h"
+#include "future_value.h"
 #include "relseq.h"
 #include "utils.h"
 
@@ -81,8 +82,7 @@ class Graph {
           << event->AsString(shouldPrintEventsState) << ": [";
     auto& futureValues = futureReadValues[executionState];
     for (auto it = futureValues.begin(); it != futureValues.end(); ++it) {
-      uint64_t value = *it;
-      log() << decode_from_u64<T>(value)
+      log() << it->AsString<T>()
             << (std::next(it) == futureValues.end() ? "" : ", ");
     }
     log() << "]\n";
@@ -622,7 +622,6 @@ class Graph {
     assert(event->IsWriteOrRMW() && "Event must be a read/rmw");
     // TODO: make a global flag here
     if (!enableFutureReads) return;
-    uint64_t value = encode_to_u64(Event::GetWrittenValue<T>(event));
 
     for (int t = 0; t < nThreads; ++t) {
       // we cannot send future value to the reads in our thread
@@ -641,9 +640,13 @@ class Graph {
         if (FutureValueCouldBeReadFrom(read, event)) {
           log() << "Read event " << read->AsString(shouldPrintEventsState)
                 << " received future value from " << event->AsString() << "\n";
-          // TODO: add a proper future value object and replace some existing
-          //       one if we add a better one (see Demsky's impl)
-          futureReadValues[read->executionState].insert(value);
+          uint64_t encodedValue =
+              encode_to_u64(Event::GetWrittenValue<T>(event));
+          // TODO: for now we just use the same write event id without
+          // additional constant for the max sequence number
+          FutureValue fv{event->threadId, encodedValue, event->id};
+          futureReadValues[read->executionState].push_back(fv);
+          // TODO: do not append duplicates
         }
       }
     }
@@ -1223,7 +1226,7 @@ class Graph {
   // For each read event with some fixed execution state prefix we collect the
   // possible future read values for it. Each set contains uint64_t type because
   // we assume that all T types which could be passed to atomic fit in uint64_t.
-  std::map<std::string /* execution state */, std::unordered_set<uint64_t>>
+  std::map<std::string /* execution state */, std::vector<FutureValue>>
       futureReadValues;  // TODO: with the value also store additional info:
                          // thread which must resolve the promise and what it
                          // the maximum seq-number of the write event which
