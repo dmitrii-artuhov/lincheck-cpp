@@ -21,6 +21,34 @@ class Graph {
   Graph() {}
   ~Graph() { Clean(); }
 
+  // Records a WMM "thread switch" in executionState (a leading T<id> segment).
+  //
+  // This is not the same notion as the scheduler's thread switch: the strategy
+  // picks which task runs on every schedule step (every Resume), including
+  // plain memory accesses and control flow. The graph only cares about logical
+  // thread identity at weak-memory-visible atomic operations (latomic ->
+  // ExecutionGraph): we append T when the thread performing such an operation
+  // differs from the thread that performed the previous one; consecutive
+  // atomics on the same thread do not add another T.
+  void OnThreadSwitch(int threadId) {
+    if (threadId == lastThreadId) {
+      return;
+    }
+    executionState += "T" + std::to_string(threadId) + ";";
+    lastThreadId = threadId;
+  }
+
+  // Method which updates the current execution state when a read event occurs.
+  template <class T>
+  void OnReadEvent(Event* event) {
+    assert(event != nullptr && "Event must be non-null");
+    assert(event->IsReadOrRMW() && "Event must be a read/rmw");
+    assert(event->GetReadFromEvent() != nullptr &&
+           "Read event must have a read from some event");
+    executionState +=
+        "R:" + std::to_string(event->GetReadFromEvent()->id) + ";";
+  }
+
   void OnExecutionComplete() {
     if (IsExecutionInfeasible()) {
       // already infeasible, so we don't need to try to complete it
@@ -68,6 +96,9 @@ class Graph {
       Print(log());
       return std::nullopt;
     }
+
+    // update the execution state
+    OnReadEvent<T>(event);
 
     assert(event->readFrom != nullptr &&
            "Read event must have appropriate write event to read from");
@@ -143,6 +174,9 @@ class Graph {
       return std::nullopt;
     }
 
+    // update the execution state
+    OnReadEvent<T>(event);
+
     assert(event->readFrom != nullptr &&
            "RMW event must have appropriate write event to read from");
     assert((event->readFrom->IsWrite() || event->readFrom->IsModifyRMW()) &&
@@ -182,6 +216,9 @@ class Graph {
       return std::nullopt;
     }
 
+    // update the execution state
+    OnReadEvent<T>(event);
+
     assert(event->readFrom != nullptr &&
            "RMW event must have appropriate write event to read from");
     assert((event->readFrom->IsWrite() || event->readFrom->IsModifyRMW()) &&
@@ -205,6 +242,7 @@ class Graph {
     for (const auto& rs : establishedRelSeqs) {
       os << rs.AsString() << "\n";
     }
+    os << "Execution state: " << executionState << "\n";
     os << "\n";
   }
 
@@ -355,8 +393,8 @@ class Graph {
   }
 
   // We calculate a release sequence for a `read` event that reads-from a
-  // `write` event. When `wmm_relseq` is false, we treat direct acquire-read from
-  // a release-write/rmw as a release sequence only.
+  // `write` event. When `wmm_relseq` is false, we treat direct acquire-read
+  // from a release-write/rmw as a release sequence only.
   std::optional<RelSeq> GetReleaseSequence(Event* read, Event* write) const {
     assert(read->IsReadOrRMW() && "Read event must be of correct type");
     assert(write->IsWriteOrRMW() && "Write event must be of correct type");
@@ -950,6 +988,8 @@ class Graph {
   }
 
   void Clean() {
+    executionState.clear();
+    lastThreadId = -1;
     establishedRelSeqs.clear();
     edges.clear();
     for (auto event : events) {
@@ -989,6 +1029,24 @@ class Graph {
                                              // randomized rf-edge selection
   bool inSnapshotMode = false;
   int nThreads = 0;
+
+  // String which represents the current execution state of the graph.
+  // It contains of the two different elements separated by ';' which allow to
+  // differentiate between different executions:
+  // 1. Thread switches (between distinct threads at atomic operations), encoded
+  //    as "T<thread_id>"
+  // 2. For each read event we also encode the write event which the read reads
+  //    from: "R:<write_event_id>"
+  //
+  // This execution state is saved for event read event and mapped to the set of
+  // future-read values for corresponding read event. The future-read values
+  // sets could be used on the next visits of the same execution state.
+  std::string executionState;
+  // Last logical thread id that performed a graph-visible atomic (Load/Store/
+  // RMW via ExecutionGraph). Used so OnThreadSwitch only emits T when the
+  // atomic-running thread changes — unlike the scheduler, which switches
+  // threads on every scheduled step regardless of atomics.
+  int lastThreadId = -1;
 };
 
 }  // namespace ltest::wmm
