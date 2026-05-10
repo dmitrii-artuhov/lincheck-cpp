@@ -27,7 +27,7 @@ struct Event {
   int threadId;
   MemoryOrder order;
   HBClock clock;
-  std::vector<EdgeId> edges;  // outgoing edges (e.g. `edge.to == this`)
+  std::vector<EdgeId> edges;  // outgoing edges (e.g. `edge.from == this`)
   std::string executionState;
 
   virtual ~Event() = default;
@@ -71,6 +71,8 @@ struct Event {
   bool IsWriteOrRMW() const { return IsWrite() || IsRMW(); }
 
   bool IsReadOrRMW() const { return IsRead() || IsRMW(); }
+
+  virtual bool IsPromise() const { return false; }
 
   virtual bool IsSeqCst() const { return order == MemoryOrder::SeqCst; }
 
@@ -130,6 +132,29 @@ struct WriteEvent : Event {
   T GetWrittenValue() const { return value; }
 
   T value;
+};
+
+template <class T>
+struct PromiseEvent : WriteEvent<T> {
+  PromiseEvent(EventId id, int nThreads, int location, int threadId, T value)
+      : WriteEvent<T>(
+            id, nThreads, location, threadId,
+            MemoryOrder::Relaxed /* not to introduce additional sync */, value,
+            "" /* empty exec state for promises */) {}
+
+  virtual std::string AsString() const override {
+    std::stringstream ss;
+
+    ss << this->id << ":" << "P(" << this->value << ")"
+       << ":T" << this->threadId << ":L" << this->location << ":"
+       << WmmUtils::OrderToString(this->order) << ":" << this->clock.AsString();
+
+    return ss.str();
+  }
+
+  bool IsPromise() const override { return true; }
+
+  std::vector<Event*> reads;  // all read events which read from this promise
 };
 
 template <class T>

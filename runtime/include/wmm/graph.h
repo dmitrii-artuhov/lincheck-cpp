@@ -77,26 +77,55 @@ class Graph {
     auto event = new ReadEvent<T>(eventId, nThreads, location, threadId, order,
                                   executionState);
 
-    // Just print the future read values for the read event
-    log() << "Future read values for "
-          << event->AsString(shouldPrintEventsState) << ": [";
-    auto& futureValues = futureReadValues[executionState];
-    for (auto it = futureValues.begin(); it != futureValues.end(); ++it) {
-      log() << it->AsString<T>()
-            << (std::next(it) == futureValues.end() ? "" : ", ");
-    }
-    log() << "]\n";
-
     // establish po-edge
     CreatePoEdgeToEvent(event);  // prevInThread --po--> event
 
-    auto shuffledEvents = GetShuffledReadFromCandidates(event);
-    for (auto readFromEvent : shuffledEvents) {
-      // try reading from `readFromEvent`
-      if (TryCreateRfEdge(readFromEvent, event)) {
-        log() << "Read event " << event->AsString() << " now reads from "
-              << readFromEvent->AsString() << "\n";
-        break;
+    PrintFutureReadValues<T>(event);
+    // TODO: add some probablity with which we choose future value + extract to
+    // a method
+    const auto& futureValues = futureReadValues[executionState];
+    if (enableFutureReads && ShouldReadFromFutureValue() &&
+        !futureValues.empty()) {
+      // TODO: we pick randomly fv index right now
+      int idx = std::rand() % futureValues.size();
+      const FutureValue& fv = futureValues[idx];
+      assert(fv.location == location &&
+             "Future value must be from the same location");
+      assert(fv.threadId != event->threadId &&
+             "Future value must be from a different thread");
+
+      auto* promise =
+          new PromiseEvent<T>(events.size(), nThreads, location, fv.threadId,
+                              decode_from_u64<T>(fv.encodedValue));
+
+      // Save to the events list and promises list
+      events.push_back(promise);
+      promises.push_back(promise);
+      // Make the promise "last" event in its thread
+      promise->clock = events[eventsPerThread[promise->threadId].back()]->clock;
+      promise->clock.Increment(promise->threadId);
+      // Save this read event inside a promise
+      promise->reads.push_back(event);
+
+      // Try to read from it
+      if (!TryCreateRfEdge(promise, event)) {
+        log() << "Execution is infeasible on read event: " << event->AsString()
+              << " on attempt to read from promise: " << promise->AsString()
+              << "\n";
+        // just to make sure we invalidate the execution later
+        event->readFrom = nullptr;
+      }
+    }
+    // TODO: add a posibility to read from existing promise as well
+    else {
+      auto shuffledEvents = GetShuffledReadFromCandidates(event);
+      for (auto readFromEvent : shuffledEvents) {
+        // try reading from `readFromEvent`
+        if (TryCreateRfEdge(readFromEvent, event)) {
+          log() << "Read event " << event->AsString() << " now reads from "
+                << readFromEvent->AsString() << "\n";
+          break;
+        }
       }
     }
 
@@ -146,8 +175,32 @@ class Graph {
     // Write-Write Coherence
     CreateWriteWriteCoherenceEdges(event);
 
+    // TODO: check what we resolve a promise
     // Populate feature values for reads where it is possible
     PopulateFutureReadValues<T>(event);
+
+    // Try to resolve some promise
+    // TODO: can we resolve multiple promises?
+    for (auto promise : promises) {
+      assert(promise->IsPromise() && "Promise must be a promise");
+      if (promise->location != event->location ||
+          promise->threadId != event->threadId ||
+          Event::GetWrittenValue<T>(promise) != value) {
+        continue;
+      }
+      auto* promiseEvent = static_cast<PromiseEvent<T>*>(promise);
+      bool canResolve = true;
+      for (Event* read : promiseEvent->reads) {
+        if (read->HappensBefore(event) || CouldSynchronizeWith(read, event)) {
+          canResolve = false;
+          break;
+        }
+      }
+
+      if (canResolve && ShouldResolvePromise()) {
+        ResolvePromise<T>(promise, event);
+      }
+    }
 
     if (HasBrokenRelSeq()) {
       log() << "Execution is infeasible on write event: " << event->AsString()
@@ -267,6 +320,19 @@ class Graph {
     }
     os << "Execution state: " << executionState << "\n";
     os << "\n";
+  }
+
+  template <class T>
+  void PrintFutureReadValues(Event* event) {
+    // Just print the future read values for the read event
+    log() << "Future read values for "
+          << event->AsString(shouldPrintEventsState) << ": [";
+    const auto& futureValues = futureReadValues[executionState];
+    for (auto it = futureValues.begin(); it != futureValues.end(); ++it) {
+      log() << it->AsString<T>()
+            << (std::next(it) == futureValues.end() ? "" : ", ");
+    }
+    log() << "]\n";
   }
 
  private:
@@ -615,6 +681,55 @@ class Graph {
     return false;
   }
 
+  bool ShouldReadFromFutureValue() const {
+    // TODO: implement the probability logic here
+    return true;
+  }
+
+  // TODO: not used yet
+  bool ShouldReadFromPromise() const {
+    // TODO: implement the probability logic here
+    return true;
+  }
+
+  bool ShouldResolvePromise() const {
+    // TODO: implement the probability logic here
+    return true;
+  }
+
+  // TODO: I do not account for max seq num in future values
+  template <class T>
+  void ResolvePromise(Event* promise, Event* write) {
+    assert(promise->IsPromise() && "Promise must be a promise");
+    assert(write->IsWriteOrRMW() && "Write event must be of correct type");
+    assert(write->location == promise->location &&
+           "Write and promise events must be of the same location");
+    assert(write->threadId == promise->threadId &&
+           "Write and promise events must be of the same thread");
+    assert(Event::GetWrittenValue<T>(promise) ==
+               Event::GetWrittenValue<T>(write) &&
+           "Write and promise events must have the same value");
+    // TODO: move all in-edges from promise to write
+    auto* promiseEvent = static_cast<PromiseEvent<T>*>(promise);
+    // move all incoming-edges from promise to write
+    for (Edge& edge : edges) {
+      if (edge.to == promise->id) {
+        edge.to = write->id;
+      }
+      // change the read from edges
+      if (edge.from == promise->id && edge.type == EdgeType::RF) {
+        edge.from = write->id;
+        events[edge.to]->SetReadFromEvent(write);
+      }
+    }
+    // remove the promise event (we leave in the `events` list though, so that
+    // it can be deleted in graph destructor)
+    promises.erase(std::remove(promises.begin(), promises.end(), promise),
+                   promises.end());
+    log() << "Promise event " << promise->AsString()
+          << " resolved to write event " << write->AsString() << "\n";
+  }
+
   // Having a write/rmw event appends its value to the future-reads set of
   // corresponding read events
   template <class T>
@@ -622,6 +737,7 @@ class Graph {
     assert(event->IsWriteOrRMW() && "Event must be a read/rmw");
     // TODO: make a global flag here
     if (!enableFutureReads) return;
+    if (IsExecutionInfeasible()) return;
 
     for (int t = 0; t < nThreads; ++t) {
       // we cannot send future value to the reads in our thread
@@ -644,7 +760,8 @@ class Graph {
               encode_to_u64(Event::GetWrittenValue<T>(event));
           // TODO: for now we just use the same write event id without
           // additional constant for the max sequence number
-          FutureValue fv{event->threadId, encodedValue, event->id};
+          FutureValue fv{event->threadId, event->location, encodedValue,
+                         event->id};
           futureReadValues[read->executionState].push_back(fv);
           // TODO: do not append duplicates
         }
@@ -787,6 +904,9 @@ class Graph {
     // set correct hb-clocks for new event
     event->clock = lastEventInSameThread->clock;
     event->clock.Increment(threadId);
+
+    // TODO: Update promises hb clocks in the same thread to make sure that
+    // promises are "last" events in their threads
   }
 
   // Adds an sc-edge between prev sc-write (to the same location as `event`)
@@ -1232,6 +1352,7 @@ class Graph {
                          // the maximum seq-number of the write event which
                          // should resolve it (in my case it will be max id)
 
+  std::vector<Event*> promises;
   bool enableFutureReads = true;
   bool shouldPrintEventsState = true;
 };

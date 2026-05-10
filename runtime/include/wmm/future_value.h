@@ -9,6 +9,7 @@ namespace ltest::wmm {
 
 struct FutureValue {
   int threadId;
+  int location;
   // Note: we assume that all T types of the atomics fit
   // in uint64_t
   uint64_t encodedValue;
