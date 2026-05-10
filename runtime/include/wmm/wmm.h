@@ -50,6 +50,7 @@ class ExecutionGraph {
 
   template <class T>
   std::optional<T> Load(int location, int threadId, MemoryOrder order) {
+    graph.OnThreadSwitch(threadId);
     // TODO: if we now only do real atomics, then they should be stored in
     // graph, I guess?
     log() << "Load: loc-" << location << ", thread=" << threadId
@@ -64,6 +65,7 @@ class ExecutionGraph {
 
   template <class T>
   void Store(int location, int threadId, MemoryOrder order, T value) {
+    graph.OnThreadSwitch(threadId);
     log() << "Store: loc-" << location << ", thread=" << threadId
           << ", order=" << WmmUtils::OrderToString(order) << ", value=" << value
           << "\n";
@@ -80,6 +82,7 @@ class ExecutionGraph {
                                                     T* expected, T desired,
                                                     MemoryOrder success,
                                                     MemoryOrder failure) {
+    graph.OnThreadSwitch(threadId);
     log() << "RMW CAS: loc-" << location << ", thread=" << threadId
           << ", expected=" << *expected << ", desired=" << desired
           << ", success=" << WmmUtils::OrderToString(success)
@@ -99,6 +102,7 @@ class ExecutionGraph {
   std::optional<T> UnconditionalReadModifyWrite(int location, int threadId,
                                                 AtomicRmwOp op, T operand,
                                                 MemoryOrder order) {
+    graph.OnThreadSwitch(threadId);
     log() << "RMW " << WmmUtils::AtomicRmwOpToString(op) << ": loc-" << location
           << ", thread=" << threadId << ", operand=" << operand
           << ", order=" << WmmUtils::OrderToString(order) << "\n";

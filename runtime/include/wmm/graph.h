@@ -12,7 +12,9 @@
 #include "common.h"
 #include "edge.h"
 #include "event.h"
+#include "future_value.h"
 #include "relseq.h"
+#include "utils.h"
 
 namespace ltest::wmm {
 
@@ -20,6 +22,34 @@ class Graph {
  public:
   Graph() {}
   ~Graph() { Clean(); }
+
+  // Records a WMM "thread switch" in executionState (a leading T<id> segment).
+  //
+  // This is not the same notion as the scheduler's thread switch: the strategy
+  // picks which task runs on every schedule step (every Resume), including
+  // plain memory accesses and control flow. The graph only cares about logical
+  // thread identity at weak-memory-visible atomic operations (latomic ->
+  // ExecutionGraph): we append T when the thread performing such an operation
+  // differs from the thread that performed the previous one; consecutive
+  // atomics on the same thread do not add another T.
+  void OnThreadSwitch(int threadId) {
+    if (threadId == lastThreadId) {
+      return;
+    }
+    executionState += "T" + std::to_string(threadId) + ";";
+    lastThreadId = threadId;
+  }
+
+  // Method which updates the current execution state when a read event occurs.
+  template <class T>
+  void OnReadEvent(Event* event) {
+    assert(event != nullptr && "Event must be non-null");
+    assert(event->IsReadOrRMW() && "Event must be a read/rmw");
+    assert(event->GetReadFromEvent() != nullptr &&
+           "Read event must have a read from some event");
+    executionState +=
+        "R:" + std::to_string(event->GetReadFromEvent()->id) + ";";
+  }
 
   void OnExecutionComplete() {
     if (IsExecutionInfeasible()) {
@@ -44,18 +74,58 @@ class Graph {
   template <class T>
   std::optional<T> AddReadEvent(int location, int threadId, MemoryOrder order) {
     EventId eventId = events.size();
-    auto event = new ReadEvent<T>(eventId, nThreads, location, threadId, order);
+    auto event = new ReadEvent<T>(eventId, nThreads, location, threadId, order,
+                                  executionState);
 
     // establish po-edge
     CreatePoEdgeToEvent(event);  // prevInThread --po--> event
 
-    auto shuffledEvents = GetShuffledReadFromCandidates(event);
-    for (auto readFromEvent : shuffledEvents) {
-      // try reading from `readFromEvent`
-      if (TryCreateRfEdge(readFromEvent, event)) {
-        log() << "Read event " << event->AsString() << " now reads from "
-              << readFromEvent->AsString() << "\n";
-        break;
+    PrintFutureReadValues<T>(event);
+    // TODO: add some probablity with which we choose future value + extract to
+    // a method
+    const auto& futureValues = futureReadValues[executionState];
+    if (enableFutureReads && ShouldReadFromFutureValue() &&
+        !futureValues.empty()) {
+      // TODO: we pick randomly fv index right now
+      int idx = std::rand() % futureValues.size();
+      const FutureValue& fv = futureValues[idx];
+      assert(fv.location == location &&
+             "Future value must be from the same location");
+      assert(fv.threadId != event->threadId &&
+             "Future value must be from a different thread");
+
+      auto* promise =
+          new PromiseEvent<T>(events.size(), nThreads, location, fv.threadId,
+                              decode_from_u64<T>(fv.encodedValue));
+
+      // Save to the events list and promises list
+      events.push_back(promise);
+      promises.push_back(promise);
+      // Make the promise "last" event in its thread
+      promise->clock = events[eventsPerThread[promise->threadId].back()]->clock;
+      promise->clock.Increment(promise->threadId);
+      // Save this read event inside a promise
+      promise->reads.push_back(event);
+
+      // Try to read from it
+      if (!TryCreateRfEdge(promise, event)) {
+        log() << "Execution is infeasible on read event: " << event->AsString()
+              << " on attempt to read from promise: " << promise->AsString()
+              << "\n";
+        // just to make sure we invalidate the execution later
+        event->readFrom = nullptr;
+      }
+    }
+    // TODO: add a posibility to read from existing promise as well
+    else {
+      auto shuffledEvents = GetShuffledReadFromCandidates(event);
+      for (auto readFromEvent : shuffledEvents) {
+        // try reading from `readFromEvent`
+        if (TryCreateRfEdge(readFromEvent, event)) {
+          log() << "Read event " << event->AsString() << " now reads from "
+                << readFromEvent->AsString() << "\n";
+          break;
+        }
       }
     }
 
@@ -69,6 +139,9 @@ class Graph {
       return std::nullopt;
     }
 
+    // update the execution state
+    OnReadEvent<T>(event);
+
     assert(event->readFrom != nullptr &&
            "Read event must have appropriate write event to read from");
     assert((event->readFrom->IsWrite() || event->readFrom->IsModifyRMW()) &&
@@ -79,8 +152,8 @@ class Graph {
   template <class T>
   void AddWriteEvent(int location, int threadId, MemoryOrder order, T value) {
     EventId eventId = events.size();
-    auto event =
-        new WriteEvent<T>(eventId, nThreads, location, threadId, order, value);
+    auto event = new WriteEvent<T>(eventId, nThreads, location, threadId, order,
+                                   value, executionState);
 
     // establish po-edge
     CreatePoEdgeToEvent(event);  // prevInThread --po--> event
@@ -102,6 +175,33 @@ class Graph {
     // Write-Write Coherence
     CreateWriteWriteCoherenceEdges(event);
 
+    // TODO: check what we resolve a promise
+    // Populate feature values for reads where it is possible
+    PopulateFutureReadValues<T>(event);
+
+    // Try to resolve some promise
+    // TODO: can we resolve multiple promises?
+    for (auto promise : promises) {
+      assert(promise->IsPromise() && "Promise must be a promise");
+      if (promise->location != event->location ||
+          promise->threadId != event->threadId ||
+          Event::GetWrittenValue<T>(promise) != value) {
+        continue;
+      }
+      auto* promiseEvent = static_cast<PromiseEvent<T>*>(promise);
+      bool canResolve = true;
+      for (Event* read : promiseEvent->reads) {
+        if (read->HappensBefore(event) || CouldSynchronizeWith(read, event)) {
+          canResolve = false;
+          break;
+        }
+      }
+
+      if (canResolve && ShouldResolvePromise()) {
+        ResolvePromise<T>(promise, event);
+      }
+    }
+
     if (HasBrokenRelSeq()) {
       log() << "Execution is infeasible on write event: " << event->AsString()
             << "\n";
@@ -118,7 +218,7 @@ class Graph {
     EventId eventId = events.size();
     auto event =
         new CASRMWEvent<T>(eventId, nThreads, location, threadId, expected,
-                           desired, successOrder, failureOrder);
+                           desired, successOrder, failureOrder, executionState);
 
     // establish po-edge
     CreatePoEdgeToEvent(event);  // prevInThread --po--> event
@@ -143,6 +243,12 @@ class Graph {
       return std::nullopt;
     }
 
+    // Populate feature values for reads where it is possible
+    PopulateFutureReadValues(event);
+
+    // update the execution state
+    OnReadEvent<T>(event);
+
     assert(event->readFrom != nullptr &&
            "RMW event must have appropriate write event to read from");
     assert((event->readFrom->IsWrite() || event->readFrom->IsModifyRMW()) &&
@@ -158,8 +264,9 @@ class Graph {
                                             AtomicRmwOp op, T operand,
                                             MemoryOrder order) {
     EventId eventId = events.size();
-    auto event = new UnconditionalRMWEvent<T>(eventId, nThreads, location,
-                                              threadId, op, operand, order);
+    auto event =
+        new UnconditionalRMWEvent<T>(eventId, nThreads, location, threadId, op,
+                                     operand, order, executionState);
 
     CreatePoEdgeToEvent(event);
 
@@ -182,6 +289,12 @@ class Graph {
       return std::nullopt;
     }
 
+    // Populate feature values for reads where it is possible
+    PopulateFutureReadValues(event);
+
+    // update the execution state
+    OnReadEvent<T>(event);
+
     assert(event->readFrom != nullptr &&
            "RMW event must have appropriate write event to read from");
     assert((event->readFrom->IsWrite() || event->readFrom->IsModifyRMW()) &&
@@ -196,16 +309,30 @@ class Graph {
       os << "<empty>\n";
     else {
       for (const auto& edge : edges) {
-        os << events[edge.from]->AsString() << " ->"
+        os << events[edge.from]->AsString(shouldPrintEventsState) << " ->"
            << WmmUtils::EdgeTypeToString(edge.type) << " "
-           << events[edge.to]->AsString() << "\n";
+           << events[edge.to]->AsString(shouldPrintEventsState) << "\n";
       }
     }
     os << "Release sequences:\n";
     for (const auto& rs : establishedRelSeqs) {
       os << rs.AsString() << "\n";
     }
+    os << "Execution state: " << executionState << "\n";
     os << "\n";
+  }
+
+  template <class T>
+  void PrintFutureReadValues(Event* event) {
+    // Just print the future read values for the read event
+    log() << "Future read values for "
+          << event->AsString(shouldPrintEventsState) << ": [";
+    const auto& futureValues = futureReadValues[executionState];
+    for (auto it = futureValues.begin(); it != futureValues.end(); ++it) {
+      log() << it->AsString<T>()
+            << (std::next(it) == futureValues.end() ? "" : ", ");
+    }
+    log() << "]\n";
   }
 
  private:
@@ -355,8 +482,8 @@ class Graph {
   }
 
   // We calculate a release sequence for a `read` event that reads-from a
-  // `write` event. When `wmm_relseq` is false, we treat direct acquire-read from
-  // a release-write/rmw as a release sequence only.
+  // `write` event. When `wmm_relseq` is false, we treat direct acquire-read
+  // from a release-write/rmw as a release sequence only.
   std::optional<RelSeq> GetReleaseSequence(Event* read, Event* write) const {
     assert(read->IsReadOrRMW() && "Read event must be of correct type");
     assert(write->IsWriteOrRMW() && "Write event must be of correct type");
@@ -554,6 +681,209 @@ class Graph {
     return false;
   }
 
+  bool ShouldReadFromFutureValue() const {
+    // TODO: implement the probability logic here
+    return true;
+  }
+
+  // TODO: not used yet
+  bool ShouldReadFromPromise() const {
+    // TODO: implement the probability logic here
+    return true;
+  }
+
+  bool ShouldResolvePromise() const {
+    // TODO: implement the probability logic here
+    return true;
+  }
+
+  // TODO: I do not account for max seq num in future values
+  template <class T>
+  void ResolvePromise(Event* promise, Event* write) {
+    assert(promise->IsPromise() && "Promise must be a promise");
+    assert(write->IsWriteOrRMW() && "Write event must be of correct type");
+    assert(write->location == promise->location &&
+           "Write and promise events must be of the same location");
+    assert(write->threadId == promise->threadId &&
+           "Write and promise events must be of the same thread");
+    assert(Event::GetWrittenValue<T>(promise) ==
+               Event::GetWrittenValue<T>(write) &&
+           "Write and promise events must have the same value");
+    // TODO: move all in-edges from promise to write
+    auto* promiseEvent = static_cast<PromiseEvent<T>*>(promise);
+    // move all incoming-edges from promise to write
+    for (Edge& edge : edges) {
+      if (edge.to == promise->id) {
+        edge.to = write->id;
+      }
+      // change the read from edges
+      if (edge.from == promise->id && edge.type == EdgeType::RF) {
+        edge.from = write->id;
+        events[edge.to]->SetReadFromEvent(write);
+      }
+    }
+    // remove the promise event (we leave in the `events` list though, so that
+    // it can be deleted in graph destructor)
+    promises.erase(std::remove(promises.begin(), promises.end(), promise),
+                   promises.end());
+    log() << "Promise event " << promise->AsString()
+          << " resolved to write event " << write->AsString() << "\n";
+  }
+
+  // Having a write/rmw event appends its value to the future-reads set of
+  // corresponding read events
+  template <class T>
+  void PopulateFutureReadValues(Event* event) {
+    assert(event->IsWriteOrRMW() && "Event must be a read/rmw");
+    // TODO: make a global flag here
+    if (!enableFutureReads) return;
+    if (IsExecutionInfeasible()) return;
+
+    for (int t = 0; t < nThreads; ++t) {
+      // we cannot send future value to the reads in our thread
+      if (t == event->threadId) continue;
+
+      auto& tidEvents = eventsPerThread[t];
+      for (auto it = tidEvents.rbegin(); it != tidEvents.rend(); ++it) {
+        auto eventId = *it;
+        Event* read = events[eventId];
+        // we reached the event which is hb-before the write
+        // event, so the earlier events in this thread are hb-before
+        // as well and we cannot send future value to any matching reads
+        if (read->HappensBefore(event)) break;
+        if (!read->IsReadOrRMW() || read->location != event->location) continue;
+
+        if (FutureValueCouldBeReadFrom(read, event)) {
+          log() << "Read event " << read->AsString(shouldPrintEventsState)
+                << " received future value from " << event->AsString() << "\n";
+          uint64_t encodedValue =
+              encode_to_u64(Event::GetWrittenValue<T>(event));
+          // TODO: for now we just use the same write event id without
+          // additional constant for the max sequence number
+          FutureValue fv{event->threadId, event->location, encodedValue,
+                         event->id};
+          futureReadValues[read->executionState].push_back(fv);
+          // TODO: do not append duplicates
+        }
+      }
+    }
+  }
+
+  // Returns true if the future value from `write` could be sent to `read` event
+  // and possibly read by the later event in some other execution.
+  bool FutureValueCouldBeReadFrom(Event* read, Event* write) {
+    assert(read->IsReadOrRMW() && "Read event must be of correct type");
+    assert(write->IsWriteOrRMW() && "Write event must be of correct type");
+    assert(read->location == write->location &&
+           "Read and Write events must be of the same location");
+
+    return !CouldSynchronizeWith(read, write) &&
+           IsOOTAConstraintSatisfied(read, write) &&
+           IsMoFutureReadConstraintSatisfied(read, write);
+  }
+
+  // This method is analogue for the `could_synchronize_with` in Demsky's paper,
+  // which checks whether the two events could be rescheduled by the strategy so
+  // that they establish synchronization (`a` syncs with `b`).
+  //
+  // This method is used in the future values producing: is two events cannot
+  // synchronize with each other via pure threads reordering, then we should
+  // send a future value in case if one of the events is a write and another is
+  // a read.
+  bool CouldSynchronizeWith(Event* a, Event* b) {
+    // Same thread can't be reordered
+    if (a->threadId == b->threadId) return false;
+
+    // Different locations cannot synch
+    if (a->location != b->location) return false;
+
+    // Exploration of seq-cst writes reordering should be possible
+    if ((a->IsWrite() || a->IsModifyRMW() || b->IsWrite() ||
+         b->IsModifyRMW()) &&
+        (a->IsSeqCst() && b->IsSeqCst())) {
+      return true;
+    }
+
+    // Exploration of rel-acq pairs reordering should be possible
+    if (a->IsAtLeastAcquire() && b->IsAtLeastRelease() && a->IsReadOrRMW() &&
+        b->IsWriteOrRMW()) {
+      return true;
+    }
+
+    // Otherwise events could not be reordered in a way to synchronize with each
+    // other
+    return false;
+  }
+
+  // Taken from Demsky's paper:
+  // Checks that we do not form a RMW cycle on reads-from edges.
+  bool IsOOTAConstraintSatisfied(Event* read, Event* write) {
+    assert(read != nullptr && "Read event must be non-null");
+    assert(write != nullptr && "Write event must be non-null");
+    assert(read->IsReadOrRMW() && "Read event must be of correct type");
+    assert(write->IsWriteOrRMW() && "Write event must be of correct type");
+    assert(read->location == write->location &&
+           "Read and Write events must be of the same location");
+
+    if (!read->IsRMW()) return true;
+    if (!write->IsRMW()) return true;
+
+    for (Event* rf = write->GetReadFromEvent(); rf != nullptr;
+         rf = rf->GetReadFromEvent()) {
+      if (rf == read) return false;
+      if (rf->threadId == read->threadId && rf->HappensBefore(read)) break;
+    }
+    return true;
+  }
+
+  // Taken from Demsky's paper:
+  // Arbitrary reads from the future are not allowed. Section 29.3 part 9
+  // places some constraints. This method checks one the following constraint
+  // (others require compiler support):
+  //   1. If X --hb-> Y --mo-> Z, then X should not read from Z.
+  //   2. If X --hb-> Y, A --rf-> Y, and A --mo-> Z, then X should not read from
+  //      Z.
+  //
+  // X is read, Z is write.
+  bool IsMoFutureReadConstraintSatisfied(Event* read, Event* write) {
+    assert(read != nullptr && "Read event must be non-null");
+    assert(write != nullptr && "Write event must be non-null");
+    assert(read->IsReadOrRMW() && "Read event must be of correct type");
+    assert(write->IsWriteOrRMW() && "Write event must be of correct type");
+    assert(read->location == write->location &&
+           "Read and Write events must be of the same location");
+
+    for (int t = 0; t < nThreads; ++t) {
+      auto& tidEvents = eventsPerThread[t];
+      Event* writeAfterRead = nullptr;
+
+      for (auto it = tidEvents.rbegin(); it != tidEvents.rend(); ++it) {
+        auto eventId = *it;
+        Event* event = events[eventId];
+        if (!read->HappensBefore(event) || read == event) break;
+        if (read->location != event->location) continue;
+
+        // TODO: check why not for all found `writeAfterRead` events we perform
+        // the check, but instead override this variable
+        if (event->IsWriteOrRMW()) {
+          writeAfterRead = event;
+        } else if (event->IsReadOrRMW() &&
+                   event->GetReadFromEvent() != nullptr) {
+          // TODO: here in condition `event->GetReadFromEvent() != nullptr`
+          // essentially means that event does not read from the promise
+          writeAfterRead = event->GetReadFromEvent();
+        }
+      }
+
+      if (writeAfterRead != nullptr && writeAfterRead != write &&
+          IsMoReachable(writeAfterRead, write)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   // ===== Methods to create general graph edges =====
 
   // Creates a po-edge between last event in the same thread as `event`
@@ -574,6 +904,9 @@ class Graph {
     // set correct hb-clocks for new event
     event->clock = lastEventInSameThread->clock;
     event->clock.Increment(threadId);
+
+    // TODO: Update promises hb clocks in the same thread to make sure that
+    // promises are "last" events in their threads
   }
 
   // Adds an sc-edge between prev sc-write (to the same location as `event`)
@@ -950,6 +1283,8 @@ class Graph {
   }
 
   void Clean() {
+    executionState.clear();
+    lastThreadId = -1;
     establishedRelSeqs.clear();
     edges.clear();
     for (auto event : events) {
@@ -989,6 +1324,37 @@ class Graph {
                                              // randomized rf-edge selection
   bool inSnapshotMode = false;
   int nThreads = 0;
+
+  // String which represents the current execution state of the graph.
+  // It contains of the two different elements separated by ';' which allow to
+  // differentiate between different executions:
+  // 1. Thread switches (between distinct threads at atomic operations), encoded
+  //    as "T<thread_id>"
+  // 2. For each read event we also encode the write event which the read reads
+  //    from: "R:<write_event_id>"
+  //
+  // This execution state is saved for event read event and mapped to the set of
+  // future-read values for corresponding read event. The future-read values
+  // sets could be used on the next visits of the same execution state.
+  std::string executionState;
+  // Last logical thread id that performed a graph-visible atomic (Load/Store/
+  // RMW via ExecutionGraph). Used so OnThreadSwitch only emits T when the
+  // atomic-running thread changes — unlike the scheduler, which switches
+  // threads on every scheduled step regardless of atomics.
+  int lastThreadId = -1;
+
+  // For each read event with some fixed execution state prefix we collect the
+  // possible future read values for it. Each set contains uint64_t type because
+  // we assume that all T types which could be passed to atomic fit in uint64_t.
+  std::map<std::string /* execution state */, std::vector<FutureValue>>
+      futureReadValues;  // TODO: with the value also store additional info:
+                         // thread which must resolve the promise and what it
+                         // the maximum seq-number of the write event which
+                         // should resolve it (in my case it will be max id)
+
+  std::vector<Event*> promises;
+  bool enableFutureReads = true;
+  bool shouldPrintEventsState = true;
 };
 
 }  // namespace ltest::wmm

@@ -41,6 +41,7 @@ add_wmm_litmus(litmus25_xoreq_relacq FALSE)
 add_wmm_litmus(litmus26_xoreq_weak TRUE)
 add_wmm_litmus(litmus27_relseq_rmw_acq FALSE)
 add_wmm_litmus(litmus28_relseq_same_thread_rlx FALSE)
+# add_wmm_litmus(litmus29_future_reads FALSE) # disabled now until more stable implementation of future reads, but passes already
 
 add_custom_target(verify-litmus
   DEPENDS

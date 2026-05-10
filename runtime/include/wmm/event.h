@@ -11,13 +11,14 @@ namespace ltest::wmm {
 struct Event {
  protected:
   Event(EventId id, EventType type, int nThreads, int location, int threadId,
-        MemoryOrder order)
+        MemoryOrder order, std::string executionState)
       : id(id),
         type(type),
         location(location),
         threadId(threadId),
         order(order),
-        clock(nThreads) {}
+        clock(nThreads),
+        executionState(executionState) {}
 
  public:
   EventId id;
@@ -26,7 +27,8 @@ struct Event {
   int threadId;
   MemoryOrder order;
   HBClock clock;
-  std::vector<EdgeId> edges;  // outgoing edges (e.g. `edge.to == this`)
+  std::vector<EdgeId> edges;  // outgoing edges (e.g. `edge.from == this`)
+  std::string executionState;
 
   virtual ~Event() = default;
 
@@ -38,6 +40,11 @@ struct Event {
        << clock.AsString();
 
     return ss.str();
+  }
+
+  std::string AsString(bool printExecutionState) const {
+    return this->AsString() +
+           (printExecutionState ? " ('" + this->executionState + "')" : "");
   }
 
   virtual void SetReadFromEvent(Event* event) {
@@ -64,6 +71,8 @@ struct Event {
   bool IsWriteOrRMW() const { return IsWrite() || IsRMW(); }
 
   bool IsReadOrRMW() const { return IsRead() || IsRMW(); }
+
+  virtual bool IsPromise() const { return false; }
 
   virtual bool IsSeqCst() const { return order == MemoryOrder::SeqCst; }
 
@@ -99,14 +108,15 @@ struct Event {
 struct DummyEvent : Event {
   DummyEvent(EventId id, int nThreads, int threadId)
       : Event(id, EventType::DUMMY, nThreads, -1 /* non-existing location */,
-              threadId, MemoryOrder::Relaxed) {}
+              threadId, MemoryOrder::Relaxed, "") {}
 };
 
 template <class T>
 struct WriteEvent : Event {
   WriteEvent(EventId id, int nThreads, int location, int threadId,
-             MemoryOrder order, T value)
-      : Event(id, EventType::WRITE, nThreads, location, threadId, order),
+             MemoryOrder order, T value, std::string executionState)
+      : Event(id, EventType::WRITE, nThreads, location, threadId, order,
+              std::move(executionState)),
         value(std::move(value)) {}  // , moBefore(-1)
 
   virtual std::string AsString() const {
@@ -125,10 +135,34 @@ struct WriteEvent : Event {
 };
 
 template <class T>
+struct PromiseEvent : WriteEvent<T> {
+  PromiseEvent(EventId id, int nThreads, int location, int threadId, T value)
+      : WriteEvent<T>(
+            id, nThreads, location, threadId,
+            MemoryOrder::Relaxed /* not to introduce additional sync */, value,
+            "" /* empty exec state for promises */) {}
+
+  virtual std::string AsString() const override {
+    std::stringstream ss;
+
+    ss << this->id << ":" << "P(" << this->value << ")"
+       << ":T" << this->threadId << ":L" << this->location << ":"
+       << WmmUtils::OrderToString(this->order) << ":" << this->clock.AsString();
+
+    return ss.str();
+  }
+
+  bool IsPromise() const override { return true; }
+
+  std::vector<Event*> reads;  // all read events which read from this promise
+};
+
+template <class T>
 struct ReadEvent : Event {
   ReadEvent(EventId id, int nThreads, int location, int threadId,
-            MemoryOrder order)
-      : Event(id, EventType::READ, nThreads, location, threadId, order),
+            MemoryOrder order, std::string executionState)
+      : Event(id, EventType::READ, nThreads, location, threadId, order,
+              std::move(executionState)),
         readFrom(nullptr) {}
 
   virtual void SetReadFromEvent(Event* event) override {
@@ -181,8 +215,9 @@ template <class T>
 struct RMWEventBase : Event {
  protected:
   RMWEventBase(EventId id, int nThreads, int location, int threadId,
-               MemoryOrder order)
-      : Event(id, EventType::RMW, nThreads, location, threadId, order),
+               MemoryOrder order, std::string executionState)
+      : Event(id, EventType::RMW, nThreads, location, threadId, order,
+              std::move(executionState)),
         readFrom(nullptr) {}
 
   static std::string StateAsString(RMWState s) {
@@ -209,8 +244,10 @@ struct RMWEventBase : Event {
 template <class T>
 struct CASRMWEvent : RMWEventBase<T> {
   CASRMWEvent(EventId id, int nThreads, int location, int threadId, T* expected,
-              T desired, MemoryOrder successOrder, MemoryOrder failureOrder)
-      : RMWEventBase<T>(id, nThreads, location, threadId, successOrder),
+              T desired, MemoryOrder successOrder, MemoryOrder failureOrder,
+              std::string executionState)
+      : RMWEventBase<T>(id, nThreads, location, threadId, successOrder,
+                        std::move(executionState)),
         // TODO: `expected` might be uninitialized, so we should not dereference
         // it blindly, fix it
         initialExpectedValue(*expected),
@@ -355,8 +392,10 @@ struct CASRMWEvent : RMWEventBase<T> {
 template <class T>
 struct UnconditionalRMWEvent : RMWEventBase<T> {
   UnconditionalRMWEvent(EventId id, int nThreads, int location, int threadId,
-                        AtomicRmwOp op, T operand, MemoryOrder order)
-      : RMWEventBase<T>(id, nThreads, location, threadId, order),
+                        AtomicRmwOp op, T operand, MemoryOrder order,
+                        std::string executionState)
+      : RMWEventBase<T>(id, nThreads, location, threadId, order,
+                        std::move(executionState)),
         op(op),
         operand(operand) {}
 
