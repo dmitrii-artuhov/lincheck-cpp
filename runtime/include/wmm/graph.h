@@ -44,7 +44,7 @@ class Graph {
   template <class T>
   std::optional<T> AddReadEvent(int location, int threadId, MemoryOrder order) {
     EventId eventId = events.size();
-    auto event = new ReadEvent<T>(eventId, nThreads, location, threadId, order);
+    auto event = new ReadEvent<T>(eventId, location, threadId, order);
 
     // establish po-edge
     CreatePoEdgeToEvent(event);  // prevInThread --po--> event
@@ -80,7 +80,7 @@ class Graph {
   void AddWriteEvent(int location, int threadId, MemoryOrder order, T value) {
     EventId eventId = events.size();
     auto event =
-        new WriteEvent<T>(eventId, nThreads, location, threadId, order, value);
+        new WriteEvent<T>(eventId, location, threadId, order, value);
 
     // establish po-edge
     CreatePoEdgeToEvent(event);  // prevInThread --po--> event
@@ -117,8 +117,8 @@ class Graph {
                                                 MemoryOrder failureOrder) {
     EventId eventId = events.size();
     auto event =
-        new CASRMWEvent<T>(eventId, nThreads, location, threadId, expected,
-                           desired, successOrder, failureOrder);
+        new CASRMWEvent<T>(eventId, location, threadId, expected, desired,
+                           successOrder, failureOrder);
 
     // establish po-edge
     CreatePoEdgeToEvent(event);  // prevInThread --po--> event
@@ -158,8 +158,8 @@ class Graph {
                                             AtomicRmwOp op, T operand,
                                             MemoryOrder order) {
     EventId eventId = events.size();
-    auto event = new UnconditionalRMWEvent<T>(eventId, nThreads, location,
-                                              threadId, op, operand, order);
+    auto event = new UnconditionalRMWEvent<T>(eventId, location, threadId, op,
+                                              operand, order);
 
     CreatePoEdgeToEvent(event);
 
@@ -970,7 +970,7 @@ class Graph {
       // TODO: DummyEvents are all ?seq-cst? (now rlx) writes, do I need to
       // add proper ?sc?-egdes between them? For now I don't
       int eventId = events.size();
-      auto dummyEvent = new DummyEvent(eventId, nThreads, t);
+      auto dummyEvent = new DummyEvent(eventId, t);
       events.push_back(dummyEvent);
       eventsPerThread[t].push_back(eventId);
     }
