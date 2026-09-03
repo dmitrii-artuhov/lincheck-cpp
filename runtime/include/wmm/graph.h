@@ -189,23 +189,34 @@ class Graph {
     return Event::GetReadValue<T>(event);
   }
 
-  template <typename Out>
-  void Print(Out& os) const {
-    os << "Graph edges:" << "\n";
+  // Returns a string with the textual representation of the graph (its
+  // edges and established release sequences).
+  std::string AsString() const {
+    std::stringstream ss;
+
+    ss << "Graph edges:" << "\n";
     if (edges.empty())
-      os << "<empty>\n";
+      ss << "<empty>\n";
     else {
       for (const auto& edge : edges) {
-        os << events[edge.from]->AsString() << " ->"
+        ss << events[edge.from]->AsString() << " ->"
            << WmmUtils::EdgeTypeToString(edge.type) << " "
            << events[edge.to]->AsString() << "\n";
       }
     }
-    os << "Release sequences:\n";
+    ss << "Release sequences:\n";
     for (const auto& rs : establishedRelSeqs) {
-      os << rs.AsString() << "\n";
+      ss << rs.AsString() << "\n";
     }
-    os << "\n";
+    ss << "\n";
+
+    return ss.str();
+  }
+
+  // Writes the textual representation of the graph to the given stream.
+  template <typename Out>
+  void Print(Out& os) const {
+    os << AsString();
   }
 
  private:
