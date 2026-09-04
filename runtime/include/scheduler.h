@@ -358,10 +358,13 @@ struct BaseStrategyWithThreads : public Strategy {
 
   void ResetCurrentRound() override {
     this->SetAllowNewTasks(true);
+    // Already reconstructs `state` from a freshly-reset wmm graph (see
+    // `FinalizeCleanup`). Do not construct another `state` on top of it
+    // here, or its atomics would register into the graph without a
+    // preceding reset, leaving the previous target's events as orphaned
+    // graph state.
     AbortForRoundReset();
     std::fill(round_schedule.begin(), round_schedule.end(), -1);
-
-    state = target_factory();
 
     // New round/replay starts from fresh target state, so verifier state
     // must also be reset.
