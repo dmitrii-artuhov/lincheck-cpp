@@ -26,6 +26,15 @@ struct RfCandidateSelector {
   virtual ~RfCandidateSelector() = default;
   virtual std::vector<Event*> OrderCandidates(
       Event* event, std::vector<Event*> candidates) = 0;
+
+  // Reports the outcome of this attempt: `chosen` is the candidate the graph
+  // actually committed to as `event`'s reads-from source (the first entry
+  // from `OrderCandidates`'s result that validated), or `nullptr` if none of
+  // the candidates validated (the execution was infeasible for `event`).
+  // No-op by default; selectors that need to track history across attempts
+  // (e.g. to avoid re-choosing the same candidate on a replay) can override
+  // this to observe it.
+  virtual void OnCandidateChosen(Event* event, Event* chosen) {}
 };
 
 // Tries candidates in a random order. This is the graph's original (and,
@@ -102,6 +111,7 @@ class Graph {
         break;
       }
     }
+    rfSelector->OnCandidateChosen(event, event->readFrom);
 
     if (event->readFrom == nullptr) {
       // we were unable to find a write/rmw to read from because we were breking
@@ -176,6 +186,7 @@ class Graph {
         break;
       }
     }
+    rfSelector->OnCandidateChosen(event, event->readFrom);
 
     if (event->readFrom == nullptr) {
       // we were unable to find a write/rmw to read from because we were breking
@@ -215,6 +226,7 @@ class Graph {
         break;
       }
     }
+    rfSelector->OnCandidateChosen(event, event->readFrom);
 
     if (event->readFrom == nullptr) {
       // we were unable to find a write/rmw to read from because we were breking
