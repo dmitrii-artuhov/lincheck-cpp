@@ -1711,6 +1711,7 @@ struct StrategyScheduler : public SchedulerWithReplay {
       if (deadlock_detected) {
         if (deadlock_policy != DeadlockPolicy::Fail) {
           if (checker.Check(sequential_history)) {
+            i++;
             continue;
           }
           return NonLinearizableHistory(
@@ -1719,6 +1720,7 @@ struct StrategyScheduler : public SchedulerWithReplay {
         }
 
         if (!IsReportableDeadlockHistory(sequential_history)) {
+          i++;
           continue;
         }
 
