@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <random>
 #include <ranges>
 #include <unordered_set>
@@ -16,9 +17,40 @@
 
 namespace ltest::wmm {
 
+// Decides the order in which reads-from candidates should be attempted for
+// `event` (a read or RMW event). `candidates` is already filtered to
+// writes/RMWs at the same location; the caller (Graph::Add*Event, via
+// TryCreateRfEdge) tries them in the returned order, rolling back and moving
+// on to the next candidate until one produces a valid graph.
+struct RfCandidateSelector {
+  virtual ~RfCandidateSelector() = default;
+  virtual std::vector<Event*> OrderCandidates(
+      Event* event, std::vector<Event*> candidates) = 0;
+};
+
+// Tries candidates in a random order. This is the graph's original (and,
+// for now, only) selection behavior. Takes a fixable seed for reproducible
+// runs; defaults to a random one.
+struct RandomRfCandidateSelector : RfCandidateSelector {
+  explicit RandomRfCandidateSelector(
+      std::mt19937::result_type seed = std::random_device{}())
+      : gen(seed) {}
+
+  std::vector<Event*> OrderCandidates(Event* /*event*/,
+                                      std::vector<Event*> candidates) override {
+    std::ranges::shuffle(candidates, gen);
+    return candidates;
+  }
+
+ private:
+  std::mt19937 gen;
+};
+
 class Graph {
  public:
-  Graph() {}
+  explicit Graph(std::unique_ptr<RfCandidateSelector> rfSelector =
+                     std::make_unique<RandomRfCandidateSelector>())
+      : rfSelector(std::move(rfSelector)) {}
   ~Graph() { Clean(); }
 
   void OnExecutionComplete() {
@@ -39,8 +71,20 @@ class Graph {
     InitThreads(nThreads);
   }
 
-  // TODO: add `ExecutionPolicy` or other way of specifying how to create edges
-  // (Random, BoundedModelChecker, etc.)
+  // Which write/rmw event a read/RMW event reads from is decided by
+  // `rfSelector` (see `RfCandidateSelector` above) — for now, `Random` is the
+  // only implementation, matching prior behavior.
+  //
+  // Note this only makes candidate *ordering* pluggable for a single-path
+  // exploration: the graph still commits to the first candidate that
+  // validates (see `TryCreateRfEdge`'s try-then-rollback loop) and moves on.
+  // Exhaustive strategies (TLA, DPOR) need to explore *all* candidates as
+  // separate branches, which requires the scheduler to drive that branching
+  // (deciding when to resume/replay each branch) in lockstep with the graph
+  // and the atomic operations that feed it events. There is no
+  // scheduler<->graph<->atomics channel for that today (the graph cannot be
+  // controlled from the outside), so that support is intentionally left for
+  // a separate, later PR once we decide to actually support TLA/DPOR here.
   template <class T>
   std::optional<T> AddReadEvent(int location, int threadId, MemoryOrder order) {
     EventId eventId = events.size();
@@ -49,7 +93,7 @@ class Graph {
     // establish po-edge
     CreatePoEdgeToEvent(event);  // prevInThread --po--> event
 
-    auto shuffledEvents = GetShuffledReadFromCandidates(event);
+    auto shuffledEvents = GetReadFromCandidates(event);
     for (auto readFromEvent : shuffledEvents) {
       // try reading from `readFromEvent`
       if (TryCreateRfEdge(readFromEvent, event)) {
@@ -123,7 +167,7 @@ class Graph {
     // establish po-edge
     CreatePoEdgeToEvent(event);  // prevInThread --po--> event
 
-    auto shuffledEvents = GetShuffledReadFromCandidates(event);
+    auto shuffledEvents = GetReadFromCandidates(event);
     for (auto readFromEvent : shuffledEvents) {
       // try reading from `readFromEvent`
       if (TryCreateRfEdge(readFromEvent, event)) {
@@ -163,7 +207,7 @@ class Graph {
 
     CreatePoEdgeToEvent(event);
 
-    auto shuffledEvents = GetShuffledReadFromCandidates(event);
+    auto shuffledEvents = GetReadFromCandidates(event);
     for (auto readFromEvent : shuffledEvents) {
       if (TryCreateRfEdge(readFromEvent, event)) {
         log() << "Unconditional RMW event " << event->AsString()
@@ -220,19 +264,16 @@ class Graph {
   }
 
  private:
-  std::vector<Event*> GetShuffledReadFromCandidates(Event* event) {
-    // Shuffle events to randomize the order of read-from edges
-    // and allow for more non-sc behaviours
+  std::vector<Event*> GetReadFromCandidates(Event* event) {
     auto filteredEventsView =
         events | std::views::filter([event](Event* e) {
           return ((e->IsWrite() || e->IsModifyRMW()) &&
                   e->location == event->location && e != event);
         });
-    std::vector<Event*> shuffledEvents(filteredEventsView.begin(),
-                                       filteredEventsView.end());
-    std::ranges::shuffle(shuffledEvents, gen);
+    std::vector<Event*> candidates(filteredEventsView.begin(),
+                                   filteredEventsView.end());
 
-    return shuffledEvents;
+    return rfSelector->OrderCandidates(event, std::move(candidates));
   }
 
   // Tries to create a read-from edge between `write` and `read` events (write
@@ -996,8 +1037,7 @@ class Graph {
       snapshotEdges;  // edges that are part of the snapshot (which case be
                       // discarded or applied, which is usefull when adding
                       // rf-edge)
-  std::mt19937 gen{std::random_device{}()};  // random number generator for
-                                             // randomized rf-edge selection
+  std::unique_ptr<RfCandidateSelector> rfSelector;
   bool inSnapshotMode = false;
   int nThreads = 0;
 };
